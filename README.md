@@ -12,7 +12,7 @@ English | [中文](README-CN.md)
 > **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). Safety is enforced at the **code level**: no power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase. Not just prompt constraints — zero destructive code paths.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
-[![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/zw008/VMware-Monitor)
+[![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
 [![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/vmware-skills/VMware-Monitor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -60,7 +60,7 @@ Works with Claude Code, Cursor, Codex, Gemini CLI, Trae, and 30+ AI agents:
 
 ```bash
 # Via Skills.sh
-npx skills add zw008/VMware-Monitor
+npx skills add vmware-skills/VMware-Monitor
 
 # Via ClawHub
 clawhub install vmware-monitor
@@ -386,7 +386,7 @@ Choose one (or more) of the following:
 Either installer places the skill in Claude Code's skills directory for you:
 
 ```bash
-npx skills add zw008/VMware-Monitor
+npx skills add vmware-skills/VMware-Monitor
 # or
 clawhub install vmware-monitor
 ```
@@ -544,7 +544,7 @@ cp skills/vmware-monitor/SKILL.md ~/.kimi/skills/vmware-monitor/SKILL.md
 
 ---
 
-#### Option H: MCP Server (Smithery / Glama / Claude Desktop)
+#### Option H: MCP Server (Glama / Claude Desktop)
 
 The MCP server exposes VMware read-only monitoring as tools via the [Model Context Protocol](https://modelcontextprotocol.io). Works with any MCP-compatible client (Claude Desktop, Cursor, etc.).
 
@@ -589,10 +589,6 @@ vmware-monitor-mcp
 
 </details>
 
-**Install via Smithery**:
-```bash
-npx -y @smithery/cli install @zw008/VMware-Monitor --client claude
-```
 
 ---
 
@@ -616,7 +612,7 @@ Already installed? Re-run the install command for your channel to get the latest
 | Install Channel | Update Command |
 |----------------|----------------|
 | ClawHub | `clawhub install vmware-monitor` |
-| Skills.sh | `npx skills add zw008/VMware-Monitor` |
+| Skills.sh | `npx skills add vmware-skills/VMware-Monitor` |
 | Git clone | `cd VMware-Monitor && git pull origin main && uv pip install -e .` |
 | uv | `uv tool install vmware-monitor --force` |
 

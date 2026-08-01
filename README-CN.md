@@ -11,7 +11,7 @@
 > **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。安全性在**代码级别**保障：代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数。不仅仅是提示词约束 — 而是零破坏性代码路径。
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
-[![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/zw008/VMware-Monitor)
+[![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
 [![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/vmware-skills/VMware-Monitor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -59,7 +59,7 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 
 ```bash
 # 通过 Skills.sh 安装
-npx skills add zw008/VMware-Monitor
+npx skills add vmware-skills/VMware-Monitor
 
 # 通过 ClawHub 安装
 clawhub install vmware-monitor
@@ -296,7 +296,7 @@ chmod 600 ~/.vmware-monitor/.env
 
 ```bash
 # 方式一：由安装器放置 skill（推荐）
-npx skills add zw008/VMware-Monitor
+npx skills add vmware-skills/VMware-Monitor
 # 或
 clawhub install vmware-monitor
 
