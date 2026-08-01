@@ -1,4 +1,4 @@
-<!-- mcp-name: io.github.zw008/vmware-monitor -->
+<!-- mcp-name: io.github.vmware-skills/vmware-monitor -->
 # VMware Monitor
 
 > **Author**: Wei Zhou, VMware by Broadcom — wei-wz.zhou@broadcom.com
