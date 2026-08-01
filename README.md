@@ -9,28 +9,28 @@ English | [中文](README-CN.md)
 
 **Read-only** VMware vCenter/ESXi monitoring — 27 tools, code-level safety. No destructive operations exist in this codebase.
 
-> **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/zw008/VMware-AIops). Safety is enforced at the **code level**: no power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase. Not just prompt constraints — zero destructive code paths.
+> **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). Safety is enforced at the **code level**: no power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase. Not just prompt constraints — zero destructive code paths.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/zw008/VMware-Monitor)
-[![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/zw008/VMware-Monitor)
+[![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/vmware-skills/VMware-Monitor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ### Companion Skills
 
 | Skill | Scope | Tools | Install |
 |-------|-------|:-----:|---------|
-| **[vmware-aiops](https://github.com/zw008/VMware-AIops)** ⭐ entry point | VM lifecycle, deployment, guest ops, clusters | 49 | `uv tool install vmware-aiops` |
-| **[vmware-storage](https://github.com/zw008/VMware-Storage)** | Datastores, iSCSI, vSAN | 11 | `uv tool install vmware-storage` |
-| **[vmware-vks](https://github.com/zw008/VMware-VKS)** | Tanzu Namespaces, TKC cluster lifecycle | 20 | `uv tool install vmware-vks` |
-| **[vmware-nsx](https://github.com/zw008/VMware-NSX)** | NSX networking: segments, gateways, NAT, IPAM | 33 | `uv tool install vmware-nsx-mgmt` |
-| **[vmware-nsx-security](https://github.com/zw008/VMware-NSX-Security)** | DFW microsegmentation, security groups, Traceflow | 21 | `uv tool install vmware-nsx-security` |
-| **[vmware-aria](https://github.com/zw008/VMware-Aria)** | Aria Ops metrics, alerts, capacity planning | 28 | `uv tool install vmware-aria` |
-| **[vmware-avi](https://github.com/zw008/VMware-AVI)** | AVI (NSX ALB) load balancing, AKO on Kubernetes | 28 | `uv tool install vmware-avi` |
-| **[vmware-harden](https://github.com/zw008/VMware-Harden)** | Compliance baselines, drift detection (read-only) | 6 | `uv tool install vmware-harden` |
-| **[vmware-log-insight](https://github.com/zw008/VMware-Log-Insight)** | Centralized syslog search, aggregation, alerts | 7 | `uv tool install vmware-log-insight` |
-| **[vmware-debug](https://github.com/zw008/VMware-Debug)** | Incident timeline correlation, root cause | 2 | `uv tool install vmware-debug` |
-| **[vmware-pilot](https://github.com/zw008/VMware-Pilot)** | Multi-step workflow orchestration, approval gates | 13 | `uv tool install vmware-pilot` |
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** ⭐ entry point | VM lifecycle, deployment, guest ops, clusters | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | Datastores, iSCSI, vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu Namespaces, TKC cluster lifecycle | 20 | `uv tool install vmware-vks` |
+| **[vmware-nsx](https://github.com/vmware-skills/VMware-NSX)** | NSX networking: segments, gateways, NAT, IPAM | 33 | `uv tool install vmware-nsx-mgmt` |
+| **[vmware-nsx-security](https://github.com/vmware-skills/VMware-NSX-Security)** | DFW microsegmentation, security groups, Traceflow | 21 | `uv tool install vmware-nsx-security` |
+| **[vmware-aria](https://github.com/vmware-skills/VMware-Aria)** | Aria Ops metrics, alerts, capacity planning | 28 | `uv tool install vmware-aria` |
+| **[vmware-avi](https://github.com/vmware-skills/VMware-AVI)** | AVI (NSX ALB) load balancing, AKO on Kubernetes | 28 | `uv tool install vmware-avi` |
+| **[vmware-harden](https://github.com/vmware-skills/VMware-Harden)** | Compliance baselines, drift detection (read-only) | 6 | `uv tool install vmware-harden` |
+| **[vmware-log-insight](https://github.com/vmware-skills/VMware-Log-Insight)** | Centralized syslog search, aggregation, alerts | 7 | `uv tool install vmware-log-insight` |
+| **[vmware-debug](https://github.com/vmware-skills/VMware-Debug)** | Incident timeline correlation, root cause | 2 | `uv tool install vmware-debug` |
+| **[vmware-pilot](https://github.com/vmware-skills/VMware-Pilot)** | Multi-step workflow orchestration, approval gates | 13 | `uv tool install vmware-pilot` |
 
 ## ⚡ Quick Investigation Reports
 
@@ -202,7 +202,7 @@ ESXi Standalone ──→ VMs
 | **SSL Self-signed Support** | `disableSslCertValidation` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
 | **Webhook Data Scope** | Sends monitoring summaries to user-configured URLs only — no third-party services by default |
-| **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor eliminates this risk: no destructive code paths exist. Use [VMware-AIops](https://github.com/zw008/VMware-AIops) only in dev/lab environments |
+| **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor eliminates this risk: no destructive code paths exist. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
 
 ### What's NOT Included (By Design)
 
@@ -214,7 +214,7 @@ These operations **do not exist** in this repository:
 - ❌ Clone or migrate VMs
 - ❌ `_double_confirm`, `_show_state_preview`, `_validate_vm_params`
 
-For these operations, use the full [VMware-AIops](https://github.com/zw008/VMware-AIops) repository.
+For these operations, use the full [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) repository.
 
 ---
 
@@ -341,7 +341,7 @@ node --version
 ### Step 1: Clone & Install Python Backend
 
 ```bash
-git clone https://github.com/zw008/VMware-Monitor.git
+git clone https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 python3 -m venv .venv
 source .venv/bin/activate
@@ -394,7 +394,7 @@ clawhub install vmware-monitor
 **Method 2: Manual skill install**
 
 ```bash
-git clone https://github.com/zw008/VMware-Monitor.git
+git clone https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 
 # Copy the skill into Claude Code's personal skills directory
@@ -749,10 +749,10 @@ VMware-Monitor/
 
 | Skill | Scope | Tools | Install |
 |-------|-------|:-----:|---------|
-| **[vmware-monitor](https://github.com/zw008/VMware-Monitor)** | Read-only monitoring, alarms, events | 27 | `uv tool install vmware-monitor` |
-| **[vmware-aiops](https://github.com/zw008/VMware-AIops)** | VM lifecycle, deployment, guest ops, clusters | 49 | `uv tool install vmware-aiops` |
-| **[vmware-storage](https://github.com/zw008/VMware-Storage)** | Datastores, iSCSI, vSAN | 11 | `uv tool install vmware-storage` |
-| **[vmware-vks](https://github.com/zw008/VMware-VKS)** | Tanzu Namespaces, TKC cluster lifecycle | 20 | `uv tool install vmware-vks` |
+| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | Read-only monitoring, alarms, events | 27 | `uv tool install vmware-monitor` |
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** | VM lifecycle, deployment, guest ops, clusters | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | Datastores, iSCSI, vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu Namespaces, TKC cluster lifecycle | 20 | `uv tool install vmware-vks` |
 
 ---
 

@@ -239,7 +239,7 @@ the live MCP registry and the live command tree, not against documentation.
 
 ### Added — the per-target username can come from the environment
 
-Adapted from [VMware-AIops#33](https://github.com/zw008/VMware-AIops/pull/33) by
+Adapted from [VMware-AIops#33](https://github.com/vmware-skills/VMware-AIops/pull/33) by
 @wright-bench, with thanks. The password already resolved from an env var; the
 username did not, so a deployment injecting credentials from a secret store
 (systemd `EnvironmentFile`, container secrets, a vault sidecar) could externalise
@@ -374,7 +374,7 @@ worse than no doctor. Requires `vmware-policy>=1.8.1`.
 
 ## v1.8.0 (2026-07-18) — read-only mode, working policy defaults, declared environments
 
-Family release driven by [VMware-AIops#31](https://github.com/zw008/VMware-AIops/issues/31),
+Family release driven by [VMware-AIops#31](https://github.com/vmware-skills/VMware-AIops/issues/31),
 where an operator running Llama 3.3 70B (Goose / OpenShift AI, on-prem H100) had to
 hand-write 17 prompt guardrails to make tool calling reliable. A prompt is advisory — a
 model can ignore it. Every guardrail that could move into the harness has.
@@ -1171,7 +1171,7 @@ This release tracks vmware-pilot v1.5.17 (new `investigate_alert` template + `re
 
 **Initial release — Read-only VMware monitoring with code-level safety.**
 
-Extracted from [VMware-AIops](https://github.com/zw008/VMware-AIops) as an independent repository. Zero destructive code paths — no power, create, delete, reconfigure, snapshot mutate, clone, or migrate operations exist in the codebase.
+Extracted from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) as an independent repository. Zero destructive code paths — no power, create, delete, reconfigure, snapshot mutate, clone, or migrate operations exist in the codebase.
 
 ### Features
 

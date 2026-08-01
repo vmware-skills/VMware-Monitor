@@ -17,7 +17,7 @@ Security considerations
   variables / ``.env`` file — never passed via MCP messages.
 * **Transport**: Uses stdio transport (local only); no network listener.
 
-Source: https://github.com/zw008/VMware-Monitor
+Source: https://github.com/vmware-skills/VMware-Monitor
 License: MIT
 """
 

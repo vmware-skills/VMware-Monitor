@@ -4,7 +4,7 @@
   "title": "VMware Monitor",
   "description": "Read-only VMware vCenter/ESXi monitoring with 27 MCP tools. Code-level safety.",
   "repository": {
-    "url": "https://github.com/zw008/VMware-Monitor",
+    "url": "https://github.com/vmware-skills/VMware-Monitor",
     "source": "github"
   },
   "version": "1.8.8",

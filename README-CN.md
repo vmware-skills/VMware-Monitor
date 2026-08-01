@@ -8,28 +8,28 @@
 
 **只读** VMware vCenter/ESXi 监控 — 27 个工具，代码级安全保障。代码库中不存在任何破坏性操作。
 
-> **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/zw008/VMware-AIops)。安全性在**代码级别**保障：代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数。不仅仅是提示词约束 — 而是零破坏性代码路径。
+> **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。安全性在**代码级别**保障：代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数。不仅仅是提示词约束 — 而是零破坏性代码路径。
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/zw008/VMware-Monitor)
-[![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/zw008/VMware-Monitor)
+[![Claude Code Marketplace](https://img.shields.io/badge/Claude_Code-Marketplace-blueviolet)](https://github.com/vmware-skills/VMware-Monitor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ### 配套技能
 
 | 技能 | 范围 | 工具数 | 安装 |
 |------|------|:-----:|------|
-| **[vmware-aiops](https://github.com/zw008/VMware-AIops)** ⭐ 统一入口 | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
-| **[vmware-storage](https://github.com/zw008/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
-| **[vmware-vks](https://github.com/zw008/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
-| **[vmware-nsx](https://github.com/zw008/VMware-NSX)** | NSX 网络：段、网关、NAT、IPAM | 33 | `uv tool install vmware-nsx-mgmt` |
-| **[vmware-nsx-security](https://github.com/zw008/VMware-NSX-Security)** | DFW 微分段、安全组、Traceflow | 21 | `uv tool install vmware-nsx-security` |
-| **[vmware-aria](https://github.com/zw008/VMware-Aria)** | Aria Ops 指标、告警、容量规划 | 28 | `uv tool install vmware-aria` |
-| **[vmware-avi](https://github.com/zw008/VMware-AVI)** | AVI (NSX ALB) 负载均衡、Kubernetes AKO | 28 | `uv tool install vmware-avi` |
-| **[vmware-harden](https://github.com/zw008/VMware-Harden)** | 合规基线、Drift 检测（只读） | 6 | `uv tool install vmware-harden` |
-| **[vmware-log-insight](https://github.com/zw008/VMware-Log-Insight)** | 集中日志检索、聚合、告警 | 7 | `uv tool install vmware-log-insight` |
-| **[vmware-debug](https://github.com/zw008/VMware-Debug)** | 故障时间线关联、根因定位 | 2 | `uv tool install vmware-debug` |
-| **[vmware-pilot](https://github.com/zw008/VMware-Pilot)** | 多步骤工作流编排、审批门控 | 13 | `uv tool install vmware-pilot` |
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** ⭐ 统一入口 | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
+| **[vmware-nsx](https://github.com/vmware-skills/VMware-NSX)** | NSX 网络：段、网关、NAT、IPAM | 33 | `uv tool install vmware-nsx-mgmt` |
+| **[vmware-nsx-security](https://github.com/vmware-skills/VMware-NSX-Security)** | DFW 微分段、安全组、Traceflow | 21 | `uv tool install vmware-nsx-security` |
+| **[vmware-aria](https://github.com/vmware-skills/VMware-Aria)** | Aria Ops 指标、告警、容量规划 | 28 | `uv tool install vmware-aria` |
+| **[vmware-avi](https://github.com/vmware-skills/VMware-AVI)** | AVI (NSX ALB) 负载均衡、Kubernetes AKO | 28 | `uv tool install vmware-avi` |
+| **[vmware-harden](https://github.com/vmware-skills/VMware-Harden)** | 合规基线、Drift 检测（只读） | 6 | `uv tool install vmware-harden` |
+| **[vmware-log-insight](https://github.com/vmware-skills/VMware-Log-Insight)** | 集中日志检索、聚合、告警 | 7 | `uv tool install vmware-log-insight` |
+| **[vmware-debug](https://github.com/vmware-skills/VMware-Debug)** | 故障时间线关联、根因定位 | 2 | `uv tool install vmware-debug` |
+| **[vmware-pilot](https://github.com/vmware-skills/VMware-Pilot)** | 多步骤工作流编排、审批门控 | 13 | `uv tool install vmware-pilot` |
 
 ## ⚡ 快速调查报告
 
@@ -154,7 +154,7 @@ ESXi 独立主机 ──→ VM
 | **SSL 自签名** | 仅用于 ESXi 自签名证书的隔离实验环境；生产环境应使用 CA 签名证书 |
 | **Prompt 注入防护** | vSphere 事件消息和主机日志在输出前进行截断、控制字符清理和边界标记（`[VSPHERE_EVENT]`/`[VSPHERE_HOST_LOG]`）包裹 |
 | **Webhook 数据范围** | **默认禁用**。启用后仅向用户自配置的 URL 发送告警摘要，payload 不含凭据、IP 或 PII |
-| **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 消除此风险：代码中不存在任何破坏性代码路径。仅在开发/实验环境使用 [VMware-AIops](https://github.com/zw008/VMware-AIops) |
+| **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 消除此风险：代码中不存在任何破坏性代码路径。仅在开发/实验环境使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) |
 
 ### 不包含的操作（设计如此）
 
@@ -165,7 +165,7 @@ ESXi 独立主机 ──→ VM
 - ❌ 创建/恢复/删除快照
 - ❌ 克隆、迁移
 
-需要这些操作请使用 [VMware-AIops](https://github.com/zw008/VMware-AIops)。
+需要这些操作请使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。
 
 ---
 
@@ -263,7 +263,7 @@ aider --conventions skills/vmware-monitor/SKILL.md --model ollama/qwen2.5-coder:
 ### 第 1 步：安装
 
 ```bash
-git clone https://github.com/zw008/VMware-Monitor.git
+git clone https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 python3 -m venv .venv
 source .venv/bin/activate
@@ -301,7 +301,7 @@ npx skills add zw008/VMware-Monitor
 clawhub install vmware-monitor
 
 # 方式二：手工安装 skill
-git clone https://github.com/zw008/VMware-Monitor.git
+git clone https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 mkdir -p ~/.claude/skills/vmware-monitor
 cp -r skills/vmware-monitor/. ~/.claude/skills/vmware-monitor/
@@ -412,10 +412,10 @@ VMware-Monitor/
 
 | Skill | 范围 | 工具数 | 安装 |
 |-------|------|:-----:|------|
-| **[vmware-monitor](https://github.com/zw008/VMware-Monitor)** | 只读监控、告警、事件 | 27 | `uv tool install vmware-monitor` |
-| **[vmware-aiops](https://github.com/zw008/VMware-AIops)** | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
-| **[vmware-storage](https://github.com/zw008/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
-| **[vmware-vks](https://github.com/zw008/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
+| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | 只读监控、告警、事件 | 27 | `uv tool install vmware-monitor` |
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
 
 ## 问题反馈与贡献
 

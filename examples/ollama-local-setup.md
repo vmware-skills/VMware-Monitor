@@ -55,4 +55,4 @@ All 27 MCP tools are read-only. No power-off, delete, create, clone, or migrate 
 
 ## Need full operations?
 
-Use [vmware-aiops](https://github.com/zw008/VMware-AIops) in dev/lab environments only.
+Use [vmware-aiops](https://github.com/vmware-skills/VMware-AIops) in dev/lab environments only.
