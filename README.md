@@ -7,7 +7,7 @@
 
 English | [中文](README-CN.md)
 
-**Read-only** VMware vCenter/ESXi monitoring — 27 tools, code-level safety. No destructive operations exist in this codebase.
+**Read-only** VMware vCenter/ESXi monitoring — 31 tools, code-level safety. No destructive operations exist in this codebase.
 
 > **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). Safety is enforced at the **code level**: no power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase. Not just prompt constraints — zero destructive code paths.
 
@@ -299,7 +299,7 @@ vCenter may be under heavy load. Try targeting a specific ESXi host directly ins
 
 ### MCP Server Integrations
 
-The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 27 tools are **read-only** — code-level enforced safety.
+The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 31 tools are **read-only** — code-level enforced safety.
 
 | Agent / Tool | Local Model Support | Config Template | Integration Guide |
 |-------------|:-------------------:|-----------------|-------------------|

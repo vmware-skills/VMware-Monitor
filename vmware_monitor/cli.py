@@ -17,13 +17,19 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from vmware_monitor import cli_observability
+from vmware_monitor import cli_observability, cli_vsphere91
 from vmware_monitor.cli_base import (
     ConfigOption,
     TargetOption,
-    audit as _audit,
-    cli_errors as _cli_errors,
     console,
+)
+from vmware_monitor.cli_base import (
+    audit as _audit,
+)
+from vmware_monitor.cli_base import (
+    cli_errors as _cli_errors,
+)
+from vmware_monitor.cli_base import (
     get_connection as _get_connection,
 )
 from vmware_monitor.config import CONFIG_DIR
@@ -49,6 +55,9 @@ app.add_typer(daemon_app, name="daemon")
 
 # Observability command groups (perf/capacity/infra/snapshots/activity).
 cli_observability.register(app)
+
+# vSphere 9.1 read command groups (memory tiering / vLCM patch / deployment size).
+cli_vsphere91.register(app)
 
 
 # ─── Inventory ────────────────────────────────────────────────────────────────

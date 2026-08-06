@@ -1,3 +1,93 @@
+## v1.8.10 — vSphere 9.1 read surface: memory tiering + vLCM patch compliance + deployment size (27 → 31 tools)
+
+Four new **read-only** tools for vSphere / VCF 9.1. This skill stays code-level
+non-destructive: every one of these only *reports* — none can enable a tier, run a
+remediation, or resize the appliance.
+
+### Added — 4 vSphere 9.1 read tools (27 → 31, all read-only)
+
+- **`host_memory_tiering`** — per-host memory tiering (DRAM/NVMe tiers) and the
+  derived NVMe *uplift ratio* (total tiered bytes ÷ DRAM), so an operator can see
+  how much of a host's apparent RAM actually rides on NVMe. Reads pyVmomi
+  `HostSystem.hardware.memoryTieringType` / `hardware.memoryTierInfo` in a single
+  PropertyCollector batch (no per-host round-trip — issue #31 class). Requires
+  ESXi/vCenter **8.0U3+**; a host with tiering off reads back as `tiering_type`
+  "noTiering", `nvme_gb` 0.0 — a real "checked, none", not a gap. Returns the
+  family list envelope.
+- **`cluster_patch_compliance`** — vLCM software (patch) compliance for one cluster
+  over the vSphere Automation REST API. Takes the cluster **MoID** (e.g.
+  `domain-c123`), not the display name.
+- **`cluster_last_apply_result`** — result (status + end time) of the last vLCM
+  remediation on one cluster (REST). Reports the outcome only; never runs an apply.
+- **`vcenter_deployment_size`** — vCenter appliance deployment size class (REST,
+  **new in 9.1**).
+
+The three REST tools authenticate with the **same per-target credentials** as the
+SOAP path and only ever GET. HTTP errors are translated **centrally** in the new
+`rest.py` (踩坑 #37): 4xx → an authored, leak-free teaching error (a 404 names how
+to get the right cluster MoID); 5xx / timeout → a "not ready" signal the tool turns
+into `{"available": false, …}` instead of crashing — because vSphere 9.1 exposes
+**no** patch-in-progress status endpoint, a 503 *is* the mid-patch signal, tolerated
+as a state rather than raised as a fault.
+
+CLI parity: `memory tiering`, `patch compliance <moid>`, `patch last-apply <moid>`,
+`deployment-size` (see `references/cli-reference.md`).
+
+### Honest beta caveats — endpoints verified, field names not yet replayed live
+
+**Read this before trusting a field value.** The verification done today is at the
+**path/endpoint level only**, not against a live 9.1 appliance:
+
+- The three REST **paths** are verified in the family VCF 9.1 endpoint spec (§D,
+  cross-checked against the Broadcom vcf-api-specs 9.1.0.0 OpenAPI) and pinned by a
+  regression test that rejects any off-spec or hallucinated path. The pyVmomi
+  memory-tiering **property chains** are verified against the installed pyVmomi 9.x
+  type metadata.
+- But the **JSON field names** those REST endpoints return have **not** been
+  replayed against a live 9.1 vCenter from this skill. Every field is therefore read
+  **defensively** (`.get` / `getattr`, absent → omitted, never a crash), and each
+  REST result **self-labels** via its `note`:
+  `"endpoint verified (spec §D); field parse best-effort pending live 9.1 vCenter"`.
+  Where the schema spelling is genuinely uncertain — the per-host compliance status
+  key — both plausible names (`compliance_status` / `status`) are tried, and if
+  *neither* is present `non_compliant_hosts` comes back **`null` (unknown), never a
+  false `0`**.
+- The session-bootstrap `POST /api/session` is the long-standing documented
+  vSphere Automation Basic-auth → session-id exchange (not a §D *data* path, listed
+  separately in the spec so the guard allows it explicitly rather than by accident).
+- No `X-VC-Maintenance*` header family and no `…/maintenance` patch-status path are
+  used — the spec documents them as non-existent, and a test forbids reintroducing
+  either as a path substring.
+
+There is no PromQL / PAIS / collector-pending surface in this skill; the only
+"inferred" thing here is the REST field parse described above, and it is labelled in
+every result rather than hidden.
+
+### Fixed — Fable5 review (three code fixes + a doc guard)
+
+- **`_target_config` (CLI) resolves config WITHOUT opening a SOAP session** — the
+  REST commands are meant to tolerate a mid-patch vCenter (503) and degrade to
+  `{available: false}`. The pre-fix path did a pyVmomi `SmartConnect` just to
+  resolve the target, so the SOAP login would fail on that same 503 and kill the
+  command *before* the degradation could run. Config is now read directly (the same
+  thing the MCP path does), no `ServiceInstance` opened.
+- **`patch compliance` returns `non_compliant_hosts=None` (unknown), never a false
+  `0`, when the host-status schema key is unmatched** (踩坑 形态 #1: an unmatched
+  read is "unknown", not "none" — a compliance tool must not silently claim
+  all-compliant because it looked for the wrong field).
+- **`host_memory_tiering` on a pre-8.0U3 target raises a teaching `ValueError`
+  naming the version**, instead of leaking an opaque `vmodl.query.InvalidProperty`.
+  (The handler catches the real class `vmodl.query.InvalidProperty`, *not* a
+  non-existent `vmodl.fault.*` — that lookup would itself crash, 踩坑 #40.)
+- **Doc guard** — a regression test now asserts SKILL.md's advertised MCP tool count
+  and the four new tool names track the live `mcp.list_tools()` registry (踩坑 #34).
+  Verified this release: live count **31**, SKILL.md header and full tools table both
+  read 31 with no phantom entries.
+
+Housekeeping: MCP-server modules are pinned against pyupgrade's `UP007`/`UP045`
+so the reflected tool signatures stay `Optional[X]` and never become PEP 604
+`X | None` (踩坑 #33); an unused `VmomiJSONEncoder` import was dropped.
+
 ## v1.8.9 — moved to vmware-skills org + MCP Registry namespace io.github.vmware-skills/vmware-monitor
 
 Repo transferred from github.com/zw008 to github.com/vmware-skills (redirects preserve old links).

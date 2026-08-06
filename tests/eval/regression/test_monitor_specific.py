@@ -96,7 +96,13 @@ def test_mcp_exposes_snapshot_listing() -> None:
         "datastore_investigation_bundle",
         # issue #31 follow-up: cross-vCenter "what needs attention now?" roll-up.
         "cross_vcenter_attention",
+        # vSphere 9.1 read tools: host memory tiering (pyVmomi) + vLCM/deployment
+        # over vSphere Automation REST. All read-only.
+        "host_memory_tiering",
+        "cluster_patch_compliance",
+        "cluster_last_apply_result",
+        "vcenter_deployment_size",
     }
     missing = expected_new - tools
     assert not missing, f"observability tools missing from MCP: {sorted(missing)}"
-    assert len(tools) == 27, f"expected 27 MCP tools, got {len(tools)}: {sorted(tools)}"
+    assert len(tools) == 31, f"expected 31 MCP tools, got {len(tools)}: {sorted(tools)}"

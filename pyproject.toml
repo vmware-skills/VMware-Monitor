@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vmware-monitor"
-version = "1.8.9"
+version = "1.8.10"
 description = "VMware vCenter/ESXi read-only monitoring tool. No destructive operations — code-level enforced."
 readme = "README.md"
 license = "MIT"
@@ -52,6 +52,10 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "vmware_monitor/ops/_html_base.py" = ["E501"]
 "vmware_monitor/ops/investigate_html.py" = ["E501"]
 "vmware_monitor/ops/attention_html.py" = ["E501"]
+# 踩坑 #33: MCP-server modules are reflected by FastMCP/Pydantic at import time.
+# Tool-signature annotations stay Optional[X], never PEP 604 X|None — never let
+# pyupgrade (UP007/UP045) rewrite them in the reflected files.
+"vmware_monitor/mcp_server/**/*.py" = ["UP007", "UP045"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

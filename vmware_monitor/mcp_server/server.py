@@ -25,8 +25,9 @@ import functools
 import logging
 import os
 import ssl
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 # MCP SDK — Model Context Protocol server framework
 from mcp.server.fastmcp import FastMCP
@@ -40,19 +41,19 @@ from vmware_policy import (
 # Internal VMware monitoring modules (all read-only operations)
 from vmware_monitor.config import CONFIG_FILE, ConfigError, load_config
 from vmware_monitor.connection import ConnectionManager
+from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
+from vmware_monitor.ops.attention import get_cross_vcenter_attention
+from vmware_monitor.ops.capacity import (
+    get_datastore_capacity,
+    get_resource_pool_usage,
+)
+from vmware_monitor.ops.cluster_summary import get_cluster_health_summary
 from vmware_monitor.ops.health import (
     get_active_alarms,
     get_host_hardware_status,
     get_recent_events,
 )
 from vmware_monitor.ops.health import get_host_services as _ops_get_host_services
-from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
-from vmware_monitor.ops.capacity import (
-    get_datastore_capacity,
-    get_resource_pool_usage,
-)
-from vmware_monitor.ops.attention import get_cross_vcenter_attention
-from vmware_monitor.ops.cluster_summary import get_cluster_health_summary
 from vmware_monitor.ops.infra_health import (
     get_certificate_status,
     get_license_status,
@@ -196,6 +197,17 @@ def _ensure_conn_mgr() -> ConnectionManager:
 def _get_connection(target: Optional[str] = None) -> Any:
     """Return a pyVmomi ServiceInstance, lazily initialising the manager."""
     return _ensure_conn_mgr().connect(target)
+
+
+def _get_target_config(target: Optional[str] = None) -> Any:
+    """Return the resolved TargetConfig for ``target`` (default if omitted).
+
+    The vSphere 9.1 REST reads (patching / deployment size) authenticate against
+    the same per-target credentials as the SOAP path but do not use a pyVmomi
+    ServiceInstance — they need the TargetConfig (host, creds, verify_ssl) instead.
+    """
+    cfg = _ensure_conn_mgr()._config
+    return cfg.get_target(target) if target else cfg.default_target
 
 
 # ---------------------------------------------------------------------------
@@ -1211,3 +1223,9 @@ def main() -> None:
     """Run the MCP server over stdio."""
     logging.basicConfig(level=logging.INFO)
     mcp.run(transport="stdio")
+
+
+# vSphere 9.1 read tools (memory tiering + vLCM/deployment REST) live in a focused
+# module to keep this file bounded; importing it registers them on ``mcp``. Placed
+# last so ``mcp`` and the tool helpers above are fully defined first.
+from vmware_monitor.mcp_server import tools_vsphere91  # noqa: E402,F401
