@@ -38,6 +38,8 @@ from vmware_policy import (
     vmware_tool,
 )
 
+from vmware_monitor import __version__
+
 # Internal VMware monitoring modules (all read-only operations)
 from vmware_monitor.config import CONFIG_FILE, ConfigError, load_config
 from vmware_monitor.connection import ConnectionManager
@@ -175,6 +177,11 @@ mcp = FastMCP(
         "No destructive operations — code-level enforced."
     ),
 )
+
+# FastMCP takes no version argument and leaves the lowlevel server's at
+# None, which makes `initialize` answer with the MCP SDK's version rather
+# than ours. Set it so a client can tell which release it is talking to.
+mcp._mcp_server.version = __version__
 
 # ---------------------------------------------------------------------------
 # Connection helper
