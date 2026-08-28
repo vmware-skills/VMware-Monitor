@@ -9,10 +9,10 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 uv tool install vmware-monitor
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add zw008/VMware-Monitor
+npx skills add vmware-skills/VMware-Monitor
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install vmware-monitor
+clawhub install @zw008/vmware-monitor
 ```
 
 ### Claude Code

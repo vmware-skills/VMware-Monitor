@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.vmware-skills/vmware-monitor -->
 # VMware Monitor
 
 > **作者**: Wei Zhou, VMware by Broadcom — wei-wz.zhou@broadcom.com
@@ -62,7 +63,7 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 npx skills add vmware-skills/VMware-Monitor
 
 # 通过 ClawHub 安装
-clawhub install vmware-monitor
+clawhub install @zw008/vmware-monitor
 ```
 
 ### PyPI 安装（无需访问 GitHub）
@@ -298,7 +299,7 @@ chmod 600 ~/.vmware-monitor/.env
 # 方式一：由安装器放置 skill（推荐）
 npx skills add vmware-skills/VMware-Monitor
 # 或
-clawhub install vmware-monitor
+clawhub install @zw008/vmware-monitor
 
 # 方式二：手工安装 skill
 git clone https://github.com/vmware-skills/VMware-Monitor.git

@@ -63,7 +63,7 @@ Works with Claude Code, Cursor, Codex, Gemini CLI, Trae, and 30+ AI agents:
 npx skills add vmware-skills/VMware-Monitor
 
 # Via ClawHub
-clawhub install vmware-monitor
+clawhub install @zw008/vmware-monitor
 ```
 
 ### PyPI Install (No GitHub Access Required)
@@ -388,7 +388,7 @@ Either installer places the skill in Claude Code's skills directory for you:
 ```bash
 npx skills add vmware-skills/VMware-Monitor
 # or
-clawhub install vmware-monitor
+clawhub install @zw008/vmware-monitor
 ```
 
 **Method 2: Manual skill install**
@@ -611,7 +611,7 @@ Already installed? Re-run the install command for your channel to get the latest
 
 | Install Channel | Update Command |
 |----------------|----------------|
-| ClawHub | `clawhub install vmware-monitor` |
+| ClawHub | `clawhub install @zw008/vmware-monitor` |
 | Skills.sh | `npx skills add vmware-skills/VMware-Monitor` |
 | Git clone | `cd VMware-Monitor && git pull origin main && uv pip install -e .` |
 | uv | `uv tool install vmware-monitor --force` |
