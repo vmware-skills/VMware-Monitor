@@ -3,7 +3,7 @@
   "name": "vmware-monitor",
   "displayName": "VMware Monitor",
   "version": "1.8.10",
-  "description": "Read-only VMware vCenter/ESXi monitoring with 27 MCP tools. Code-level safety.",
+  "description": "Read-only VMware vCenter/ESXi monitoring with 31 MCP tools. Code-level safety.",
   "author": {
     "name": "Wei Zhou",
     "email": "zhouwei008@gmail.com",
