@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vmware-monitor": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "vmware-monitor==1.8.10",
+        "vmware-monitor-mcp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "vmware-monitor",
+  "displayName": "VMware Monitor",
+  "version": "1.8.10",
+  "description": "Read-only VMware vCenter/ESXi monitoring with 27 MCP tools. Code-level safety.",
+  "author": {
+    "name": "Wei Zhou",
+    "email": "zhouwei008@gmail.com",
+    "url": "https://github.com/vmware-skills"
+  },
+  "homepage": "https://github.com/vmware-skills/VMware-Monitor",
+  "repository": "https://github.com/vmware-skills/VMware-Monitor",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "monitor",
+    "vmware",
+    "vsphere"
+  ]
+}
