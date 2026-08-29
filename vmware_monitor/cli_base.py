@@ -61,6 +61,23 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
                 f"Missing config key or password env var: {e}. "
                 "Check ~/.vmware-monitor/config.yaml and ~/.vmware-monitor/.env."
             )
+        except vmodl.fault.NotImplemented as e:
+            # A bare ESXi answers this to anything that is really a vCenter
+            # service — the event query above all. Connectivity and credentials
+            # are fine, so the general "run doctor" remedy sends the user to a
+            # check that passes and explains nothing. Observed on a standalone
+            # host, 2026-08-29.
+            fail(
+                f"This target does not implement that operation: "
+                f"{str(getattr(e, 'msg', None) or type(e).__name__).rstrip('.')}. "
+                f"This is what a "
+                f"standalone ESXi answers for vCenter-only services such as the "
+                f"event query — it is not a connectivity or credential problem, "
+                f"and 'doctor' will pass. Point the command at a vCenter target, "
+                f"or use the paths that work directly against a host: "
+                f"'vmware-monitor health alarms', 'vmware-monitor scan logs', "
+                f"'vmware-monitor summary'."
+            )
         except vmodl.MethodFault as e:
             fail(
                 f"vSphere API fault: {getattr(e, 'msg', None) or type(e).__name__}. "
