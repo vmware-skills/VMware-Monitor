@@ -392,3 +392,126 @@ def test_a_loaded_standalone_host_is_not_reported_as_all_clear(monkeypatch):
     out = cluster_summary.get_cluster_health_summary(object())
     [row] = out["clusters"]
     assert row["status"] != "ok", "93% memory reported as OK"
+
+
+# ── vCenter-level alarms ────────────────────────────────────────────────────
+#
+# Found live, 2026-08-29. A vCenter held three critical alarms:
+#
+#     Host TPM attestation alarm      on 192.168.60.15
+#     Root user password expired.     on Datacenters
+#     Expired vCenter Server license  on Datacenters
+#
+# `get_active_alarms` returned all three. `cluster_health_summary` counted ONE,
+# because it scans ClusterComputeResource and HostSystem and nothing else. An
+# alarm raised on a datacenter or on the vCenter root belongs to no cluster and
+# no host, so it was dropped — and the count that remained looked authoritative.
+#
+# The same shape as the standalone-host defect above: an object outside the
+# expected hierarchy vanishes rather than being reported. It is worse here,
+# because an expired license and an expired root password are how an estate
+# stops working, and if those were the ONLY alarms present the summary would
+# have reported "no issues detected".
+
+
+class _FakeSI:
+    """A ServiceInstance whose root folder holds the alarms, as a real one does."""
+
+    def __init__(self, states):
+        folder = types.SimpleNamespace(name="Datacenters", triggeredAlarmState=states)
+        self.content = types.SimpleNamespace(rootFolder=folder)
+
+
+def _root_state(status, entity):
+    return types.SimpleNamespace(overallStatus=status, entity=entity)
+
+
+def _vcenter_scoped(status):
+    """An alarm on the root folder itself — a licence, a password expiry."""
+    return _root_state(status, vim.Folder("folder-1"))
+
+
+def _host_scoped(status, host_ref):
+    """A host alarm as it appears in the root folder's list: propagated up, but
+    still tagged with the host it was raised on."""
+    return _root_state(status, host_ref)
+
+
+def _dc_collect(host_ref, host_alarms):
+    """A vCenter with one standalone host and no clusters."""
+
+    def fake_collect(si, obj_type, paths):
+        t = obj_type[0]
+        if t is vim.ClusterComputeResource:
+            return []
+        if t is vim.HostSystem:
+            host = _standalone_host(330, 20000)
+            host["triggeredAlarmState"] = [_alarm(a) for a in host_alarms]
+            return [(host_ref, host)]
+        if t is vim.VirtualMachine:
+            return [(object(), {"runtime.host": host_ref, "runtime.powerState": "poweredOn"})]
+        return []
+
+    return fake_collect
+
+
+def test_datacenter_alarms_are_counted(monkeypatch):
+    """The reproduction: two root-folder alarms plus one host alarm is three."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, ["red"]))
+    si = _FakeSI([
+        _host_scoped("red", host_ref),
+        _vcenter_scoped("red"),
+        _vcenter_scoped("red"),
+    ])
+    out = cluster_summary.get_cluster_health_summary(si)
+    total = sum(c["alarms"]["critical"] for c in out["clusters"])
+    assert total == 3, f"counted {total} of 3 critical alarms"
+
+
+def test_a_propagated_host_alarm_is_not_counted_twice(monkeypatch):
+    """The root folder carries the host's alarm too. Counting the list wholesale
+    would report two criticals where the estate has one."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, ["red"]))
+    si = _FakeSI([_host_scoped("red", host_ref)])
+    out = cluster_summary.get_cluster_health_summary(si)
+    assert sum(c["alarms"]["critical"] for c in out["clusters"]) == 1
+
+
+def test_a_vcenter_only_alarm_is_not_reported_as_all_clear(monkeypatch):
+    """The dangerous case. If the only alarms are vCenter-level — an expired
+    licence, an expired root password — nothing else in the estate looks wrong,
+    and the tool used to say so."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
+    out = cluster_summary.get_cluster_health_summary(
+        _FakeSI([_vcenter_scoped("red"), _vcenter_scoped("red")])
+    )
+    assert any(c["status"] != "ok" for c in out["clusters"]), "reported OK"
+    assert out["top_issues"], "no issue surfaced for two critical alarms"
+
+
+def test_the_vcenter_alarm_is_attributed_to_vcenter_not_a_host(monkeypatch):
+    """Reporting it under a host would send the operator to the wrong machine."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
+    out = cluster_summary.get_cluster_health_summary(_FakeSI([_vcenter_scoped("red")]))
+    assert any(i["cluster"] == "(vCenter-level)" for i in out["top_issues"])
+
+
+def test_a_vcenter_that_will_not_answer_for_its_root_does_not_take_the_summary_down(
+    monkeypatch,
+):
+    """The summary runs precisely when something is wrong, so a root folder that
+    raises must degrade to 'no vCenter-level alarms', not to no summary."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, ["red"]))
+
+    class Exploding:
+        @property
+        def content(self):
+            raise RuntimeError("vCenter is not answering")
+
+    out = cluster_summary.get_cluster_health_summary(Exploding())
+    assert sum(c["alarms"]["critical"] for c in out["clusters"]) == 1

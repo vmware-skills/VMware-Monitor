@@ -43,6 +43,11 @@ _YELLOW = "yellow"
 # Bucket name for hosts that belong to no cluster (standalone hosts).
 _STANDALONE = "(standalone hosts)"
 
+#: Bucket for alarms raised above any cluster or host — datacenter and vCenter
+#: root. Its own scope because attributing "expired vCenter license" to a host
+#: would send the operator to the wrong machine.
+_VCENTER_SCOPE = "(vCenter-level)"
+
 # Default size of the "top issues" focus list.
 DEFAULT_TOP_N = 10
 
@@ -76,6 +81,21 @@ def _pct(used: float, total: float) -> float:
     if not total:
         return 0.0
     return round(used / total * 100, 1)
+
+
+def _root_alarm_states(si: ServiceInstance) -> list:
+    """Every triggered alarm in the inventory, read from the root folder.
+
+    The root folder accumulates descendants' alarms, so this one read sees all
+    of them — each still carrying the entity it was actually raised on. Guarded:
+    a vCenter that will not answer for its root folder must not take the whole
+    health summary down with it, since the summary is what gets run precisely
+    when something is wrong.
+    """
+    try:
+        return list(getattr(si.content.rootFolder, "triggeredAlarmState", None) or [])
+    except Exception:
+        return []
 
 
 def _empty_cluster(name: str, ha: bool, drs: bool) -> dict:
@@ -254,6 +274,37 @@ def get_cluster_health_summary(
     # Standalone bucket only when not filtering to a named cluster.
     if needle is None:
         clusters[_STANDALONE] = _empty_cluster(_STANDALONE, ha=False, drs=False)
+
+    # Pass 1b — alarms raised ABOVE any cluster or host.
+    #
+    # Measured on a live vCenter, 2026-08-29:
+    #
+    #   rootFolder "Datacenters"  -> 3 alarms, each tagged with its true .entity
+    #   Datacenter  "home"        -> 1, the HOST's alarm propagated up
+    #   HostSystem  192.168.60.15 -> 1, its own
+    #
+    # Two things follow. Alarms propagate upward, so reading a parent's list
+    # wholesale double-counts what the host and cluster passes already have.
+    # And the alarms that belong to nobody else — "Expired vCenter Server
+    # license", "Root user password expired." — sit on the root FOLDER, which
+    # this function never read. Live, that hid two of three criticals behind a
+    # count that looked authoritative, and had those two been the only alarms
+    # present the answer would have been "no issues detected".
+    #
+    # So: read the root folder, which holds every alarm, and keep only the ones
+    # whose entity is a Folder or Datacenter. Hosts and clusters are owned by
+    # the passes below; anything lower (a VM, say) is not this scope's to claim.
+    if needle is None:
+        for state in _root_alarm_states(si):
+            entity = getattr(state, "entity", None)
+            if not isinstance(entity, (vim.Folder, vim.Datacenter)):
+                continue
+            rec = clusters.get(_VCENTER_SCOPE)
+            if rec is None:
+                rec = _empty_cluster(_VCENTER_SCOPE, ha=False, drs=False)
+                clusters[_VCENTER_SCOPE] = rec
+            scope_name = sanitize(getattr(entity, "name", None) or "vCenter")
+            _scan_alarms([state], rec, "vcenter", scope_name, _VCENTER_SCOPE, raw_alarms)
 
     # Pass 2 — hosts. Roll connection state, live CPU/memory usage, and
     # host-level alarms up to the owning cluster.

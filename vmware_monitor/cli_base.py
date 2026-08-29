@@ -88,6 +88,28 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
                 f"Connection failed: {e}. "
                 "Run 'vmware-monitor doctor' to verify connectivity and credentials."
             )
+        except Exception as e:
+            # pyVim.connect.SmartConnect raises a BARE Exception when the port
+            # answers but no VIM service does — a vCenter mid-boot, a wrong
+            # port, a proxy, or an HTTPS endpoint that simply is not vCenter.
+            # It is neither OSError nor ConnectionError, so it walked past every
+            # clause above and printed twenty lines of pyVim internals. Seen
+            # live against a vCSA that was still starting, 2026-08-29.
+            #
+            # Matched on the message rather than caught wholesale: a blanket
+            # `except Exception` here would turn genuine bugs in this codebase
+            # into a calm sentence, which is worse than the traceback it
+            # replaces. Anything else re-raises.
+            if "is not a VIM server" not in str(e):
+                raise
+            fail(
+                f"{e}. TCP reached the host, but nothing there answered as a "
+                f"vSphere endpoint — most often a vCenter that is still "
+                f"starting up (a vCSA takes several minutes after power-on), "
+                f"and otherwise a wrong port, a proxy in the way, or an HTTPS "
+                f"service that is not vSphere. Wait and retry, or check the "
+                f"host and port for this target in ~/.vmware-monitor/config.yaml."
+            )
 
     return wrapper
 
