@@ -1,3 +1,36 @@
+## v1.8.12 — three defects a mock could not have shown
+
+Every one of these was found by pointing the tool at a real ESXi host and a real
+vCenter, and every one had passed the full suite.
+
+- **A standalone ESXi reported 0 VMs, 0% usage, and "no issues detected".** The
+  host was at 70.7% memory with three VMs running. The VM pass had no fallback
+  to the standalone bucket, so every VM outside a cluster was silently skipped;
+  and capacity totals were only ever read from cluster properties, so the
+  standalone bucket divided by zero and reported 0.0% — indistinguishable from
+  an idle host. Any ESXi without vCenter — normal for labs, edge sites and small
+  installs — got an all-clear regardless of its actual state. All five existing
+  tests built a cluster, so the path could not fail in any of them.
+- **Two of three critical alarms were invisible to the health summary.** A live
+  vCenter held an expired licence, an expired root password, and a host TPM
+  alarm. `get_active_alarms` returned all three; `cluster_health_summary`
+  counted one, because it scanned clusters and hosts and nothing above them.
+  Alarms raised on the root folder belonged to no bucket. Had the two
+  vCenter-level ones been the only alarms present, "is anything on fire?" would
+  have answered no. Measured before fixing: alarms propagate upward, so reading
+  a parent's list wholesale double-counts — the first attempt did exactly that.
+- **The SSL config key in every doc was one the code has never read.**
+  SKILL.md, README, README-CN, SECURITY.md, capabilities and setup-guide all
+  said to set `disableSslCertValidation: true`; `config.py` reads `verify_ssl`.
+  Following our own instruction produced a config the code ignores and a failure
+  naming a key the docs never mention.
+
+Two error messages also stopped being unhelpful. `vmodl.fault.NotImplemented` —
+what a standalone ESXi answers for vCenter-only services such as the event query
+— was met with "run doctor to verify connectivity and credentials", and doctor
+passes. And a vCenter still booting made pyVim raise a bare `Exception` that no
+clause caught, so twenty lines of library internals reached the terminal.
+
 ## v1.8.11 — two wrong numbers: the server's own version, and the advertised tool count
 
 Both defects were invisible to the test suites and both were user-facing.
