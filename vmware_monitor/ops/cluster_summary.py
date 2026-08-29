@@ -87,15 +87,22 @@ def _root_alarm_states(si: ServiceInstance) -> list:
     """Every triggered alarm in the inventory, read from the root folder.
 
     The root folder accumulates descendants' alarms, so this one read sees all
-    of them — each still carrying the entity it was actually raised on. Guarded:
-    a vCenter that will not answer for its root folder must not take the whole
-    health summary down with it, since the summary is what gets run precisely
-    when something is wrong.
+    of them — each still carrying the entity it was actually raised on.
+
+    Returns ``(states, error)``. A vCenter that will not answer for its root
+    folder must not take the whole summary down with it — the summary is what
+    gets run precisely when something is wrong — but the failure is returned so
+    the caller can surface it, because an empty list here is indistinguishable
+    from "nothing is wrong" and this read covers the alarms nothing else sees.
     """
     try:
-        return list(getattr(si.content.rootFolder, "triggeredAlarmState", None) or [])
-    except Exception:
-        return []
+        return list(getattr(si.content.rootFolder, "triggeredAlarmState", None) or []), None
+    except Exception as exc:
+        # Degrade, but never silently. Returning a bare [] here would say
+        # "there are no vCenter-level alarms" — and this read is the ONLY thing
+        # that sees the alarms no other pass covers, so a failure has to become
+        # a visible issue rather than a clean bill of health.
+        return [], f"{type(exc).__name__}: {exc}"
 
 
 def _empty_cluster(name: str, ha: bool, drs: bool) -> dict:
@@ -295,7 +302,21 @@ def get_cluster_health_summary(
     # whose entity is a Folder or Datacenter. Hosts and clusters are owned by
     # the passes below; anything lower (a VM, say) is not this scope's to claim.
     if needle is None:
-        for state in _root_alarm_states(si):
+        root_states, root_error = _root_alarm_states(si)
+        if root_error:
+            host_issues.append({
+                "severity": "warning",
+                "kind": "alarm",
+                "object": "vCenter",
+                "scope": "vcenter",
+                "cluster": _VCENTER_SCOPE,
+                "detail": (
+                    f"vCenter-level alarms could not be read ({root_error}) — "
+                    f"this view is incomplete, not clear"
+                ),
+                "drilldown": _DRILLDOWN["alarm"],
+            })
+        for state in root_states:
             entity = getattr(state, "entity", None)
             if not isinstance(entity, (vim.Folder, vim.Datacenter)):
                 continue
@@ -494,7 +515,12 @@ def _finalize(
             rec.pop("vms_total", None)
             rec.pop("vms_on", None)
 
-        totals["clusters"] += 1
+        # The vCenter-level bucket is an alarm scope, not a compute scope — no
+        # hosts, no VMs, no capacity. Counting it made an estate with one host
+        # and no clusters report "2 clusters". Its alarms still roll up below;
+        # only the cluster tally skips it.
+        if rec["name"] != _VCENTER_SCOPE:
+            totals["clusters"] += 1
         totals["hosts_total"] += rec["hosts_total"]
         totals["hosts_connected"] += rec["hosts_connected"]
         totals["vms_total"] += rec.get("vms_total", 0)

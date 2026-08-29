@@ -188,7 +188,7 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 | Code-Level Isolation | Independent repository — zero destructive functions in codebase |
 | Audit Trail | All queries logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy) |
 | Password Protection | `.env` file loading with permission check (warn if not 600) |
-| SSL Self-signed Support | `verify_ssl` — **only** for ESXi hosts with self-signed certificates in isolated lab/home environments. Production environments should use CA-signed certificates with full TLS verification enabled. |
+| SSL Self-signed Support | `verify_ssl: false` — **only** for ESXi hosts with self-signed certificates in isolated lab/home environments. Production environments should use CA-signed certificates with full TLS verification enabled. |
 
 ## FORBIDDEN Operations — DO NOT EXIST IN CODEBASE
 

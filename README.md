@@ -199,7 +199,7 @@ ESXi Standalone ──→ VMs
 | **Code-Level Isolation** | Independent repository — zero destructive functions in codebase |
 | **Audit Trail** | All queries logged to `~/.vmware-monitor/audit.log` (JSONL) |
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
-| **SSL Self-signed Support** | `verify_ssl` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
+| **SSL Self-signed Support** | `verify_ssl: false` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
 | **Webhook Data Scope** | Sends monitoring summaries to user-configured URLs only — no third-party services by default |
 | **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor eliminates this risk: no destructive code paths exist. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
@@ -705,7 +705,7 @@ See `config.example.yaml` for all options.
 | targets | host | — | vCenter/ESXi hostname or IP |
 | targets | type | vcenter | `vcenter` or `esxi` |
 | targets | port | 443 | Connection port |
-| targets | verify_ssl | false | SSL certificate verification |
+| targets | verify_ssl | true | Verify the target's TLS certificate (set false only for self-signed lab hosts) |
 | scanner | interval_minutes | 15 | Scan frequency |
 | scanner | severity_threshold | warning | Min severity: critical/warning/info |
 | scanner | lookback_hours | 1 | How far back to scan |

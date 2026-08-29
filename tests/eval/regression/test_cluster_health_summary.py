@@ -21,6 +21,18 @@ from pyVmomi import vim
 from vmware_monitor.ops import cluster_summary
 
 
+def _si(states=()):
+    """A ServiceInstance with a readable (possibly empty) root folder.
+
+    `object()` was standing in for `si` in the tests below, which is not a shape
+    a real ServiceInstance ever has — and once the summary started reading
+    `si.content.rootFolder` for vCenter-level alarms, that double made every one
+    of them look like a vCenter that could not be reached.
+    """
+    folder = types.SimpleNamespace(name="Datacenters", triggeredAlarmState=list(states))
+    return types.SimpleNamespace(content=types.SimpleNamespace(rootFolder=folder))
+
+
 def _alarm(status: str) -> types.SimpleNamespace:
     return types.SimpleNamespace(overallStatus=status)
 
@@ -102,7 +114,7 @@ def test_rollup_maps_hosts_vms_alarms_and_escalates_status(monkeypatch):
         cluster_summary, "_collect", _mk_collect(hosts_by_cluster, host_props, vm_rows)
     )
 
-    data = cluster_summary.get_cluster_health_summary(object())
+    data = cluster_summary.get_cluster_health_summary(_si())
 
     assert data["customization_hint"] == cluster_summary.CUSTOMIZATION_HINT
     assert "point-in-time" in data["snapshot"]
@@ -148,7 +160,7 @@ def test_capacity_and_alarm_and_ha_rules(monkeypatch):
         h_ok2: {"conn": "connected", "cpu_mhz": 1000, "mem_mb": 10 * 1024, "alarms": []},
     }
     monkeypatch.setattr(cluster_summary, "_collect", _mk_collect(hosts_by_cluster, host_props, []))
-    rows = {c["name"]: c for c in cluster_summary.get_cluster_health_summary(object())["clusters"]}
+    rows = {c["name"]: c for c in cluster_summary.get_cluster_health_summary(_si())["clusters"]}
     assert rows["hot"]["status"] == "critical"
     assert any("CPU at 96.0%" in r for r in rows["hot"]["attention"])
     assert rows["noha"]["status"] == "warn"
@@ -166,7 +178,7 @@ def test_include_vms_false_skips_vm_fields(monkeypatch):
         "_collect",
         _mk_collect(hosts_by_cluster, host_props, [(h, "poweredOn")]),
     )
-    data = cluster_summary.get_cluster_health_summary(object(), include_vms=False)
+    data = cluster_summary.get_cluster_health_summary(_si(), include_vms=False)
     assert "vms_total" not in data["clusters"][0]
     assert "vms_total" not in data["totals"]
 
@@ -182,7 +194,7 @@ def test_cluster_filter_substring(monkeypatch):
         h2: {"conn": "connected", "cpu_mhz": 1000, "mem_mb": 1024, "alarms": []},
     }
     monkeypatch.setattr(cluster_summary, "_collect", _mk_collect(hosts_by_cluster, host_props, []))
-    data = cluster_summary.get_cluster_health_summary(object(), cluster_filter="PROD")
+    data = cluster_summary.get_cluster_health_summary(_si(), cluster_filter="PROD")
     names = [c["name"] for c in data["clusters"]]
     assert names == ["prod-east"]
     # Standalone bucket is suppressed when filtering.
@@ -272,7 +284,7 @@ def test_top_issues_ranked_named_and_capped(monkeypatch):
         lambda si, objs, typ, paths: [(alarm_ref, {"info.name": "Host CPU alarm"})],
     )
 
-    data = cluster_summary.get_cluster_health_summary(object(), top_n=2)
+    data = cluster_summary.get_cluster_health_summary(_si(), top_n=2)
     issues = data["top_issues"]
     # 3 anomalies exist (host down, critical alarm, memory 96%); capped to 2.
     assert data["issues_total"] == 3
@@ -284,7 +296,7 @@ def test_top_issues_ranked_named_and_capped(monkeypatch):
     assert all(i["drilldown"] and i["cluster"] == "prod" for i in issues)
 
     # top_n=0 hides the list but still counts.
-    d0 = cluster_summary.get_cluster_health_summary(object(), top_n=0)
+    d0 = cluster_summary.get_cluster_health_summary(_si(), top_n=0)
     assert d0["top_issues"] == [] and d0["issues_total"] == 3
 
 
@@ -355,7 +367,7 @@ def test_standalone_host_counts_its_vms(monkeypatch):
             ],
         ),
     )
-    out = cluster_summary.get_cluster_health_summary(object())
+    out = cluster_summary.get_cluster_health_summary(_si())
     [row] = out["clusters"]
     assert row["vms_total"] == 4, "VMs on a standalone host were dropped"
     assert row["vms_on"] == 3
@@ -371,7 +383,7 @@ def test_standalone_host_reports_real_utilisation(monkeypatch):
         "_collect",
         _standalone_collect(host_ref, _standalone_host(330, 46094), [(host_ref, "poweredOn")]),
     )
-    [row] = cluster_summary.get_cluster_health_summary(object())["clusters"]
+    [row] = cluster_summary.get_cluster_health_summary(_si())["clusters"]
     assert 60 < row["mem_used_pct"] < 80, f"memory read as {row['mem_used_pct']}%"
     assert row["cpu_used_pct"] > 0
 
@@ -389,7 +401,7 @@ def test_a_loaded_standalone_host_is_not_reported_as_all_clear(monkeypatch):
             [(host_ref, "poweredOn")],
         ),
     )
-    out = cluster_summary.get_cluster_health_summary(object())
+    out = cluster_summary.get_cluster_health_summary(_si())
     [row] = out["clusters"]
     assert row["status"] != "ok", "93% memory reported as OK"
 
@@ -515,3 +527,60 @@ def test_a_vcenter_that_will_not_answer_for_its_root_does_not_take_the_summary_d
 
     out = cluster_summary.get_cluster_health_summary(Exploding())
     assert sum(c["alarms"]["critical"] for c in out["clusters"]) == 1
+
+
+def test_the_vcenter_bucket_is_not_counted_as_a_cluster(monkeypatch):
+    """Caught reviewing the fix above, not by the fix's own tests.
+
+    The vCenter-level bucket is an alarm scope, not a compute scope: it holds no
+    hosts and no VMs. Counting it made a live estate with ONE host and NO
+    clusters report "2 clusters", which is worse than the missing alarms it was
+    added to surface — a wrong number stated confidently.
+
+    Its alarms still roll into the totals; only the cluster tally excludes it.
+    """
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
+    out = cluster_summary.get_cluster_health_summary(_FakeSI([_vcenter_scoped("red")]))
+    assert out["totals"]["clusters"] == 1, (
+        f"counted {out['totals']['clusters']} clusters where one standalone "
+        f"host and no clusters exist"
+    )
+    assert out["totals"]["alarms"]["critical"] == 1, "its alarms were lost too"
+    assert any(c["name"] == "(vCenter-level)" for c in out["clusters"]), (
+        "the row itself must still be shown"
+    )
+
+
+def test_an_empty_vcenter_bucket_never_appears(monkeypatch):
+    """No vCenter-level alarms means no such row, exactly as the standalone
+    bucket disappears when no host is outside a cluster."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, ["red"]))
+    out = cluster_summary.get_cluster_health_summary(_FakeSI([_host_scoped("red", host_ref)]))
+    assert not any(c["name"] == "(vCenter-level)" for c in out["clusters"])
+    assert out["totals"]["clusters"] == 1
+
+
+def test_an_unreadable_root_folder_is_reported_not_silently_empty(monkeypatch):
+    """Caught reviewing my own fix.
+
+    The guard around the root-folder read returned [] on failure, which reads
+    as "there are no vCenter-level alarms" — the exact shape the whole day's
+    work has been removing. Degrading is right; degrading silently is not,
+    because the one thing that read covers is the alarms nothing else sees.
+    """
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
+
+    class Exploding:
+        @property
+        def content(self):
+            raise RuntimeError("vCenter is not answering")
+
+    out = cluster_summary.get_cluster_health_summary(Exploding())
+    assert out["top_issues"], "an unreadable alarm source produced no signal at all"
+    top = " ".join(str(i) for i in out["top_issues"]).lower()
+    assert "alarm" in top and ("could not" in top or "unread" in top or "unknown" in top), (
+        f"nothing says vCenter-level alarms went unchecked: {out['top_issues']}"
+    )
