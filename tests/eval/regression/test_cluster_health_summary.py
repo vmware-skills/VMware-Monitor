@@ -286,3 +286,109 @@ def test_top_issues_ranked_named_and_capped(monkeypatch):
     # top_n=0 hides the list but still counts.
     d0 = cluster_summary.get_cluster_health_summary(object(), top_n=0)
     assert d0["top_issues"] == [] and d0["issues_total"] == 3
+
+
+# ── Standalone ESXi (no vCenter) ────────────────────────────────────────────
+#
+# Found on a real host, 2026-08-29: an ESXi at 70.7% memory with three VMs
+# running reported "0/0 VMs on, 0.0% CPU, 0.0% memory, overall OK — no issues
+# detected". Every test above builds a cluster, so the standalone path could not
+# fail in any of them; the defect needed an environment the suite did not have.
+#
+# Two causes, one root — the standalone bucket was a second-class citizen. Pass 2
+# routed hosts into it, pass 3 did not route VMs into it, and nothing ever gave
+# it the capacity denominators that only cluster properties carried.
+#
+# The severity is not the wrong numbers. It is that the tool whose whole job is
+# "is anything on fire?" answered affirmatively that nothing was, on the one
+# deployment shape it could not measure.
+
+
+def _standalone_collect(host_ref, host, vm_rows):
+    """No clusters at all — a bare ESXi, which is how many labs and edge sites
+    actually run."""
+
+    def fake_collect(si, obj_type, paths):
+        t = obj_type[0]
+        if t is vim.ClusterComputeResource:
+            return []
+        if t is vim.HostSystem:
+            return [(host_ref, host)]
+        if t is vim.VirtualMachine:
+            return [
+                (object(), {"runtime.host": h, "runtime.powerState": ps})
+                for h, ps in vm_rows
+            ]
+        return []
+
+    return fake_collect
+
+
+def _standalone_host(cpu_mhz_used, mem_mb_used):
+    gb = 1024**3
+    return {
+        "name": "localhost.localdomain",
+        "runtime.connectionState": "connected",
+        "summary.quickStats.overallCpuUsage": cpu_mhz_used,
+        "summary.quickStats.overallMemoryUsage": mem_mb_used,
+        "summary.hardware.cpuMhz": 2500,
+        "summary.hardware.numCpuCores": 4,
+        "summary.hardware.memorySize": 64 * gb,
+        "triggeredAlarmState": [],
+    }
+
+
+def test_standalone_host_counts_its_vms(monkeypatch):
+    """The reproduction: three VMs on a host that belongs to no cluster."""
+    host_ref = object()
+    monkeypatch.setattr(
+        cluster_summary,
+        "_collect",
+        _standalone_collect(
+            host_ref,
+            _standalone_host(330, 46094),
+            [
+                (host_ref, "poweredOn"),
+                (host_ref, "poweredOn"),
+                (host_ref, "poweredOn"),
+                (host_ref, "poweredOff"),
+            ],
+        ),
+    )
+    out = cluster_summary.get_cluster_health_summary(object())
+    [row] = out["clusters"]
+    assert row["vms_total"] == 4, "VMs on a standalone host were dropped"
+    assert row["vms_on"] == 3
+
+
+def test_standalone_host_reports_real_utilisation(monkeypatch):
+    """Percentages need a denominator, and only cluster properties carried one.
+    A standalone host has its own capacity; 0% must not stand in for unmeasured.
+    """
+    host_ref = object()
+    monkeypatch.setattr(
+        cluster_summary,
+        "_collect",
+        _standalone_collect(host_ref, _standalone_host(330, 46094), [(host_ref, "poweredOn")]),
+    )
+    [row] = cluster_summary.get_cluster_health_summary(object())["clusters"]
+    assert 60 < row["mem_used_pct"] < 80, f"memory read as {row['mem_used_pct']}%"
+    assert row["cpu_used_pct"] > 0
+
+
+def test_a_loaded_standalone_host_is_not_reported_as_all_clear(monkeypatch):
+    """The part that matters. Whatever the numbers, a host under real memory
+    pressure must not come back as 'no issues detected'."""
+    host_ref = object()
+    monkeypatch.setattr(
+        cluster_summary,
+        "_collect",
+        _standalone_collect(
+            host_ref,
+            _standalone_host(330, int(0.93 * 64 * 1024)),
+            [(host_ref, "poweredOn")],
+        ),
+    )
+    out = cluster_summary.get_cluster_health_summary(object())
+    [row] = out["clusters"]
+    assert row["status"] != "ok", "93% memory reported as OK"

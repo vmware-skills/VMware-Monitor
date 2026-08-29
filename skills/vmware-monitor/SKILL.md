@@ -243,7 +243,7 @@ The `get_alarms` tool queries triggered alarms at the root folder level. Some al
 ### "Connection refused" error
 1. Run `vmware-monitor doctor` to diagnose
 2. Verify target hostname/IP and port (443) in config.yaml
-3. For self-signed certs: set `disableSslCertValidation: true`
+3. For self-signed certs: set `verify_ssl: false`
 
 ### Events returns too many results
 Use severity filter: `--severity warning` (default) filters out info-level events. Use `--hours 4` to narrow time range.

@@ -199,7 +199,7 @@ ESXi Standalone ──→ VMs
 | **Code-Level Isolation** | Independent repository — zero destructive functions in codebase |
 | **Audit Trail** | All queries logged to `~/.vmware-monitor/audit.log` (JSONL) |
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
-| **SSL Self-signed Support** | `disableSslCertValidation` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
+| **SSL Self-signed Support** | `verify_ssl` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
 | **Webhook Data Scope** | Sends monitoring summaries to user-configured URLs only — no third-party services by default |
 | **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor eliminates this risk: no destructive code paths exist. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
@@ -257,7 +257,7 @@ The `get_alarms` tool queries triggered alarms at the root folder level. Some al
 
 1. Run `vmware-monitor doctor` to diagnose
 2. Verify target hostname/IP and port (443) in `config.yaml`
-3. For self-signed certs: set `disableSslCertValidation: true`
+3. For self-signed certs: set `verify_ssl: false`
 
 ### Events returns too many results
 

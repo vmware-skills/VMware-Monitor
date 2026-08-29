@@ -42,7 +42,7 @@ The background scanner (`daemon start`) is **user-initiated only** and is never 
 ### SSL/TLS Verification
 
 - TLS certificate verification is **enabled by default**
-- `disableSslCertValidation: true` exists solely for ESXi hosts using self-signed certificates in isolated lab/home environments
+- `verify_ssl: false` exists solely for ESXi hosts using self-signed certificates in isolated lab/home environments
 - In production, always use CA-signed certificates with full TLS verification
 
 ### Transitive Dependencies

@@ -262,6 +262,14 @@ def get_cluster_health_summary(
         "runtime.connectionState",
         "summary.quickStats.overallCpuUsage",
         "summary.quickStats.overallMemoryUsage",
+        # A cluster reports its own totals; a standalone host has no cluster to
+        # report them, so its capacity has to come from the host itself. Without
+        # these the standalone bucket divides by zero and every percentage reads
+        # 0.0 — which is indistinguishable from an idle host, and was reported
+        # as one on a real ESXi sitting at 70% memory.
+        "summary.hardware.cpuMhz",
+        "summary.hardware.numCpuCores",
+        "summary.hardware.memorySize",
         "triggeredAlarmState",
     ]
     for obj, p in _collect(si, [vim.HostSystem], host_props):
@@ -288,13 +296,25 @@ def get_cluster_health_summary(
             )
         rec["_cpu_used_mhz"] += float(p.get("summary.quickStats.overallCpuUsage") or 0)
         rec["_mem_used_mb"] += float(p.get("summary.quickStats.overallMemoryUsage") or 0)
+        if cname == _STANDALONE:
+            # Only for the standalone bucket. A cluster's own totals already
+            # account for its hosts, and adding them again would double-count.
+            rec["_cpu_total_mhz"] += float(p.get("summary.hardware.cpuMhz") or 0) * float(
+                p.get("summary.hardware.numCpuCores") or 0
+            )
+            rec["_mem_total_bytes"] += float(p.get("summary.hardware.memorySize") or 0)
         _scan_alarms(p.get("triggeredAlarmState"), rec, "host", host_name, cname, raw_alarms)
 
     # Pass 3 — VMs (optional). Minimal props: power state + host ref, mapped up
     # to the cluster. Skipped entirely when include_vms is False.
     if include_vms:
         for _obj, p in _collect(si, [vim.VirtualMachine], ["runtime.powerState", "runtime.host"]):
-            cname = host_to_cluster.get(p.get("runtime.host"))
+            # Same fallback pass 2 uses for hosts. Without it every VM on a
+            # host outside a cluster was silently skipped, so a standalone ESXi
+            # reported "0/0 VMs on" no matter how many were running.
+            cname = host_to_cluster.get(
+                p.get("runtime.host"), _STANDALONE if needle is None else None
+            )
             rec = clusters.get(cname) if cname else None
             if rec is None:
                 continue

@@ -26,18 +26,20 @@
           "datastore_capacity",
           "resource_pool_usage",
           "active_tasks",
-          "active_sessions"
+          "active_sessions",
+          "host_memory_tiering",
+          "vcenter_deployment_size"
         ],
-        "reachable_on_surface": 5,
+        "reachable_on_surface": 7,
         "reachable_only_via_description": 0,
-        "required_entity_params": 5,
-        "required_params_classified": "5/5",
-        "tool_count": 27
+        "required_entity_params": 7,
+        "required_params_classified": "7/7",
+        "tool_count": 31
       },
-      "maximum": 5,
+      "maximum": 7,
       "pct": 100.0,
       "unit": "required entity params",
-      "value": 5
+      "value": 7
     },
     "entity_reachability_read_only": {
       "detail": {
@@ -74,75 +76,100 @@
       },
       "maximum": 5,
       "pct": 100.0,
+      "stale": true,
       "unit": "required entity params",
       "value": 5
     },
     "entry_point_availability": {
       "detail": {
-        "full_entry_points": 22,
-        "read_only_entry_points": 22
+        "full_entry_points": 24
       },
-      "maximum": 27,
-      "pct": 81.5,
+      "maximum": 31,
+      "pct": 77.4,
       "unit": "entry points",
-      "value": 22
+      "value": 24
     },
     "error_actionability": {
       "detail": {
         "composed_hint_sites": [],
-        "dead_end_count": 0,
-        "dead_end_errors": [],
+        "dead_end_count": 3,
+        "dead_end_errors": [
+          {
+            "message": "Memory tiering requires vCenter/ESXi 8.0U3+ \u2014 this target does not expose the property '{}'. Upgrade",
+            "missing": [
+              "names_artifact",
+              "states_remedy"
+            ],
+            "where": "memory_tiering.py:117"
+          },
+          {
+            "message": "vCenter session bootstrap at {} returned no session id.",
+            "missing": [
+              "names_artifact",
+              "states_remedy"
+            ],
+            "where": "rest.py:120"
+          },
+          {
+            "message": "vCenter REST GET {} returned a non-JSON body.",
+            "missing": [
+              "names_artifact",
+              "states_remedy"
+            ],
+            "where": "rest.py:156"
+          }
+        ],
         "per_dimension_pct": {
-          "names_artifact": 100.0,
+          "names_artifact": 69.2,
           "names_input": 100.0,
-          "states_remedy": 100.0
+          "states_remedy": 76.9
         },
-        "raise_sites": 8
+        "raise_sites": 13
       },
-      "maximum": 24,
-      "pct": 100.0,
+      "maximum": 39,
+      "pct": 82.1,
       "unit": "points",
-      "value": 24
+      "value": 32
     },
     "manifest_context_headroom": {
       "detail": {
         "heaviest_tools": {
           "cluster_health_summary": 326,
           "host_log_scan": 279,
-          "list_virtual_machines": 377,
-          "vm_investigation_bundle": 256,
+          "host_memory_tiering": 302,
+          "list_virtual_machines": 404,
           "vm_performance": 262
         },
-        "manifest_tokens": 5886,
-        "mean_tokens_per_tool": 218.0,
+        "manifest_tokens": 6831,
+        "mean_tokens_per_tool": 220.4,
         "reference_context": 16384,
-        "tool_count": 27
+        "tool_count": 31
       },
       "maximum": 16384,
-      "pct": 64.1,
+      "pct": 58.3,
       "unit": "tokens",
-      "value": 10498
+      "value": 9553
     },
     "parameter_documentation_coverage": {
       "detail": {
         "undocumented_by_tool": {}
       },
-      "maximum": 70,
+      "maximum": 78,
       "pct": 100.0,
       "unit": "parameters",
-      "value": 70
+      "value": 78
     },
     "per_tool_token_discipline": {
       "detail": {
         "ceiling": 350,
         "over_ceiling": {
-          "list_virtual_machines": 377
+          "list_virtual_machines": 404
         }
       },
-      "maximum": 27,
-      "pct": 96.3,
+      "maximum": 31,
+      "pct": 96.8,
       "unit": "tools",
-      "value": 26
+      "value": 30
     },
     "read_only_manifest_saving": {
       "detail": {
@@ -154,6 +181,7 @@
       },
       "maximum": 5886,
       "pct": 0.0,
+      "stale": true,
       "unit": "tokens",
       "value": 0
     },
@@ -161,28 +189,31 @@
       "detail": {
         "unmarked": []
       },
-      "maximum": 27,
+      "maximum": 31,
       "pct": 100.0,
       "unit": "points",
-      "value": 27
+      "value": 31
     },
     "remedy_survives_truncation": {
       "detail": {
         "budget_chars": 300,
         "over_budget": [],
-        "remedy_after_interpolation": []
+        "remedy_after_interpolation": [
+          "rest.py:113",
+          "rest.py:149"
+        ]
       },
-      "maximum": 8,
+      "maximum": 10,
       "pct": 100.0,
       "unit": "messages",
-      "value": 8
+      "value": 10
     },
     "teaching_error_rate": {
       "detail": {},
-      "maximum": 8,
-      "pct": 100.0,
+      "maximum": 13,
+      "pct": 69.2,
       "unit": "messages",
-      "value": 8
+      "value": 9
     },
     "tool_description_quality": {
       "detail": {
@@ -190,26 +221,31 @@
           "args": 100.0,
           "gotcha": 100.0,
           "marker": 100.0,
-          "next_hop": 100.0,
+          "next_hop": 93.5,
           "what": 100.0,
-          "when": 100.0
+          "when": 96.8
         },
-        "tools_graded": 27,
+        "tools_graded": 31,
         "weakest_tools": {
           "active_sessions": [],
           "active_tasks": [],
           "certificate_status": [],
           "cluster_health_summary": [],
-          "cross_vcenter_attention": [],
-          "datastore_capacity": [],
-          "datastore_investigation_bundle": [],
-          "get_alarms": []
+          "cluster_last_apply_result": [],
+          "cluster_patch_compliance": [],
+          "host_memory_tiering": [
+            "next_hop"
+          ],
+          "vcenter_deployment_size": [
+            "next_hop",
+            "when"
+          ]
         }
       },
-      "maximum": 162,
-      "pct": 100.0,
+      "maximum": 186,
+      "pct": 98.4,
       "unit": "points",
-      "value": 162
+      "value": 183
     },
     "tool_failure_payload_quality": {
       "detail": {
