@@ -106,11 +106,34 @@ def _event_catalogue(event_mgr: object) -> dict[str, str]:
     info = getattr(getattr(event_mgr, "description", None), "eventInfo", None)
     catalogue: dict[str, str] = {}
     for detail in info or []:
-        key = getattr(detail, "key", None)
+        key = _detail_key(getattr(detail, "key", None))
         category = getattr(detail, "category", None)
         if key and category:
-            catalogue[str(key)] = str(category).lower()
+            catalogue[key] = str(category).lower()
     return catalogue
+
+
+def _detail_key(key: object) -> str:
+    """The event type name from an ``EventDetail.key``.
+
+    pyVmomi's VMODL declares this property as a **type**, not a string::
+
+        vim.event.EventDescription.EventDetail -> key: <class 'type'>
+
+    so on a live vCenter it arrives as a pyVmomi class and ``str(key)`` renders
+    ``"<class 'pyVmomi.VmomiSupport.vim.event.VmPoweredOnEvent'>"`` — which no
+    lookup against an event's own class name can ever match. v1.8.14 shipped
+    with exactly that: every event fell through to "unknown", and because
+    unknown ranks alongside warning, a fix meant to stop hiding events flooded
+    instead — 1000 of 1000 unclassified, 89% of the returned rows login noise.
+
+    The unit tests mocked this key as a string, so they could not have caught
+    it: validated in an environment where the defect cannot appear (形态 #3).
+    """
+    if key is None:
+        return ""
+    name = getattr(key, "__name__", None)
+    return str(name) if name else str(key)
 
 
 def _event_key(event: object) -> str:

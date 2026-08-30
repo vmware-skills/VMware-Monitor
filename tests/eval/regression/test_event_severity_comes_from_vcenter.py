@@ -172,3 +172,91 @@ def test_a_vcenter_without_a_catalogue_still_returns_events():
     out = ops.get_recent_events(_si(mgr), hours=24, severity="warning")
 
     assert [r["severity"] for r in out["items"]] == ["critical"]
+
+
+# ── the shape a real vCenter actually sends ────────────────────────────────
+#
+# Everything above mocks `EventDetail.key` as a string, and that is why v1.8.14
+# shipped broken. pyVmomi's own VMODL metadata declares it as a **type**:
+#
+#     vim.event.EventDescription.EventDetail  ->  key: <class 'type'>
+#                                                 category: <class 'str'>
+#
+# So on a live vCenter `key` is a pyVmomi class, `str(key)` renders
+# "<class 'pyVmomi.VmomiSupport.vim.event.VmPoweredOnEvent'>", and no lookup
+# against `type(event).__name__` can ever match. Every event fell through to
+# "unknown" — which ranks alongside warning, so instead of hiding events the
+# fix flooded: 1000 of 1000 unclassified, 998 rows returned, 89% of them login
+# noise (real VCF 9.1 estate, 2026-08-30).
+#
+# Validating in an environment where the defect could not appear (形态 #3),
+# committed while fixing that very class of bug.
+
+
+class _RealisticDetail:
+    """An EventDetail whose `key` is a type, as pyVmomi declares it."""
+
+    def __init__(self, event_cls, category):
+        self.key = event_cls
+        self.category = category
+
+
+def _real_mgr(events, pairs):
+    """`pairs` is [(event_class, category)] — key carried as the class itself."""
+    mgr = _Ref(events, {})
+    mgr.description = SimpleNamespace(
+        eventInfo=[_RealisticDetail(cls, cat) for cls, cat in pairs]
+    )
+    return mgr
+
+
+@pytest.mark.unit
+def test_the_catalogue_key_is_a_type_not_a_string():
+    """The regression that shipped. Reproduces pyVmomi's declared shape."""
+    warning_cls = type("VmDiskConsolidationNeededEvent", (SimpleNamespace,), {})
+    event = warning_cls(
+        fullFormattedMessage="disk consolidation needed",
+        createdTime="2026-08-03T05:49:00Z",
+        userName="root",
+    )
+    mgr = _real_mgr([event], [(warning_cls, "warning")])
+
+    out = ops.get_recent_events(_si(mgr), hours=24, severity="warning")
+
+    assert out["unclassified"] == 0, (
+        "the catalogue was keyed by str(<class ...>) and matched nothing, so "
+        "every event on a real vCenter ranked as unknown"
+    )
+    assert [r["severity"] for r in out["items"]] == ["warning"]
+
+
+@pytest.mark.unit
+def test_routine_events_are_still_filtered_out_on_the_real_shape():
+    """The half that turned a hiding bug into a flooding one.
+
+    With the catalogue unusable, everything became `unknown`, which ranks with
+    warning and therefore passes the default filter. A login storm was returned
+    in full.
+    """
+    # Deliberately NOT a name in CRITICAL/WARNING/INFO_EVENTS: those overrides
+    # run before the catalogue, so using one would let this test pass without
+    # ever exercising the lookup it exists to check (形态 #4 — it did, on the
+    # first draft, via UserLoginSessionEvent).
+    login = type("AccountCreatedEvent", (SimpleNamespace,), {})
+    assert "AccountCreatedEvent" not in (
+        ops.CRITICAL_EVENTS | ops.WARNING_EVENTS | ops.INFO_EVENTS
+    )
+    events = [
+        login(
+            fullFormattedMessage=f"user {i} logged in",
+            createdTime="2026-08-03T05:49:00Z",
+            userName="root",
+        )
+        for i in range(50)
+    ]
+    mgr = _real_mgr(events, [(login, "user")])
+
+    out = ops.get_recent_events(_si(mgr), hours=24, severity="warning")
+
+    assert out["items"] == [], "50 routine logins were returned as warnings"
+    assert out["unclassified"] == 0
