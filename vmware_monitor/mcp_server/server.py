@@ -30,6 +30,7 @@ from typing import Any, Optional
 # MCP SDK — Model Context Protocol server framework
 from mcp.server.fastmcp import FastMCP
 from vmware_policy import (
+    describe_tool_parameters,
     mtime_cached_loader,
     sanitize,
     set_environment_resolver,
@@ -1249,3 +1250,10 @@ def main() -> None:
 # module to keep this file bounded; importing it registers them on ``mcp``. Placed
 # last so ``mcp`` and the tool helpers above are fully defined first.
 from vmware_monitor.mcp_server import tools_vsphere91  # noqa: E402,F401
+
+# The docstrings above are the schema. `describe_tool_parameters` copies each
+# `Args:` entry into the JSON schema an agent actually reads, and closes the
+# object. Without it every parameter reaches the model as a bare name and a
+# type, which is how a wrong guess becomes an unfiltered result or a silent
+# zero-row answer instead of an error (real-hardware round, 2026-08-30).
+_DESCRIBED_PARAMS = describe_tool_parameters(mcp._tool_manager._tools)
