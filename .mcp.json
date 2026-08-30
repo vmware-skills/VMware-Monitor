@@ -5,7 +5,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "vmware-monitor==1.8.14",
+        "vmware-monitor==1.8.15",
         "vmware-monitor-mcp"
       ]
     }

@@ -1,3 +1,40 @@
+## v1.8.15 — the event catalogue key is a type, and v1.8.14 flooded because of it
+
+v1.8.14 replaced 23 hardcoded event-class names with vCenter's own published
+catalogue. The reasoning held; the type did not. pyVmomi's VMODL declares
+`EventDescription.EventDetail.key` as a **type**, not a string, so on a live
+vCenter `str(key)` renders "<class 'pyVmomi...VmPoweredOnEvent'>" and matches no
+event's class name. Every event fell through to "unknown" — which ranks with
+warning so that an unrankable event is not hidden — and a fix meant to stop
+*hiding* events flooded instead: 1000 of 1000 unclassified, 998 rows returned,
+89% of them login noise. It shipped because the tests mocked that key as a
+string, validating where the defect could not appear.
+
+The read-only claim is also now enforced by something that can enforce it. The
+old check was 33 string literals shell-grepped at the source; injecting 18 real
+destructive pyVmomi calls left it green. It is an AST gate now, with the
+allowlist checked against pyVmomi's own type metadata (195 managed types, 1386
+methods) and a deny half derived from vSphere's RBAC privilege data. Same
+experiment re-run: the old check killed 13 of 29 injections, the new one kills
+27, and the two survivors are declared blind spots pinned as tests asserting
+they are still blind.
+
+**The `vmware-policy` floor moves to >=1.11.0.** Policy 1.11.0 stops the engine
+failing open: on a host whose locale is not UTF-8, reading `rules.yaml` raised a
+decode error that was swallowed, and a `freeze-production-writes` rule came back
+ALLOW. No new API is used here, so the floor could have stayed — it is raised
+because leaving it low means a user resolving 1.10.0 keeps the permissive engine
+and the fix never reaches them. One behaviour travels with it: on a host whose
+rules file cannot be read, operations move from all-allowed to all-denied.
+`VMWARE_POLICY_DISABLED=1` is checked above the rules, so the escape hatch does
+not itself depend on them loading.
+
+Also in this release: the suite no longer appends to the operator's real
+`~/.vmware/audit.db`. It held over 30,000 rows dominated by tool names nobody
+had invoked, including 1,400 entries for a destructive operation that never
+happened — an audit trail carrying test fiction cannot answer the question it is
+kept for.
+
 ## v1.8.14 — the schema an agent reads now carries the descriptions
 
 Parameter descriptions reach the JSON schema for the first time. An MCP client
