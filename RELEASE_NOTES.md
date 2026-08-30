@@ -1,3 +1,54 @@
+## v1.8.14 — the schema an agent reads now carries the descriptions
+
+Parameter descriptions reach the JSON schema for the first time. An MCP client
+sees the schema, not the docstring, and this repo's coverage of `description`
+and `additionalProperties` was 0% — while nearly every parameter was already
+described in an `Args:` block no client ever receives.
+
+Measured on a real VCF 9.1 estate, the gap produced a silent failure with no
+error at any stage: a parameter name guessed wrong is discarded and the tool
+returns the full unfiltered result; a value guessed wrong (`power_state=
+"running"`) returns 0 rows where there were 11.
+
+vmware-policy 1.10.0's `describe_tool_parameters` copies what is already
+written, so the docstring is now load-bearing and the two cannot drift apart. It
+removes the `Args:` block from the description once copied — both travel in
+every `tools/list` response, so leaving it bills the same sentences twice
+against the manifest's token budget. `additionalProperties` is closed: an open
+schema is room for a model to invent arguments that are then silently
+discarded, which is the other half of the same failure.
+
+**The `vmware-policy` floor moves to >=1.10.0.** Older releases have no
+`describe_tool_parameters`, and resolving one gives an ImportError at server
+start rather than a missing feature.
+
+Also in this release: the read-only claim is now enforced by something that can
+enforce it. `test_no_destructive_code.py` was 33 string literals shell-grepped
+against the source, under a docstring calling itself "the most critical test".
+Injecting 18 real destructive pyVmomi calls left it green — `PowerOnVM_Task(`
+was not in the list at all, and the one pattern that did fire is bypassed by a
+space before the parenthesis.
+
+It is now an AST gate: every vSphere method the package calls must be on a
+reviewed allowlist, with the set of what vSphere offers read out of pyVmomi own
+type metadata (195 managed types, 1386 methods) rather than hand-written. Two
+second nets are derived from vSphere own RBAC data — an allowlisted method that
+returns `vim.Task`, or that vCenter gates outside System.Read/View, needs an
+explicit reasoned exemption. The whole package calls nine methods; two are
+exempted and argued in place.
+
+Re-running the same experiment: the old check killed 13 of 29 injections, the
+new one kills 27. The two survivors are pre-declared blind spots — a method name
+composed across two statements, and eval dispatch — pinned as tests asserting
+they are *still* blind, so the day one becomes catchable the suite fails rather
+than the docstring going quietly stale.
+
+The documentation was corrected to match. "Cannot modify, create, or delete any
+resource" became "has no code path that does": there is no runtime interceptor,
+and every place claiming enforcement now names the mechanism, states the two
+limits, and points at a read-only vCenter account as the backstop that does not
+depend on this repo. The Chinese README also said 27 tools where there are 31.
+
 ## v1.8.13 — five things that answered when they should have said "I don't know"
 
 Found by running the family against a real VCF 9.1 estate, where four of eight

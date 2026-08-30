@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vmware-monitor"
-version = "1.8.13"
+version = "1.8.14"
 description = "VMware vCenter/ESXi read-only monitoring tool. No destructive operations — code-level enforced."
 readme = "README.md"
 license = "MIT"
