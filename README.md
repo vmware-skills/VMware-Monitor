@@ -7,9 +7,11 @@
 
 English | [中文](README-CN.md)
 
-**Read-only** VMware vCenter/ESXi monitoring — 31 tools, code-level safety. No destructive operations exist in this codebase.
+**Read-only** VMware vCenter/ESXi monitoring — 31 tools. No destructive operations exist in this codebase, and a test enforces that.
 
-> **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). Safety is enforced at the **code level**: no power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase. Not just prompt constraints — zero destructive code paths.
+> **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). No power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase — not a prompt constraint, an absence.
+>
+> **How that is enforced, precisely.** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) parses every source file with `ast` and requires each vSphere method the package calls to appear on a reviewed allowlist, cross-checked against pyVmomi's own type metadata: anything returning a `vim.Task`, or gated by vCenter on a non-read privilege, fails unless a human wrote down why. Today that allowlist is nine methods. The check is a gate on the code as written — it cannot see a method name assembled at runtime, and nothing runs it automatically, so it holds only as far as someone runs the test suite. For a guarantee that does not depend on this repository at all, point the skill at a vCenter account with read-only permissions.
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -196,13 +198,13 @@ ESXi Standalone ──→ VMs
 
 | Feature | Details |
 |---------|---------|
-| **Code-Level Isolation** | Independent repository — zero destructive functions in codebase |
+| **Code-Level Isolation** | Independent repository — zero destructive functions in codebase, checked by an AST allowlist gate over every vSphere call ([`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)) |
 | **Audit Trail** | All queries logged to `~/.vmware-monitor/audit.log` (JSONL) |
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
 | **SSL Self-signed Support** | `verify_ssl: false` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
 | **Webhook Data Scope** | Sends monitoring summaries to user-configured URLs only — no third-party services by default |
-| **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor eliminates this risk: no destructive code paths exist. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
+| **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor removes that class of risk from its own code: no destructive code paths exist, and the allowlist gate fails the build if one is added. Pair it with a read-only vCenter account for defence that does not rely on this codebase. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
 
 ### What's NOT Included (By Design)
 
@@ -299,7 +301,7 @@ vCenter may be under heavy load. Try targeting a specific ESXi host directly ins
 
 ### MCP Server Integrations
 
-The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 31 tools are **read-only** — code-level enforced safety.
+The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 31 tools are **read-only**, enforced by the allowlist gate described above.
 
 | Agent / Tool | Local Model Support | Config Template | Integration Guide |
 |-------------|:-------------------:|-----------------|-------------------|
@@ -312,7 +314,7 @@ The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. R
 | **Continue** | ✅ Ollama | [`continue.yaml`](examples/mcp-configs/continue.yaml) | [Guide](docs/integrations/continue.md) |
 | **Claude Code** | — | [`claude-code.json`](examples/mcp-configs/claude-code.json) | — |
 
-> **[Xiaoguai (小怪)](https://github.com/xiaoguai-agent/xiaoguai)** — a self-hostable, audit-first agent platform (Rust, single binary + embedded SQLite) from the same maintainer. It runs the read-only vmware-monitor MCP server as one of its toolboxes; being both an MCP *consumer* and an MCP *server*, its HMAC-chained audit log pairs naturally with this skill's code-level read-only guarantee — every query is logged, nothing mutates. See its [MCP integration guide](https://github.com/xiaoguai-agent/xiaoguai/blob/main/docs/book/src/api/mcp.md).
+> **[Xiaoguai (小怪)](https://github.com/xiaoguai-agent/xiaoguai)** — a self-hostable, audit-first agent platform (Rust, single binary + embedded SQLite) from the same maintainer. It runs the read-only vmware-monitor MCP server as one of its toolboxes; being both an MCP *consumer* and an MCP *server*, its HMAC-chained audit log pairs naturally with this skill's read-only design — every query is logged, and no code path here mutates. See its [MCP integration guide](https://github.com/xiaoguai-agent/xiaoguai/blob/main/docs/book/src/api/mcp.md).
 
 **Fully local operation** (no cloud API required):
 

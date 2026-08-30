@@ -59,7 +59,7 @@ Each operation is classified by autonomy level per the Enterprise Harness Engine
 | **L5** | Auto-remediation from learned pattern | *N/A* | — *(remediation is out of scope by design)* |
 
 **Notes**:
-- All tools are safe for agents to call without confirmation — the skill is code-level read-only.
+- All tools are safe for agents to call without confirmation — the skill is read-only, enforced by the allowlist gate in `tests/eval/regression/test_read_only_enforcement.py`.
 - Test file `test_no_destructive_operations.py` enforces this invariant on every commit.
 
 ## 0. Cluster Health Summary (triage)
@@ -185,14 +185,14 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 
 | Feature | Details |
 |---------|---------|
-| Code-Level Isolation | Independent repository — zero destructive functions in codebase |
+| Code-Level Isolation | Independent repository — zero destructive functions in codebase, gated by an AST allowlist over every vSphere call |
 | Audit Trail | All queries logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy) |
 | Password Protection | `.env` file loading with permission check (warn if not 600) |
 | SSL Self-signed Support | `verify_ssl: false` — **only** for ESXi hosts with self-signed certificates in isolated lab/home environments. Production environments should use CA-signed certificates with full TLS verification enabled. |
 
 ## FORBIDDEN Operations — DO NOT EXIST IN CODEBASE
 
-These operations **cannot** be performed with this skill — zero destructive code paths exist:
+These operations are **not** performed by this skill — no code path here does them, and the allowlist gate fails if one is added:
 
 - `vm power-on/off`, `vm reset`, `vm suspend`
 - `vm create/delete/reconfigure`

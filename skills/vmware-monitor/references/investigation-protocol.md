@@ -132,7 +132,7 @@ Missing:
 
 A complete investigation often chains across skills:
 
-- **vmware-monitor** (this skill): inventory, alarms, events — code-level read-only data source
+- **vmware-monitor** (this skill): inventory, alarms, events — read-only data source
 - [vmware-aria](https://github.com/vmware-skills/VMware-Aria): metrics, alerts, anomaly detection — primary L1/L2 data source for time-series analysis
 - [vmware-aiops](https://github.com/vmware-skills/VMware-AIops): VM/host state, deployment history; can also remediate at L3+ once the investigation is complete and approved
 - [vmware-pilot](https://github.com/vmware-skills/VMware-Pilot): orchestrate the investigation itself as a multi-step Dispatcher → Subagent workflow

@@ -7,9 +7,11 @@
 
 [English](README.md) | 中文
 
-**只读** VMware vCenter/ESXi 监控 — 27 个工具，代码级安全保障。代码库中不存在任何破坏性操作。
+**只读** VMware vCenter/ESXi 监控 — 27 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
 
-> **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。安全性在**代码级别**保障：代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数。不仅仅是提示词约束 — 而是零破坏性代码路径。
+> **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数——不是提示词约束，是这些代码根本不存在。
+>
+> **这一点具体由什么守住。** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) 用 `ast` 解析每个源文件，要求本包调用的每一个 vSphere 方法都出现在一份经人工审阅的白名单里，并对照 pyVmomi 自带的类型元数据交叉核验：凡是返回 `vim.Task`、或 vCenter 要求非只读权限的方法，都必须有人写明理由才放行。当前白名单只有九个方法。它守的是**写出来的代码**——看不见运行时拼出来的方法名；而且本仓没有任何 CI，所以它只在有人跑测试时才生效。若要一份不依赖本仓的保证，请用只读权限的 vCenter 账号连接。
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -148,7 +150,7 @@ ESXi 独立主机 ──→ VM
 
 | 功能 | 说明 |
 |------|------|
-| **代码级隔离** | 独立仓库 — 代码中零破坏性函数 |
+| **代码级隔离** | 独立仓库 — 代码中零破坏性函数，由一道 AST 白名单闸门逐个核验全部 vSphere 调用（[`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)）|
 | **审计日志** | 所有查询记录到 `~/.vmware-monitor/audit.log`（JSONL） |
 | **密码保护** | 通过 `.env` 加载密码并检查文件权限（warn if not 600） |
 | **配置文件内容** | `config.yaml` 仅存储主机名、端口和 `.env` 引用路径，**不含密码或 Token** |
@@ -238,7 +240,7 @@ vCenter 可能负载过高。尝试直接连接特定 ESXi 主机而非 vCenter�
 
 ### MCP Server 集成（本地 Agent）
 
-vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 27 个工具均为**只读** — 代码级安全保障。
+vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 27 个工具均为**只读**，由上述白名单闸门守住。
 
 | Agent / 工具 | 本地模型支持 | 配置模板 | 集成指南 |
 |-------------|:----------:|---------|---------|

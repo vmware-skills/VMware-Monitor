@@ -1,10 +1,10 @@
 ---
 name: vmware-monitor
 description: >
-  Use this skill for safe, risk-free queries of VMware infrastructure — code-level enforced safety means no destructive operations exist in the codebase.
+  Use this skill for safe, read-only queries of VMware infrastructure — no destructive operations exist in the codebase; a test enforces it.
   Directly handles: a one-glance cross-cluster health summary, object-centered VM/host/datastore investigation drill-downs (correlating surrounding infrastructure + recent events), a cross-vCenter "what needs attention now?" rollup, list VMs/hosts/datastores/clusters, active alarms, recent events, VM details.
   Always use vmware-monitor when the user asks to "list VMs", "check vSphere alarms", "show host status", "is anything on fire", "what needs attention now", "what is happening around this VM/host/datastore", "investigate this VM" — or needs read-only VMware info before making changes.
-  Do NOT use for any write operations — this skill is code-level read-only and cannot modify, create, or delete any resource.
+  Do NOT use for any write operations — this skill is read-only and has no code path that creates, modifies, or deletes a resource.
   For VM modifications use vmware-aiops, for networking use vmware-nsx, for metrics/capacity use vmware-aria. For load balancing/AVI/AKO use vmware-avi.
 installer:
   kind: uv
@@ -23,7 +23,7 @@ compatibility: >
 
 Read-only VMware vCenter/ESXi monitoring — 31 MCP tools, zero destructive code.
 
-> **Code-level safety**: This skill contains NO power, create, delete, snapshot, or modify operations. Not disabled — they don't exist in the codebase.
+> **Read-only by construction**: This skill contains NO power, create, delete, snapshot, or modify operations. Not disabled — they don't exist in the codebase. Enforced by [`tests/eval/regression/test_read_only_enforcement.py`](../../tests/eval/regression/test_read_only_enforcement.py): it parses every source file and requires each vSphere method called to be on a reviewed allowlist, checked against pyVmomi's own type metadata. That gate reads the code as written — it cannot see a method name composed at runtime, and no CI runs it. For a guarantee independent of this repo, connect with a read-only vCenter account.
 > **Companion skills**: [vmware-aiops](https://github.com/vmware-skills/VMware-AIops) (VM lifecycle), [vmware-storage](https://github.com/vmware-skills/VMware-Storage) (iSCSI/vSAN), [vmware-vks](https://github.com/vmware-skills/VMware-VKS) (Tanzu Kubernetes), [vmware-nsx](https://github.com/vmware-skills/VMware-NSX) (NSX networking), [vmware-nsx-security](https://github.com/vmware-skills/VMware-NSX-Security) (DFW/firewall), [vmware-aria](https://github.com/vmware-skills/VMware-Aria) (metrics/alerts/capacity), [vmware-avi](https://github.com/vmware-skills/VMware-AVI) (AVI/ALB/AKO), [vmware-harden](https://github.com/vmware-skills/VMware-Harden) (compliance baselines).
 > | [vmware-pilot](../vmware-pilot/SKILL.md) (workflow orchestration) | [vmware-policy](../vmware-policy/SKILL.md) (audit/policy)
 

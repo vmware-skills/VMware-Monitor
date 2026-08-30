@@ -1,8 +1,13 @@
-"""Safety boundary tests -- verify VMware-Monitor contains NO destructive ops.
+"""Naming-convention guard: no ops/ function is *named* after a destructive verb.
 
-VMware-Monitor is a read-only skill. This test scans all ops/ files and
-asserts that none contain function definitions matching destructive patterns
-(delete, power_off, remove, disable, reset, force, shutdown, revert, destroy).
+This is a hygiene check on our own function names, not an enforcement of the
+read-only claim -- a function called ``get_status`` could still call
+``Destroy_Task``, and this test would not notice. The actual gate on what
+vSphere methods this package calls lives in
+``tests/eval/regression/test_read_only_enforcement.py``.
+
+Kept because a destructive-sounding name in a read-only skill is a design
+smell worth catching early, and because it is cheap.
 """
 from __future__ import annotations
 
