@@ -134,25 +134,32 @@
     "manifest_context_headroom": {
       "detail": {
         "heaviest_tools": {
-          "cluster_health_summary": 326,
-          "host_log_scan": 279,
-          "host_memory_tiering": 302,
-          "list_virtual_machines": 404,
-          "vm_performance": 262
+          "cluster_health_summary": 344,
+          "get_events": 313,
+          "host_log_scan": 293,
+          "host_memory_tiering": 317,
+          "list_virtual_machines": 429
         },
-        "manifest_tokens": 6831,
-        "mean_tokens_per_tool": 220.4,
+        "manifest_tokens": 7348,
+        "mean_tokens_per_tool": 237.0,
         "reference_context": 16384,
         "tool_count": 31
       },
       "maximum": 16384,
-      "pct": 58.3,
+      "pct": 55.2,
       "unit": "tokens",
-      "value": 9553
+      "value": 9036
     },
     "parameter_documentation_coverage": {
       "detail": {
-        "undocumented_by_tool": {}
+        "undocumented_by_tool": {},
+        "value_set_candidates": {
+          "get_events.severity": [
+            "critical",
+            "info",
+            "warning"
+          ]
+        }
       },
       "maximum": 78,
       "pct": 100.0,
@@ -163,7 +170,7 @@
       "detail": {
         "ceiling": 350,
         "over_ceiling": {
-          "list_virtual_machines": 404
+          "list_virtual_machines": 429
         }
       },
       "maximum": 31,
