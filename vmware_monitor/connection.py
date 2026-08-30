@@ -44,12 +44,20 @@ def _connect_failed(target: TargetConfig, exc: BaseException) -> ConnectError:
     setting, and the file to edit — and interpolates nothing from ``exc``, whose
     text is the thing being withheld. The original survives as ``__cause__`` for
     the server-side log.
+
+    **The remedy comes before the path**, and that ordering is load-bearing.
+    ``_safe_error`` renders this through ``sanitize(str(exc), 300)``, the path is
+    unbounded, and the tail is what gets cut — so with the path first, the longer
+    someone's home directory is the more likely they are to receive a diagnosis
+    with no next step. The family's own Windows test host
+    (``C:\\Users\\Administrator``) is longer than the developer's, which is
+    exactly the population that would have lost it (形态 #3).
     """
     return ConnectError(
         f"Could not open a session to target '{target.name}' (its config says "
         f"verify_ssl: {str(target.verify_ssl).lower()}). Check that target's host "
-        f"and port in {CONFIG_FILE}; a self-signed certificate needs "
-        f"verify_ssl: false. Then run 'vmware-monitor doctor'.",
+        f"and port, and note a self-signed certificate needs verify_ssl: false; "
+        f"then run 'vmware-monitor doctor'. Config: {CONFIG_FILE}",
         cause_name=type(exc).__name__,
     )
 

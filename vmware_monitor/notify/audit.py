@@ -66,7 +66,7 @@ class AuditLogger:
         # — degrade to a stderr warning and continue (family rule).
         try:
             existed = self._path.exists()
-            with open(self._path, "a") as fh:
+            with open(self._path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
             if not existed:
                 try:

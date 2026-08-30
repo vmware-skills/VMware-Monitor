@@ -127,7 +127,7 @@ def start_scheduler(config_path: Path | None = None) -> None:
         os.chmod(PID_FILE.parent, 0o700)
     except OSError:
         pass
-    PID_FILE.write_text(str(os.getpid()))
+    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
 
     try:
         # Run first scan immediately, then scheduler takes over. Inside the

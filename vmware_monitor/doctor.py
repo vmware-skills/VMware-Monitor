@@ -66,7 +66,7 @@ def _check_targets() -> tuple[bool, str]:
     if not path.exists():
         return False, f"Config file missing: {path} — skipping target check"
     import yaml
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
     targets = raw.get("targets", [])
     if not targets:
@@ -81,7 +81,7 @@ def _check_connectivity() -> tuple[bool, str]:
     if not path.exists():
         return False, f"Config file missing: {path} — skipping connectivity check"
     import yaml
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
     targets = raw.get("targets", [])
     if not targets:
@@ -159,7 +159,7 @@ def _check_daemon() -> tuple[bool, str]:
     pid_file = CONFIG_DIR / "daemon.pid"
     if not pid_file.exists():
         return True, "Daemon not running (optional — needed for scheduled scanning)"
-    pid = pid_file.read_text().strip()
+    pid = pid_file.read_text(encoding="utf-8").strip()
     try:
         import os as _os
         _os.kill(int(pid), 0)

@@ -467,7 +467,7 @@ def daemon_status() -> None:
     if not pid_file.exists():
         console.print("[yellow]Daemon not running.[/]")
         return
-    raw = pid_file.read_text().strip()
+    raw = pid_file.read_text(encoding="utf-8").strip()
     try:
         pid = int(raw)
     except ValueError:
@@ -495,7 +495,7 @@ def daemon_stop() -> None:
         console.print("[yellow]Daemon not running.[/]")
         return
 
-    raw = pid_file.read_text().strip()
+    raw = pid_file.read_text(encoding="utf-8").strip()
     try:
         pid = int(raw)
     except ValueError:
@@ -594,7 +594,7 @@ def mcp_config_generate(
         console.print(f"[red]Template file not found: {template_file}[/]")
         raise typer.Exit(1)
 
-    content = template_file.read_text()
+    content = template_file.read_text(encoding="utf-8")
 
     if install_path:
         content = content.replace("/path/to/VMware-Monitor", str(Path(install_path).resolve()))
@@ -604,7 +604,7 @@ def mcp_config_generate(
             content = content.replace("/path/to/VMware-Monitor", str(pkg_dir))
 
     if output:
-        output.write_text(content)
+        output.write_text(content, encoding="utf-8")
         console.print(f"[green]Config written to: {output}[/]")
     else:
         console.print(content)
