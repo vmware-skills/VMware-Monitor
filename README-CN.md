@@ -7,7 +7,7 @@
 
 [English](README.md) | 中文
 
-**只读** VMware vCenter/ESXi 监控 — 27 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
+**只读** VMware vCenter/ESXi 监控 — 31 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
 
 > **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数——不是提示词约束，是这些代码根本不存在。
 >
@@ -240,7 +240,7 @@ vCenter 可能负载过高。尝试直接连接特定 ESXi 主机而非 vCenter�
 
 ### MCP Server 集成（本地 Agent）
 
-vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 27 个工具均为**只读**，由上述白名单闸门守住。
+vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 31 个工具均为**只读**，由上述白名单闸门守住。
 
 | Agent / 工具 | 本地模型支持 | 配置模板 | 集成指南 |
 |-------------|:----------:|---------|---------|
