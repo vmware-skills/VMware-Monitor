@@ -1,3 +1,46 @@
+## v1.9.0 — backup windows from snapshot task history (issue #26)
+
+New read-only tool `vm_backup_snapshot_history` (31 → 32 tools), requested by
+@juanpf-ha. Image-level backup products snapshot a VM, copy the frozen disks,
+then delete the snapshot; vCenter records both ends as tasks, so the period a
+backup held the snapshot open is recoverable without credentials for the backup
+server. Four hour statistics — backup active, snapshot present, total window,
+removal itself — plus the cycles that never got a matching removal.
+
+It is a **lower bound on the job, not its duration**: work the product does
+before the snapshot is taken and after it is removed is invisible to vCenter.
+The qualifier ships in the payload's `basis` field rather than only in the docs,
+so a caller quoting the figure cannot lose it.
+
+Two ways this tool could have reported calm when it should not, both closed:
+
+* `history_unavailable` is set when the task history could not be read at all
+  (no permission, no task manager). Zero cycles then means "could not look",
+  not "no backups ran", and the two must not arrive looking identical.
+* `coverage_note` is set when vCenter has already expired part of the requested
+  window. Task history ages out on `vpxd.task.maxAge` — 30 days by default — so
+  a 90-day request can silently describe 30 days. It now says so.
+
+Duplicate VM names raise `AmbiguousVMError` instead of resolving to the first
+match: a duration attributed to the wrong same-named VM is indistinguishable
+from a correct answer once it leaves the tool.
+
+The issue proposed matching `TaskInfo.Name`, and pyVmomi declares that field as
+a **ManagedMethod, not a string** — the same shape that made v1.8.14 flood. The
+wire name is read off `name.info.wsdlName`, alongside `descriptionId` and
+`description.key`; the localised `description.message` is never matched on. A
+test pins all three shapes against the SDK.
+
+Also: `get_events`'s `severity` is now `Literal["critical", "warning", "info"]`,
+so the values reach the MCP schema. Previously an unrecognised severity was
+ranked by `SEVERITY_ORDER.get(sev, 1)` — a typo filtered at warning level and
+returned a plausible, wrong list without raising. A new gate pins the schema's
+enum against the implementation's own set.
+
+The four vSphere calls the collector needs (`CreateCollectorForTasks`,
+`RewindCollector`, `ReadNextTasks`, `DestroyCollector`) are recorded in the
+read-only allowlist with stated reasons and receiver pins.
+
 ## v1.8.15 — the event catalogue key is a type, and v1.8.14 flooded because of it
 
 v1.8.14 replaced 23 hardcoded event-class names with vCenter's own published

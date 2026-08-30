@@ -181,7 +181,7 @@ whitespace are handled correctly).
 
 ### MCP Server — Local Agent Compatibility
 
-The MCP server works with any MCP-compatible agent via stdio transport. All 31 tools are **read-only**. Config templates in `examples/mcp-configs/`:
+The MCP server works with any MCP-compatible agent via stdio transport. All 32 tools are **read-only**. Config templates in `examples/mcp-configs/`:
 
 | Agent | Local Models | Config Template |
 |-------|:----------:|-----------------|

@@ -333,6 +333,78 @@ def snapshots_aging(
         console.print(f"[yellow]ℹ {result['hint']}[/yellow]")
 
 
+@snapshots_app.command("backup-window")
+@cli_errors
+def snapshots_backup_window(
+    vm: Annotated[str, typer.Argument(help="Exact VM name")],
+    days: Annotated[int, typer.Option("--days", help="How far back to look (1-365)")] = 30,
+    cycles: Annotated[bool, typer.Option("--cycles", help="Show every cycle, not just totals")] = False,
+    target: TargetOption = None,
+    config: ConfigOption = None,
+    limit: LimitOption = None,
+) -> None:
+    """Backup windows for a VM, inferred from its snapshot task history."""
+    from vmware_monitor.ops.backup_window import get_backup_snapshot_history
+
+    si, _, tgt = get_connection(target, config)
+    result = get_backup_snapshot_history(si, vm, days=days, include_cycles=cycles, limit=limit)
+    audit.log_query(target=tgt, resource=vm, query_type="get_backup_snapshot_history")
+
+    if result["history_unavailable"]:
+        # Not "no backups" -- the history could not be read at all, and the
+        # difference is the whole answer.
+        console.print(f"[red]{result['history_unavailable']}[/]")
+        return
+
+    console.print(
+        f"[bold]{result['vm']}[/] over {result['period_days']}d: "
+        f"[bold]{result['complete_cycles']}[/] complete cycle(s), "
+        f"[yellow]{result['incomplete_cycles']}[/] unmatched."
+    )
+    if result["coverage_note"]:
+        console.print(f"[yellow]{result['coverage_note']}[/]")
+
+    stats = result["backup_active_hours"]
+    if stats:
+        table = Table(title="Backup window (hours)")
+        table.add_column("Measure", style="cyan")
+        table.add_column("Avg", justify="right")
+        table.add_column("Min", justify="right")
+        table.add_column("Max", justify="right")
+        for label, key in (
+            ("Backup active", "backup_active_hours"),
+            ("Snapshot present", "snapshot_present_hours"),
+            ("Total window", "total_window_hours"),
+            ("Removal itself", "snapshot_removal_hours"),
+        ):
+            st = result[key]
+            if st:
+                table.add_row(label, str(st["average"]), str(st["minimum"]), str(st["maximum"]))
+        console.print(table)
+    else:
+        console.print("[green]No complete snapshot cycles in the window.[/]")
+
+    if cycles and result.get("cycles"):
+        ct = Table(title="Cycles (oldest first)")
+        ct.add_column("Snapshot created", style="cyan")
+        ct.add_column("Removal started")
+        ct.add_column("Active h", justify="right")
+        for c in result["cycles"]:
+            ct.add_row(
+                str(c["snapshot_created"]),
+                str(c["snapshot_removal_started"]),
+                str(c["backup_active_hours"]),
+            )
+        console.print(ct)
+        if result.get("cycles_truncated"):
+            console.print("[yellow]Cycle list truncated; raise --limit for more.[/]")
+
+    for row in result["unmatched"]:
+        console.print(f"[yellow]! {row['reason']} at {row['started']}[/]")
+
+    console.print(f"[dim]{result['basis']}[/dim]")
+
+
 # ─── activity ──────────────────────────────────────────────────────────────
 
 

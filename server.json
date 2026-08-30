@@ -2,17 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.vmware-skills/vmware-monitor",
   "title": "VMware Monitor",
-  "description": "Read-only VMware vCenter/ESXi monitoring, 31 MCP tools; vSphere calls allowlist-gated in tests.",
+  "description": "Read-only VMware vCenter/ESXi monitoring, 32 MCP tools; vSphere calls allowlist-gated in tests.",
   "repository": {
     "url": "https://github.com/vmware-skills/VMware-Monitor",
     "source": "github"
   },
-  "version": "1.8.15",
+  "version": "1.9.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "vmware-monitor",
-      "version": "1.8.15",
+      "version": "1.9.0",
       "runtimeHint": "uvx",
       "packageArguments": [
         {

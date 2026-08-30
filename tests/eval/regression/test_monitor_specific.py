@@ -105,4 +105,4 @@ def test_mcp_exposes_snapshot_listing() -> None:
     }
     missing = expected_new - tools
     assert not missing, f"observability tools missing from MCP: {sorted(missing)}"
-    assert len(tools) == 31, f"expected 31 MCP tools, got {len(tools)}: {sorted(tools)}"
+    assert len(tools) == 32, f"expected 32 MCP tools, got {len(tools)}: {sorted(tools)}"

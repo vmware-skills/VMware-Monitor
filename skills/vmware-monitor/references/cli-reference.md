@@ -107,6 +107,23 @@ Returns detailed VM information: CPU, memory, disks, NICs, guest OS, IP, VMware 
 
 `snapshot-list` lists existing snapshots with name and creation time. No create, revert, or delete operations exist. The same data is exposed via the MCP tool `vm_list_snapshots`.
 
+```bash
+vmware-monitor snapshots backup-window <vm> [--days 30] [--cycles]
+```
+
+Infers backup windows for one VM from its snapshot task history: image-level
+backup products snapshot the VM, copy the frozen disks, then delete the
+snapshot, and vCenter records both ends. Reports four hour statistics
+(backup active / snapshot present / total window / removal itself) plus
+creations that never got a matching removal.
+
+Two lines in the output change what the numbers mean, and both are printed
+rather than left to the reader: a note when vCenter could not be read at all
+(which is not "no backups"), and a note when part of the requested window has
+already aged out of task history (`vpxd.task.maxAge`, 30 days by default).
+Duplicate VM names are refused rather than resolved to one. The same data is
+exposed via the MCP tool `vm_backup_snapshot_history`.
+
 ## vSphere 9.1 (read-only)
 
 ```bash

@@ -92,6 +92,23 @@ ALLOWED_VSPHERE_METHODS: dict[str, str] = {
         "Sees NON_READ_EXEMPTIONS -- it is a _Task method and needs the receiver pin."
     ),
     "QueryEvents": "Reads rows out of the vCenter event history; the collector is server-side.",
+    "CreateCollectorForTasks": (
+        "Creates a server-side *task history collector* -- a scoped cursor over tasks that "
+        "already ran. Like CreateContainerView, the verb creates a query handle, not an "
+        "estate object. pyVmomi reports System.View, a read privilege."
+    ),
+    "RewindCollector": (
+        "Moves this code's own collector cursor back to the start of its page. Sees "
+        "NON_READ_EXEMPTIONS -- pyVmomi reports no privilege for it."
+    ),
+    "ReadNextTasks": (
+        "Reads the next page of TaskInfo rows out of our own collector. Sees "
+        "NON_READ_EXEMPTIONS -- pyVmomi reports no privilege for it."
+    ),
+    "DestroyCollector": (
+        "Releases the task history collector this code created moments earlier. Sees "
+        "NON_READ_EXEMPTIONS -- pyVmomi reports no privilege for it."
+    ),
     "QueryPerf": "Reads sampled performance counter values for entities we already found.",
     "QueryPerfProviderSummary": (
         "Reads which counters and sampling intervals an entity's provider offers."
@@ -122,6 +139,39 @@ NON_READ_EXEMPTIONS: dict[str, Exemption] = {
             "both nets flag it; the receiver pin below is what keeps `vm.Destroy()` out."
         ),
         receivers=frozenset({"view"}),
+    ),
+    "RewindCollector": Exemption(
+        reason=(
+            "Repositions the cursor of the TaskHistoryCollector that "
+            "vmware_monitor/ops/backup_window.py created one statement earlier, so paging "
+            "starts at the beginning of the filtered set rather than wherever vCenter left "
+            "it. It moves our cursor, not vCenter state. pyVmomi reports no privilege for "
+            "it -- HistoryCollector's own methods carry none -- so the privilege net flags "
+            "it; the receiver pin is what keeps the name from being reused elsewhere."
+        ),
+        receivers=frozenset({"collector"}),
+    ),
+    "ReadNextTasks": Exemption(
+        reason=(
+            "Genuinely a read -- it returns vim.TaskInfo[] describing tasks that already "
+            "ran -- but pyVmomi reports no privilege for it, so the privilege net flags it. "
+            "Access is really gated by the System.View checked on CreateCollectorForTasks, "
+            "which is allowlisted above on its own privilege. Kept honest rather than "
+            "widening READ_PRIVILEGES to admit None, which would silently admit every "
+            "un-annotated method in the SDK."
+        ),
+        receivers=frozenset({"collector"}),
+    ),
+    "DestroyCollector": Exemption(
+        reason=(
+            "Destroys the task history collector vmware_monitor/ops/backup_window.py "
+            "created, in a finally: block. vCenter allows a bounded number of collectors "
+            "per session (32 by default), so NOT calling this leaks one per invocation "
+            "until every later call fails for an unrelated-looking reason. The object "
+            "destroyed is our own cursor, never an inventory object -- the receiver pin "
+            "is what enforces that reading."
+        ),
+        receivers=frozenset({"collector"}),
     ),
     "BrowseDiagnosticLog": Exemption(
         reason=(

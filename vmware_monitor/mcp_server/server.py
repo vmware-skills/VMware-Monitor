@@ -25,7 +25,7 @@ import functools
 import logging
 import ssl
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 # MCP SDK — Model Context Protocol server framework
 from mcp.server.fastmcp import FastMCP
@@ -77,6 +77,10 @@ from vmware_monitor.ops.investigate_host import (
 )
 from vmware_monitor.ops.investigate_vm import get_vm_investigation_bundle
 from vmware_monitor.ops.performance import get_host_performance, get_vm_performance
+from vmware_monitor.ops.backup_window import (
+    AmbiguousVMError,
+    get_backup_snapshot_history,
+)
 from vmware_monitor.ops.snapshots import list_snapshot_aging
 from vmware_monitor.ops.vm_info import VMNotFoundError, get_vm_info, list_snapshots
 from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs
@@ -137,6 +141,7 @@ def _safe_error(exc: Exception, tool: str) -> str:
         ConnectionError,
         ConfigError,
         VMNotFoundError,
+        AmbiguousVMError,
         HostNotFoundError,
         DatastoreNotFoundError,
     )
@@ -636,7 +641,7 @@ def get_alarms(
 @_catch_tool_errors
 def get_events(
     hours: int = 24,
-    severity: str = "warning",
+    severity: Literal["critical", "warning", "info"] = "warning",
     target: Optional[str] = None,
 ) -> dict:
     """[READ] Get recent vCenter/ESXi events filtered by severity.
@@ -951,6 +956,63 @@ def snapshot_aging(
         si, age_threshold_days=age_threshold_days, only_old=only_old, limit=limit
     )
 
+
+
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
+@vmware_tool(risk_level="low")
+@_catch_tool_errors
+def vm_backup_snapshot_history(
+    vm_name: str,
+    days: int = 30,
+    include_cycles: bool = False,
+    target: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> dict:
+    """[READ] How long backups held a snapshot open on one VM, from task history.
+
+    Image-level backup products (Veeam, Commvault, Rubrik, NetBackup) snapshot
+    the VM, copy the frozen disks, then delete the snapshot. vCenter records
+    both ends, so the backup window is recoverable without credentials for the
+    backup server.
+
+    This is a LOWER BOUND on the job, not its duration: work the product does
+    before the snapshot is taken and after it is removed is invisible to
+    vCenter. The returned ``basis`` says so — quote it alongside any figure.
+
+    Returns a rollup, not the list envelope: counts, four hour statistics
+    (backup_active / snapshot_present / total_window / snapshot_removal),
+    latest_cycle, longest_cycle, and ``unmatched`` rows for creations with no
+    removal (a backup that left its snapshot behind) or removals whose creation
+    predates the window.
+
+    Read two fields before reporting all-clear. ``history_unavailable`` non-null
+    means the history could not be read at all — that is not "no backups".
+    ``coverage_note`` non-null means vCenter has already expired part of the
+    requested window (vpxd.task.maxAge, 30 days by default), so the counts
+    describe a shorter period than ``days`` asked for.
+
+    Duplicate VM names raise rather than resolve to one, because a duration
+    attributed to the wrong same-named VM looks exactly like a correct answer.
+    For snapshots that exist right now use vm_list_snapshots or snapshot_aging.
+
+    Args:
+        vm_name: Exact VM name; duplicates are refused, not guessed.
+        days: How far back to look, 1 to 365 (default 30).
+        include_cycles: Also return the individual cycles, newest kept on cap.
+        target: vCenter/ESXi target from config (default if omitted).
+        limit: Max cycle rows when include_cycles is set (capped at 200).
+    """
+    si = _get_connection(target)
+    return get_backup_snapshot_history(
+        si, vm_name, days=days, include_cycles=include_cycles, limit=limit
+    )
 
 # ---------------------------------------------------------------------------
 # Infrastructure health (read-only — certificates, licenses, NTP)

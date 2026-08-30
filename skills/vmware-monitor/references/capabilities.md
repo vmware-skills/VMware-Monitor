@@ -170,6 +170,7 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 |---------|---------|
 | VM Info | Name, power state, guest OS, CPU, memory, IP, VMware Tools, disks, NICs, `folder_path` |
 | Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `vm_list_snapshots` |
+| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
 
 ## 4. Scheduled Scanning & Notifications
 

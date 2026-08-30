@@ -7,7 +7,7 @@
 
 English | [中文](README-CN.md)
 
-**Read-only** VMware vCenter/ESXi monitoring — 31 tools. No destructive operations exist in this codebase, and a test enforces that.
+**Read-only** VMware vCenter/ESXi monitoring — 32 tools. No destructive operations exist in this codebase, and a test enforces that.
 
 > **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). No power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase — not a prompt constraint, an absence.
 >
@@ -181,6 +181,7 @@ ESXi Standalone ──→ VMs
 |---------|---------|
 | VM Info | Name, power state, guest OS, CPU, memory, IP, VMware Tools, disks, NICs, `folder_path` |
 | Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `vm_list_snapshots` |
+| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
 
 ### 4. Scheduled Scanning & Notifications
 
@@ -301,7 +302,7 @@ vCenter may be under heavy load. Try targeting a specific ESXi host directly ins
 
 ### MCP Server Integrations
 
-The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 31 tools are **read-only**, enforced by the allowlist gate described above.
+The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 32 tools are **read-only**, enforced by the allowlist gate described above.
 
 | Agent / Tool | Local Model Support | Config Template | Integration Guide |
 |-------------|:-------------------:|-----------------|-------------------|
