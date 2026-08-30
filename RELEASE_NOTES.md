@@ -1,3 +1,46 @@
+## v1.8.13 — five things that answered when they should have said "I don't know"
+
+Found by running the family against a real VCF 9.1 estate, where four of eight
+ESXi hosts were `notResponding`. Every defect here passed the existing suite.
+
+**`infra ntp` reported unreachable hosts as misconfigured.** vCenter has no
+`config.dateTimeInfo` for a host it cannot reach, and the HostServiceSystem is
+unreadable, so the defaults — no servers, service not running — supplied the
+verdict: byte for byte the row a genuinely misconfigured host produces. An
+operator would have gone and configured NTP on four machines that may already
+have it. Unreachable hosts now report `reachable: false` with null facts and the
+`connectionState` in the note, and the envelope carries `hosts_unreachable`,
+because a caller filtering for `healthy is False` otherwise learns nothing about
+an estate half of which went unasked. The same defect one level down is fixed
+with it: a *connected* host whose config could not be read was also reported
+misconfigured.
+
+**`health events` printed a green "No events above warning" over five real
+warnings.** Severity came from three hardcoded sets of pyVmomi class names — 23
+of them, against vSphere's thousand-odd event types — ending in `else: "info"`,
+which the default filter then dropped. It now asks vCenter's own published event
+catalogue, and identifies `EventEx` by its `eventTypeId`: every one of those
+shares the class name "EventEx", so they could never have matched by name even
+in principle. What neither can rank is returned as `unknown` and counted, not
+demoted to `info` and hidden.
+
+**`doctor` cleared an estate it had not checked.** It authenticated
+`default_target` and stopped, so five targets with three wrong passwords came
+back "All checks passed" — and the failure that followed told the user to run
+the doctor that had just cleared them. Every target is now attempted, and one
+bad credential no longer hides the state of the others.
+
+**The CLI, the doctor and the MCP server opened different config files.** With
+`VMWARE_MONITOR_CONFIG` set, the server read that file while `load_config()`
+read the default — the agent and the human on different vCenters, with the
+doctor reporting on the human's. The precedence now lives in one
+`resolve_config_path`, and a structural test keeps the callers from drifting
+apart again.
+
+**`server.json` never started the MCP server.** It carried only the package
+identifier, so a registry client composed `uvx vmware-monitor`, which runs the
+CLI and exits. It now declares the `mcp` subcommand and the config variable.
+
 ## v1.8.12 — three defects a mock could not have shown
 
 Every one of these was found by pointing the tool at a real ESXi host and a real

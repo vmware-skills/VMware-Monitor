@@ -46,7 +46,7 @@ class _Ref:
             ]
         )
 
-    def QueryEvents(self, _spec):
+    def QueryEvents(self, _spec):  # noqa: N802 - mirrors pyVmomi's own method name
         return self._events
 
 
