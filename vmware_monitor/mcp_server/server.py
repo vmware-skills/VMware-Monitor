@@ -644,6 +644,13 @@ def get_events(
     ``total`` is null because vCenter's event collector applies its own bounds —
     widen ``hours`` if you need to be sure nothing older is being missed.
 
+    Severity is this skill's own ranking where it has one, and otherwise
+    vCenter's published event catalogue. An event neither can rank comes back
+    with severity "unknown" (it is returned, not filtered out) and is counted in
+    the envelope's ``unclassified``, with ``classification_note`` explaining. An
+    empty ``items`` alongside a non-zero ``unclassified`` does NOT mean the
+    window was quiet — read the note before reporting all-clear.
+
     Use this for an inventory-wide event sweep. When you already know the object,
     prefer vm_investigation_bundle / host_investigation_bundle instead: they
     return the same events correlated with that object's state in one call. ESXi

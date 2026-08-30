@@ -46,7 +46,18 @@ INFO_EVENTS = {
     "VmClonedEvent",
 }
 
-SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
+SEVERITY_ORDER = {"critical": 0, "warning": 1, "unknown": 1, "info": 2}
+
+#: vCenter's own event categories, as published by
+#: ``EventManager.description.eventInfo``, mapped onto this skill's three ranks.
+#: "user" is an operator action (a login, a reconfigure) — routine unless one of
+#: the override sets above says otherwise.
+_VC_CATEGORY_RANK = {
+    "error": "critical",
+    "warning": "warning",
+    "info": "info",
+    "user": "info",
+}
 
 # Maps event type → suggested remediation skill/tool hint
 _EVENT_SUGGESTIONS: dict[str, str] = {
@@ -78,6 +89,69 @@ def query_events(event_mgr: vim.event.EventManager, filter_spec: vim.event.Event
         return event_mgr.QueryEvents(filter_spec)
     except _NOT_SUPPORTED_FAULTS:
         return []
+
+
+def _event_catalogue(event_mgr: object) -> dict[str, str]:
+    """vCenter's ``event type key -> category`` map, or ``{}`` if unavailable.
+
+    ``EventManager.description.eventInfo`` is vCenter telling us how it ranks
+    every event type it knows — roughly a thousand of them. The three sets above
+    name 23. Consulting this instead of guessing is the whole fix; consulting it
+    is also one property read, not a round trip per event.
+
+    Returns ``{}`` rather than raising when the property is missing (older or
+    permission-restricted vCenter): the overrides still work, and losing the
+    catalogue must not lose the events.
+    """
+    info = getattr(getattr(event_mgr, "description", None), "eventInfo", None)
+    catalogue: dict[str, str] = {}
+    for detail in info or []:
+        key = getattr(detail, "key", None)
+        category = getattr(detail, "category", None)
+        if key and category:
+            catalogue[str(key)] = str(category).lower()
+    return catalogue
+
+
+def _event_key(event: object) -> str:
+    """What this event actually is.
+
+    Modern vSphere emits most events as ``EventEx``/``ExtendedEvent``, where the
+    Python class name is the literal string "EventEx" for all of them and the
+    identity lives in ``eventTypeId`` (``esx.problem.scsi.device.io.latency.high``
+    and the like). Keying on the class name collapsed every one of them into a
+    single unmatched bucket — and reported "EventEx" to the user, which is not a
+    thing anyone can look up.
+    """
+    return str(getattr(event, "eventTypeId", None) or type(event).__name__)
+
+
+def _event_severity(event: object, key: str, catalogue: dict[str, str]) -> str:
+    """Rank one event: this skill's judgement first, then vCenter's, then unknown.
+
+    The override sets come first on purpose. vCenter files HostShutdownEvent
+    under "info"; for a monitoring skill a host that shut down is critical, and
+    that disagreement is the product rather than a defect.
+
+    ``"unknown"`` is a real fourth answer and is NOT folded into "info". An
+    event nobody can rank is not evidence that nothing happened, and defaulting
+    it to the quietest rank is what let five warning-level events be reported as
+    "No events above warning" (VCF 9.1, 2026-08-30).
+    """
+    if key in CRITICAL_EVENTS:
+        return "critical"
+    if key in WARNING_EVENTS:
+        return "warning"
+    if key in INFO_EVENTS:
+        return "info"
+    # EventEx carries its own severity inline; prefer it over the catalogue
+    # lookup because a vendor-defined type may not be in the catalogue at all.
+    own = getattr(event, "severity", None)
+    if own:
+        rank = _VC_CATEGORY_RANK.get(str(own).lower())
+        if rank:
+            return rank
+    return _VC_CATEGORY_RANK.get(catalogue.get(key, ""), "unknown")
 
 
 def _get_event_entity(event: object) -> str | None:
@@ -191,6 +265,13 @@ def get_recent_events(
 ) -> dict:
     """Get recent events filtered by severity.
 
+    Severity comes from this skill's own override sets first and vCenter's
+    published event catalogue second (see :func:`_event_severity`). An event
+    neither can rank is returned with severity ``"unknown"`` and counted in the
+    envelope's ``unclassified`` — it is never quietly demoted to ``"info"``,
+    which is how five warning-level events came back as "No events above
+    warning" (VCF 9.1, 2026-08-30).
+
     Returns the family list envelope. ``total`` is deliberately left ``None``:
     QueryEvents applies its own server-side collector bounds, so the number of
     events matching the window is not something this code actually knows. No
@@ -209,18 +290,15 @@ def get_recent_events(
 
     events = query_events(event_mgr, filter_spec)
     min_level = SEVERITY_ORDER.get(severity, 1)
+    catalogue = _event_catalogue(event_mgr)
 
     results = []
+    unclassified = 0
     for event in events:
-        event_type = type(event).__name__
-        if event_type in CRITICAL_EVENTS:
-            sev = "critical"
-        elif event_type in WARNING_EVENTS:
-            sev = "warning"
-        elif event_type in INFO_EVENTS:
-            sev = "info"
-        else:
-            sev = "info"
+        event_type = _event_key(event)
+        sev = _event_severity(event, event_type, catalogue)
+        if sev == "unknown":
+            unclassified += 1
 
         if SEVERITY_ORDER.get(sev, 2) > min_level:
             continue
@@ -242,7 +320,18 @@ def get_recent_events(
         })
 
     results.sort(key=lambda x: x["time"], reverse=True)
-    return paginated(results)
+    extra: dict = {"unclassified": unclassified}
+    if unclassified:
+        # Only when there is something to say — a note on every clean run is a
+        # note nobody reads on the run that matters. Its own key rather than the
+        # envelope's `hint`, which family-wide means "this page was truncated".
+        extra["classification_note"] = (
+            f"{unclassified} event(s) could not be ranked: neither this skill nor "
+            f"vCenter's own event catalogue knows the type. They are included with "
+            f"severity 'unknown' rather than filtered out — an unrankable event is "
+            f"not evidence that nothing happened."
+        )
+    return paginated(results, **extra)
 
 
 def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> dict:

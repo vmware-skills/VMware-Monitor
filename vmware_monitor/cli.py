@@ -280,18 +280,34 @@ def health_events(
     from vmware_monitor.ops.health import get_recent_events
 
     si, _, tgt = _get_connection(target, config)
-    events = get_recent_events(si, hours=hours, severity=severity)["items"]
+    result = get_recent_events(si, hours=hours, severity=severity)
+    events = result["items"]
     _audit.log_query(target=tgt, resource="events", query_type="get_recent_events")
+    note = result.get("classification_note")
     if not events:
-        console.print(f"[green]No events above '{severity}' in the last {hours}h.[/]")
+        # Green only when the quiet is established. The window may also be quiet
+        # because nothing in it could be ranked, and painting that green is how
+        # this line came to announce calm over five real warnings.
+        if note:
+            console.print(f"[yellow]{note}[/]")
+        else:
+            console.print(f"[green]No events above '{severity}' in the last {hours}h.[/]")
         return
     table = Table(title=f"Events (last {hours}h, >= {severity})")
+    table.add_column("Severity")
     table.add_column("Time")
     table.add_column("Type", style="cyan")
     table.add_column("Message")
     for e in events:
-        table.add_row(e["time"], e["event_type"], e["message"][:120])
+        style = {"critical": "red", "warning": "yellow", "unknown": "yellow"}.get(
+            e["severity"], "white"
+        )
+        table.add_row(
+            f"[{style}]{e['severity']}[/]", e["time"], e["event_type"], e["message"][:120]
+        )
     console.print(table)
+    if note:
+        console.print(f"[yellow]{note}[/]")
 
 
 @health_app.command("sensors")
