@@ -117,9 +117,14 @@ def _init_command_is_registered() -> bool:
 
 
 def test_doctor_recommends_init_which_actually_exists(monkeypatch, tmp_path):
+    from vmware_monitor import config as cfg
     from vmware_monitor import doctor
 
-    monkeypatch.setattr(doctor, "CONFIG_FILE", tmp_path / "missing" / "config.yaml")
+    # The default path is patched on config, not on doctor: since 2026-08-30
+    # the doctor asks resolve_config_path() rather than naming the default, so
+    # that every check reports on the file the tools will actually open.
+    monkeypatch.delenv("VMWARE_MONITOR_CONFIG", raising=False)
+    monkeypatch.setattr(cfg, "CONFIG_FILE", tmp_path / "missing" / "config.yaml")
     monkeypatch.setattr(doctor, "ENV_FILE", tmp_path / "missing" / ".env")
 
     ok_cfg, msg_cfg = doctor._check_config_file()

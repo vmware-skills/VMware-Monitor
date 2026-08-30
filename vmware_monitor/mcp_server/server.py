@@ -23,10 +23,8 @@ License: MIT
 
 import functools
 import logging
-import os
 import ssl
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, Optional
 
 # MCP SDK — Model Context Protocol server framework
@@ -194,9 +192,11 @@ def _ensure_conn_mgr() -> ConnectionManager:
     """Lazily build the shared ConnectionManager (does not connect anything)."""
     global _conn_mgr  # noqa: PLW0603
     if _conn_mgr is None:
-        config_path_str = os.environ.get("VMWARE_MONITOR_CONFIG")
-        config_path = Path(config_path_str) if config_path_str else None
-        config = load_config(config_path)
+        # No env-var read here: load_config resolves the path (explicit arg,
+        # then the environment, then the default). This copy was the reason the
+        # server and the CLI opened different files — load_config did not look
+        # at the variable at all, so only this path honoured it (形态 #6).
+        config = load_config()
         _conn_mgr = ConnectionManager(config)
     return _conn_mgr
 
