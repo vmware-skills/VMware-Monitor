@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.vmware-skills/vmware-monitor",
   "title": "VMware Monitor",
-  "description": "Read-only VMware vCenter/ESXi monitoring with 31 MCP tools. No destructive code paths; every vSphere call is allowlist-gated in the test suite.",
+  "description": "Read-only VMware vCenter/ESXi monitoring, 31 MCP tools; vSphere calls allowlist-gated in tests.",
   "repository": {
     "url": "https://github.com/vmware-skills/VMware-Monitor",
     "source": "github"
