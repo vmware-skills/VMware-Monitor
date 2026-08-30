@@ -253,7 +253,8 @@ def infra_ntp(
     from vmware_monitor.ops.infra_health import get_ntp_status
 
     si, _, tgt = get_connection(target, config)
-    rows = get_ntp_status(si, host_name=host)["items"]
+    result = get_ntp_status(si, host_name=host)
+    rows = result["items"]
     audit.log_query(target=tgt, resource="ntp", query_type="get_ntp_status")
     table = Table(title="NTP Configuration (live offset not exposed by SOAP API)")
     table.add_column("Host", style="cyan")
@@ -262,11 +263,28 @@ def infra_ntp(
     table.add_column("Policy")
     table.add_column("Healthy")
     for r in rows:
-        servers = ", ".join(r["ntp_servers"]) or "[red]none[/]"
-        run = "[green]running[/]" if r["ntpd_running"] else "[red]stopped[/]"
-        healthy = "[green]yes[/]" if r["healthy"] else "[red]no[/]"
+        # None is a third state everywhere in this row: the host was not read.
+        # Rendering it with the same falsy branch as False put the verdict the
+        # ops layer had just refused to make straight back on the screen.
+        if r["ntp_servers"] is None:
+            servers = "[yellow]not read[/]"
+        else:
+            servers = ", ".join(r["ntp_servers"]) or "[red]none[/]"
+        if r["ntpd_running"] is None:
+            run = "[yellow]not read[/]"
+        else:
+            run = "[green]running[/]" if r["ntpd_running"] else "[red]stopped[/]"
+        if r["healthy"] is None:
+            healthy = "[yellow]unknown[/]"
+        else:
+            healthy = "[green]yes[/]" if r["healthy"] else "[red]no[/]"
         table.add_row(r["host"], servers, run, r["ntpd_policy"], healthy)
     console.print(table)
+    note = result.get("unreachable_note")
+    if note:
+        # Under the table, where someone scanning the Healthy column for red
+        # will still meet it. Without this the yellow rows are the only clue.
+        console.print(f"[yellow]{note}[/]")
 
 
 # ─── snapshots ─────────────────────────────────────────────────────────────

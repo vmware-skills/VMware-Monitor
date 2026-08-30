@@ -197,6 +197,9 @@ def test_get_ntp_status_batches_serviceinfo():
                 _NoLazyMO("esx-01"),
                 {
                     "name": "esx-01",
+                    # Load-bearing since 2026-08-30: a host whose state is not
+                    # "connected" is reported as unknown rather than judged.
+                    "runtime.connectionState": "connected",
                     "config.dateTimeInfo": dt,
                     "configManager.serviceSystem": ss1,
                 },
@@ -214,13 +217,26 @@ def test_get_ntp_status_batches_serviceinfo():
     assert rows[0]["healthy"] is True
 
 
-def test_get_ntp_status_no_service_system_is_unhealthy():
+def test_get_ntp_status_no_service_system_is_unknown_not_unhealthy():
+    """Renamed and inverted on 2026-08-30, deliberately.
+
+    This host is connected, but neither its dateTimeInfo nor its serviceSystem
+    could be read — so nothing about its NTP configuration was observed.
+    ``healthy: False`` said it is misconfigured, which is a finding, and the
+    finding was manufactured out of two defaults. It is the same defect the
+    unreachable-host fix addresses, one level down: not unreached, but unread.
+
+    A host that answers with dateTimeInfo and no NTP server still reports
+    ``healthy: False`` — see the neighbouring test — so the actionable signal
+    this tool exists for is untouched.
+    """
     fixtures = {
         vim.HostSystem: [
             (
                 _NoLazyMO("esx-99"),
                 {
                     "name": "esx-99",
+                    "runtime.connectionState": "connected",
                     "config.dateTimeInfo": None,
                     "configManager.serviceSystem": None,
                 },
@@ -228,7 +244,32 @@ def test_get_ntp_status_no_service_system_is_unhealthy():
         ],
     }
     rows = infra_health.get_ntp_status(_si(fixtures))["items"]
-    assert rows[0]["ntpd_running"] is False
+    assert rows[0]["reachable"] is True
+    assert rows[0]["ntpd_running"] is None
+    assert rows[0]["ntp_servers"] is None
+    assert rows[0]["healthy"] is None
+
+
+def test_get_ntp_status_configured_with_no_servers_is_still_unhealthy():
+    """The control for the test above: a real misconfiguration must still be
+    reported as one, without needing the service state to confirm it."""
+    fixtures = {
+        vim.HostSystem: [
+            (
+                _NoLazyMO("esx-98"),
+                {
+                    "name": "esx-98",
+                    "runtime.connectionState": "connected",
+                    "config.dateTimeInfo": types.SimpleNamespace(
+                        ntpConfig=types.SimpleNamespace(server=[])
+                    ),
+                    "configManager.serviceSystem": None,
+                },
+            ),
+        ],
+    }
+    rows = infra_health.get_ntp_status(_si(fixtures))["items"]
+    assert rows[0]["ntp_servers"] == []
     assert rows[0]["healthy"] is False
 
 

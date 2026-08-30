@@ -1030,10 +1030,16 @@ def ntp_status(
     """[READ] Per-host NTP configuration health (servers + ntpd service state).
 
     Returns the list envelope; every matching host is enumerated, so ``truncated``
-    is always False. Each row has host, ntp_servers, ntpd_running, ntpd_policy and a
-    ``healthy`` flag (servers configured AND ntpd running). The SOAP API does not
-    expose live clock offset or stratum — this is configuration health only; for
-    actual offset use esxcli on the host.
+    is always False. Each row has host, reachable, ntp_servers, ntpd_running,
+    ntpd_policy and a ``healthy`` flag (servers configured AND ntpd running). The
+    SOAP API does not expose live clock offset or stratum — this is configuration
+    health only; for actual offset use esxcli on the host.
+
+    healthy/ntp_servers/ntpd_running are null — not false/empty — for a host
+    vCenter could not reach or could not read. Null means nothing was observed;
+    false means NTP is misconfigured. Filtering rows for `healthy == false` will
+    not surface the unread ones, so check the envelope's `hosts_unreachable`
+    count and `unreachable_note` before reporting the estate as healthy.
 
     Prefer this over get_host_services for time problems: that tool reports
     whether ntpd runs but not which servers are configured. Fixing NTP is a
