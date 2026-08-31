@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from vmware_policy import sanitize
+from vmware_policy.compat import Requires
 
 from vmware_monitor.rest import RestNotReadyError, VsphereRest
 
@@ -38,6 +39,17 @@ if TYPE_CHECKING:
 # Verified paths (spec §D). Kept as literals here so the regression test can assert
 # they match the spec module exactly.
 DEPLOYMENT_SIZE_PATH = "/api/vcenter/deployment/size"
+
+#: Spec §D annotates this endpoint "NEW in 9.1" — that annotation is the
+#: evidence, not a recollection. The other two paths here are not annotated as
+#: new, so they carry no floor: a version branch on a call that behaves the same
+#: across 8.x and 9.x is only somewhere for a later reader to introduce a
+#: difference by accident.
+REQUIRES_DEPLOYMENT_SIZE = Requires(
+    product="vCenter",
+    minimum=(9, 1),
+    feature="Appliance deployment-size read",
+)
 _COMPLIANCE_TMPL = "/api/esx/settings/clusters/{cluster}/software/compliance"
 _LAST_APPLY_TMPL = "/api/esx/settings/clusters/{cluster}/software/reports/last-apply-result"
 
@@ -81,7 +93,7 @@ def get_deployment_size(target: TargetConfig) -> dict:
     """
     rest = VsphereRest(target)
     try:
-        data = rest.get_json(DEPLOYMENT_SIZE_PATH)
+        data = rest.get_json(DEPLOYMENT_SIZE_PATH, requires=REQUIRES_DEPLOYMENT_SIZE)
     except RestNotReadyError as exc:
         return _not_ready(exc, "deployment_size")
     return {"available": True, "note": _BEST_EFFORT, "fields": _scalar_fields(data)}

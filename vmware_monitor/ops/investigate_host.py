@@ -55,8 +55,26 @@ class HostNotFoundError(Exception):
 
 
 def _is_cluster(ref: object) -> bool:
-    """True if a host's ``parent`` is a real cluster (not a standalone ComputeResource)."""
-    return type(ref).__name__ == "ClusterComputeResource"
+    """True if a host's ``parent`` is a real cluster (not a standalone ComputeResource).
+
+    Uses ``isinstance``. The previous form compared ``type(ref).__name__`` against
+    the bare leaf name, and pyVmomi names its types with the fully-qualified VMODL
+    name — on real hardware that attribute reads ``"vim.ClusterComputeResource"``,
+    so the comparison was False for every host that has ever existed. It never
+    raised; it simply never matched, so ``cluster`` came back ``null`` on every
+    bundle and every cluster-scoped alarm was dropped — 9 of the 11 on the host
+    this was caught with (真机 vCenter 9.1, 2026-08-31; the qualified name was
+    reproduced locally on 8.0.3, so it is not a 9.x behaviour).
+
+    Why it was written that way is the actual root cause and is worth keeping:
+    it let the pure-aggregation tests pass a lightweight
+    ``type("ClusterComputeResource", (), {})()`` sentinel instead of a pyVmomi
+    object. The test could only pass with a fake that nothing real resembles
+    (形态 #3 — verified in an environment where the defect cannot appear). The
+    tests now build ``vim.ClusterComputeResource("domain-cN")``, which pyVmomi
+    constructs without a live connection, so fake and field agree again.
+    """
+    return isinstance(ref, vim.ClusterComputeResource)
 
 
 def _format_host_object(props: dict, fallback_name: str) -> dict:

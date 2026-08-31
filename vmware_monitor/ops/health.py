@@ -128,7 +128,7 @@ def _catalogue_and_coverage(
     seen: dict[str, set[str]] = {}
     described = 0
     for detail in info or []:
-        key = _detail_key(getattr(detail, "key", None))
+        key = _catalogue_entry_key(detail)
         category = getattr(detail, "category", None)
         if not key or not category:
             continue
@@ -143,23 +143,48 @@ def _catalogue_and_coverage(
     return catalogue, coverage
 
 
-def _detail_key(key: object) -> str:
-    """The event type name from an ``EventDetail.key``.
+def _catalogue_entry_key(detail: object) -> str:
+    """The event type id this catalogue entry describes.
 
-    pyVmomi's VMODL declares this property as a **type**, not a string::
+    Two shapes arrive in ``EventManager.description.eventInfo``, and they must be
+    read differently. Measured on a live vCenter 8.0.3, 2196 entries:
 
-        vim.event.EventDescription.EventDetail -> key: <class 'type'>
+    * 441 classic VMODL events. ``key`` is the pyVmomi class
+      (``vim.event.AccountCreatedEvent``) and ``fullFormat`` is prose —
+      "Account {spec.id} was created on host {host.name}". **None** of these
+      contains a ``|``.
+    * 1755 extended events. ``key`` is the single class ``vim.event.EventEx`` or
+      ``vim.event.ExtendedEvent`` for *all* of them, so reading the class name
+      collapsed 1755 distinct descriptions onto 2 keys — 80% of everything
+      vCenter published about itself, discarded. **All** of these put the real
+      id in ``fullFormat`` ahead of a ``|``::
 
-    so on a live vCenter it arrives as a pyVmomi class and ``str(key)`` renders
-    ``"<class 'pyVmomi.VmomiSupport.vim.event.VmPoweredOnEvent'>"`` — which no
-    lookup against an event's own class name can ever match. v1.8.14 shipped
-    with exactly that: every event fell through to "unknown", and because
-    unknown ranks alongside warning, a fix meant to stop hiding events flooded
-    instead — 1000 of 1000 unclassified, 89% of the returned rows login noise.
+          com.vmware.cis.CreatePermission|Permission created for user {User}...
+          esx.problem.scsi.device.io.latency.high|Device {1} performance...
 
-    The unit tests mocked this key as a string, so they could not have caught
-    it: validated in an environment where the defect cannot appear (形态 #3).
+      which is exactly the value ``Event.eventTypeId`` carries, so the catalogue
+      and :func:`_event_key` finally speak the same language.
+
+    The ``|`` split is unambiguous because the two populations do not overlap:
+    0 of 441 classic entries have one, 1755 of 1755 extended entries do, the
+    1755 extracted ids are distinct (zero collisions) and none contains a space.
+
+    ``key`` remains the fallback: an entry with no parseable id keeps the old
+    behaviour rather than being dropped.
+
+    Verified on 8.0.3 only. That the ids match what live events report was NOT
+    confirmed — the lab produced 10 events, none of them extended — so the
+    catalogue's own consistency is the evidence here, not a round trip.
     """
+    full = getattr(detail, "fullFormat", None)
+    if isinstance(full, str) and "|" in full:
+        candidate = full.split("|", 1)[0].strip()
+        # An id, not a sentence: vCenter's ids are dotted tokens. A prose
+        # fullFormat that happens to contain a pipe must not become a key.
+        if candidate and " " not in candidate:
+            return candidate
+
+    key = getattr(detail, "key", None)
     if key is None:
         return ""
     name = getattr(key, "__name__", None)
@@ -180,6 +205,16 @@ def _event_key(event: object) -> str:
 
 
 #: ESXi names its own problem events ``esx.problem.<subsystem>.<condition>``.
+#:
+#: These events do NOT carry ``.severity``. That took three rounds and two
+#: separate estates to pin down: 0 of 38 ``esx.problem.*`` events on a live VCF
+#: 9.1 vCenter had the field, across two runs (2026-08-31). It is written here
+#: so the next person does not go reading it again and find None — and so that
+#: this prefix rule is understood as the real ranking path for these events,
+#: not a curiosity. (Since ``_catalogue_entry_key`` learned to read extended ids out of
+#: ``fullFormat``, the catalogue does now cover ~372 ``esx.problem.*`` types, so
+#: the prefix is once again a genuine last resort rather than the main road.)
+#:
 #: The prefix is vCenter's own convention and it is the last thing consulted --
 #: only after the overrides, the event's own severity, and the catalogue have
 #: all declined to rank it. "warning" rather than "critical" because the prefix

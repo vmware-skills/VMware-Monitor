@@ -7,6 +7,8 @@ original password through the normal config loader.
 
 from __future__ import annotations
 
+from vmware_policy.fsperms import assert_owner_only
+
 import os
 from pathlib import Path
 
@@ -47,9 +49,9 @@ def test_init_writes_grep_safe_env(_wizard_env: Path, monkeypatch: pytest.Monkey
     # Password is present under the right key, but NOT in plaintext.
     assert "VMWARE_LAB_VC_PASSWORD=b64:" in env_text
     assert "S3cr3t!pw" not in env_text
-    # 0600 perms.
-    mode = (_wizard_env / ".env").stat().st_mode & 0o777
-    assert mode == 0o600, oct(mode)
+    # Owner-only. Asserted through fsperms so this stays true on a platform
+    # with no POSIX mode bits, where the raw comparison could only ever fail.
+    assert_owner_only(_wizard_env / ".env")
 
 
 def test_init_password_round_trips(_wizard_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -51,6 +51,19 @@ class _EventMgr:
         return self._events
 
 
+def _class_key(cls):
+    """The catalogue key for an entry that carries no extended id.
+
+    Entries in this file's fixtures have no ``fullFormat``, so they still key on
+    the pyVmomi class — the fallback branch of ``_catalogue_entry_key``. That
+    branch is not dead: on a live 8.0.3, 441 classic descriptions take it. What
+    changed is that real ``EventEx`` entries no longer land here, because their
+    ids are recoverable (see test_event_catalogue_uses_event_type_ids.py); the
+    ambiguity rule below still has to hold for whatever cannot be told apart.
+    """
+    return cls.__name__
+
+
 def _si(event_mgr):
     return SimpleNamespace(
         RetrieveContent=lambda: SimpleNamespace(eventManager=event_mgr)
@@ -92,11 +105,11 @@ def test_disagreeing_entries_under_one_key_are_dropped_not_overwritten():
     )
     catalogue, coverage = ops._catalogue_and_coverage(mgr)
 
-    assert ops._detail_key(vim.event.EventEx) not in catalogue, (
+    assert _class_key(vim.event.EventEx) not in catalogue, (
         "the ambiguous key survived -- an esx.problem.* event would inherit "
         "whichever description happened to be parsed last"
     )
-    assert catalogue[ops._detail_key(vim.event.VmPoweredOnEvent)] == "info"
+    assert catalogue[_class_key(vim.event.VmPoweredOnEvent)] == "info"
     assert coverage == {"described": 3, "usable": 1, "ambiguous": 1}
 
 
@@ -104,7 +117,7 @@ def test_agreeing_duplicates_are_still_usable():
     """Dropping every repeated key would throw away answers we actually have."""
     mgr = _EventMgr([], [(vim.event.EventEx, "error"), (vim.event.EventEx, "error")])
     catalogue, coverage = ops._catalogue_and_coverage(mgr)
-    assert catalogue[ops._detail_key(vim.event.EventEx)] == "error"
+    assert catalogue[_class_key(vim.event.EventEx)] == "error"
     assert coverage["ambiguous"] == 0
 
 

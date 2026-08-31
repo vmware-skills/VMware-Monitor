@@ -58,6 +58,19 @@ MEMORY_TIER_KINDS: frozenset[str] = frozenset({"DRAM", "NVMe"})
 # docstring). Basic-auth POST returning a session id.
 REST_AUTH_PATH = "/api/session"
 
+#: Appliance version, used only to explain a 404 from a version-gated call.
+#: Not from section D and not from memory: observed returning 200 on a live
+#: vCenter 8.0.3 (2026-08-31) with the body
+#:
+#:     {"version": "8.0.3.00000", "build": "24022515",
+#:      "summary": "VMware vCenter Server 8.0 Update 3", ...}
+#:
+#: A live appliance answering is stronger evidence than a document, and the
+#: alternative was to keep telling operators "the running version could not be
+#: read" while it sat one GET away. If it ever 404s, the reader degrades to that
+#: same honest wording rather than guessing.
+REST_VERSION_PATH = "/api/appliance/system/version"
+
 # Read-only GET paths. Templated cluster id segment kept literal as {cluster}.
 REST_READ_PATHS: tuple[str, ...] = (
     # vCenter appliance deployment size — NEW in 9.1.

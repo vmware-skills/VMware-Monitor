@@ -221,7 +221,7 @@ class _FakeRest:
         self._payload = payload
         self._raise = raise_not_ready
 
-    def get_json(self, path: str):
+    def get_json(self, path, *, requires=None):
         if self._raise:
             raise patching.RestNotReadyError("vCenter returned 503 for " + path)
         return self._payload

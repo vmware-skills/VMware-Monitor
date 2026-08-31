@@ -34,7 +34,12 @@ def _alarm(status: str, name: str) -> types.SimpleNamespace:
 
 
 def _cluster_ref():
-    return type("ClusterComputeResource", (), {})()
+    # A real pyVmomi managed-object reference — it constructs fine without a
+    # live connection. The old stand-in was a bare namespace class whose
+    # __name__ happened to equal the leaf type name: the only object in
+    # existence that the old production check matched. This test passed
+    # precisely because the fake was shaped like the bug (形态 #3).
+    return vim.ClusterComputeResource("domain-c1")
 
 
 def _vm_rows(refs, powered):

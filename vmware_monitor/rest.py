@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from vmware_policy.compat import Requires, version_remedy
+
 if TYPE_CHECKING:
     from vmware_monitor.config import TargetConfig
 
@@ -52,6 +54,14 @@ class RestAuthError(ValueError):
     """
 
 
+#: Distinguishes "not probed yet" from "probed, and unreadable". Collapsing the
+#: two would re-probe an unanswering appliance on every 404.
+_UNPROBED = object()
+
+#: See tests/eval/spec/vsphere91_endpoints.py — observed on a live 8.0.3.
+_VERSION_PATH = "/api/appliance/system/version"
+
+
 class RestNotFoundError(ValueError):
     """A templated id (e.g. cluster MoID) did not resolve — names how to get one."""
 
@@ -60,8 +70,20 @@ def _base_url(target: TargetConfig) -> str:
     return f"https://{target.host}:{target.port}"
 
 
-def _translate_status(exc: httpx.HTTPStatusError, path: str) -> Exception:
-    """Map an HTTP error status to the right authored exception (no body leak)."""
+def _translate_status(
+    exc: httpx.HTTPStatusError,
+    path: str,
+    requires: Requires | None = None,
+    detected: str | None = None,
+) -> Exception:
+    """Map an HTTP error status to the right authored exception (no body leak).
+
+    ``requires`` names the oldest vCenter a call site works on. It only ever
+    affects a 404, and only when the floor is not met: a 404 from an endpoint
+    that does not exist on this vCenter is not a bad cluster MoID, and telling
+    the operator to go re-check the MoID sends them after something that was
+    never wrong.
+    """
     code = exc.response.status_code
     if code in (502, 503, 504):
         return RestNotReadyError(
@@ -76,6 +98,14 @@ def _translate_status(exc: httpx.HTTPStatusError, path: str) -> Exception:
             "account has read access, then run 'vmware-monitor doctor'."
         )
     if code == 404:
+        # `detected` is the appliance's own version when it could be read, and
+        # None when it could not. version_remedy() words those two differently
+        # and says nothing at all when the floor is already met, so a 9.1 box
+        # that 404s still gets the ordinary "check the id" remedy.
+        if requires is not None:
+            explained = version_remedy(requires, detected)
+            if explained:
+                return RestNotFoundError(f"{explained} Failing call: {path}")
         return RestNotFoundError(
             f"vCenter has no resource at {path} (404). If this used a cluster id, "
             "confirm it with 'vmware-monitor inventory clusters' — the REST API "
@@ -92,6 +122,7 @@ class VsphereRest:
         self._base = _base_url(target)
         self._verify = target.verify_ssl
         self._session_id: str | None = None
+        self._product_version: str | None | object = _UNPROBED
 
     def _client(self) -> httpx.Client:
         return httpx.Client(base_url=self._base, verify=self._verify, timeout=_TIMEOUT_S)
@@ -123,7 +154,35 @@ class VsphereRest:
         self._session_id = token
         return token
 
-    def get_json(self, path: str) -> Any:
+    def product_version(self) -> str | None:
+        """Best-effort vCenter version string, or ``None`` if unreadable.
+
+        Called only while a 404 is being turned into a message, which sets three
+        rules. It must never raise, or it would replace a useful error with a
+        confusing one. It must never recurse: it calls ``_get_once`` with no
+        ``requires``, so its own failure cannot re-enter this path. And it must
+        cache its failure as well as its success, or an appliance that cannot
+        answer gets re-probed on every subsequent 404.
+
+        ``None`` is a supported answer, not a fallback to "old" — see
+        ``vmware_policy.compat.version_remedy``, which words the two differently.
+        """
+        if self._product_version is not _UNPROBED:
+            return self._product_version
+
+        self._product_version = None  # cache the failure before probing
+        try:
+            token = self._session_id or self._login()
+            data = self._get_once(_VERSION_PATH, token)
+        except Exception:  # noqa: BLE001 — unreadable is a supported answer
+            return None
+        if isinstance(data, dict):
+            value = data.get("version")
+            if isinstance(value, str) and value.strip():
+                self._product_version = value.strip()
+        return self._product_version
+
+    def get_json(self, path: str, *, requires: Requires | None = None) -> Any:
         """Authenticated GET → parsed JSON. One re-auth retry on a stale 401.
 
         Transient transport/5xx failures surface as :class:`RestNotReadyError`; 4xx as
@@ -131,20 +190,21 @@ class VsphereRest:
         """
         token = self._session_id or self._login()
         try:
-            return self._get_once(path, token)
+            return self._get_once(path, token, requires)
         except RestAuthError:
             # Session may have expired between calls — re-auth once, then give up.
             token = self._login()
-            return self._get_once(path, token)
+            return self._get_once(path, token, requires)
 
-    def _get_once(self, path: str, token: str) -> Any:
+    def _get_once(self, path: str, token: str, requires: Requires | None = None) -> Any:
         headers = {_SESSION_HEADER: token}
         try:
             with self._client() as client:
                 resp = client.get(path, headers=headers)
                 resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise _translate_status(exc, path) from exc
+            detected = self.product_version() if requires is not None else None
+            raise _translate_status(exc, path, requires, detected) from exc
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             raise RestNotReadyError(
                 f"vCenter REST GET {path} could not complete "
