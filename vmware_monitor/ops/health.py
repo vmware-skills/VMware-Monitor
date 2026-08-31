@@ -72,23 +72,46 @@ _EVENT_SUGGESTIONS: dict[str, str] = {
 }
 
 
-# Faults raised by QueryEvents on standalone ESXi (no event manager support).
-# Only these mean "no events available here" — auth/network errors must
-# propagate, otherwise a monitoring tool reports all-clear on failure.
-# (vim.fault has no NotSupported class; vmodl.fault.NotSupported is the one.)
-_NOT_SUPPORTED_FAULTS: tuple[type[Exception], ...] = (vmodl.fault.NotSupported,)
+# Faults meaning "this endpoint does not answer QueryEvents at all". Only these;
+# auth/network/permission errors must propagate, or a monitoring tool reports
+# all-clear on failure.
+#
+# Both are needed and only one was here. A standalone ESXi raises
+# **NotImplemented** -- verified on a live 8.0.3 host, and the reason both
+# investigation bundles died there with a raw VMODL traceback after doing all
+# their work. The original comment reasoned correctly about which class *exists*
+# (vim.fault has no NotSupported; vmodl.fault does) and never checked which one
+# ESXi actually raises. Knowing a class exists is not knowing it is thrown.
+_NOT_SUPPORTED_FAULTS: tuple[type[Exception], ...] = (
+    vmodl.fault.NotSupported,
+    vmodl.fault.NotImplemented,
+)
 
 
-def query_events(event_mgr: vim.event.EventManager, filter_spec: vim.event.EventFilterSpec) -> list:
-    """QueryEvents wrapper shared by ops.health and scanner.log_scanner.
+def query_events_or_none(
+    event_mgr: vim.event.EventManager, filter_spec: vim.event.EventFilterSpec
+) -> list | None:
+    """Events, or ``None`` when this endpoint cannot answer at all.
 
-    Standalone ESXi does not support QueryEvents — treat NotSupported as
-    "no events". Everything else (auth, network, permission) re-raises.
+    The two answers are different and callers need them apart: ``[]`` is "the
+    window really is empty", ``None`` is "we could not ask". A caller that
+    collapses them reports a quiet all-clear on a host it never read (形态 #1).
     """
     try:
         return event_mgr.QueryEvents(filter_spec)
     except _NOT_SUPPORTED_FAULTS:
-        return []
+        return None
+
+
+def query_events(event_mgr: vim.event.EventManager, filter_spec: vim.event.EventFilterSpec) -> list:
+    """QueryEvents wrapper that reads "unsupported" as "no events".
+
+    Kept for callers that genuinely have nothing to say about the difference
+    (the log scanner scans what it can reach). Anything that reports to an
+    operator should use :func:`query_events_or_none` and say which it got.
+    """
+    events = query_events_or_none(event_mgr, filter_spec)
+    return [] if events is None else events
 
 
 def _event_catalogue(event_mgr: object) -> dict[str, str]:

@@ -226,3 +226,66 @@ def test_the_version_is_probed_once_not_per_404(monkeypatch) -> None:
         with pytest.raises(RestNotFoundError):
             rest.get_json(PATH, requires=REQUIRES_DEPLOYMENT_SIZE)
     assert len(calls) == 1, f"version probed {len(calls)} times, expected 1"
+
+
+def test_vcenters_own_explanation_beats_a_guess() -> None:
+    """vCenter writes the reason into the body; discarding it to guess is worse.
+
+    ``last-apply-result`` 404s on a cluster that has simply never been
+    remediated, and vCenter says exactly that. The tool answered "if this used a
+    cluster id, confirm it" — sending the operator to re-check an id that was
+    correct, with the real answer sitting unread in the response.
+    """
+    import httpx
+
+    from vmware_monitor.rest import _translate_status
+
+    body = {
+        "error_type": "NOT_FOUND",
+        "messages": [{"default_message": "The last remediation results for entity mgmt-cl01 are unavailable."}],
+    }
+    err = _translate_status(
+        httpx.HTTPStatusError(
+            "x",
+            request=httpx.Request("GET", "https://vc/x"),
+            response=httpx.Response(404, json=body),
+        ),
+        "/api/esx/settings/clusters/domain-c9/software/reports/last-apply-result",
+    )
+    msg = str(err)
+    assert "are unavailable" in msg
+    # ...and the MoID pointer survives, because the two are additive: vCenter
+    # names the id back at you without saying what shape it should have been.
+    assert "domain-c123" in msg
+
+
+def test_a_body_with_nothing_to_say_keeps_the_original_remedy() -> None:
+    import httpx
+
+    from vmware_monitor.rest import _translate_status
+
+    for body in ({}, {"messages": []}, {"messages": [{"x": 1}]}, {"messages": "nope"}):
+        err = _translate_status(
+            httpx.HTTPStatusError(
+                "x", request=httpx.Request("GET", "https://vc/x"),
+                response=httpx.Response(404, json=body),
+            ),
+            "/api/esx/settings/clusters/domain-c9/software/compliance",
+        )
+        assert "cluster MoID" in str(err), f"{body!r} lost the fallback"
+
+
+def test_a_non_json_body_does_not_crash_the_translator() -> None:
+    """The translator runs while another error is being built; it must not raise."""
+    import httpx
+
+    from vmware_monitor.rest import _translate_status
+
+    err = _translate_status(
+        httpx.HTTPStatusError(
+            "x", request=httpx.Request("GET", "https://vc/x"),
+            response=httpx.Response(404, text="<html>gateway page</html>"),
+        ),
+        "/api/x",
+    )
+    assert "vCenter has no resource" in str(err)

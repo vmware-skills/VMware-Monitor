@@ -126,7 +126,10 @@ def _install_graph(monkeypatch, *, vm_alarms=(), host_alarms=(), with_cluster=Tr
     monkeypatch.setattr(investigate_vm, "find_vm_by_name", fake_find)
     monkeypatch.setattr(investigate_vm, "_collect_objects", fake_collect_objects)
     monkeypatch.setattr(_correlate, "_collect_objects", fake_collect_objects)
-    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: [])
+    # Returns the (rows, unavailable_reason) pair the real one does — a stub
+    # narrower than the function it replaces lets a signature change pass here
+    # and fail on real hardware.
+    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None))
     monkeypatch.setattr(investigate_vm, "list_snapshots", lambda si, name: paginated([], total=0))
     monkeypatch.setattr(
         investigate_vm,
@@ -253,7 +256,7 @@ def test_entity_timeline_merges_dedups_and_orders(monkeypatch):
     )
     si = types.SimpleNamespace(RetrieveContent=lambda: types.SimpleNamespace(eventManager=object()))
     entities = [("vm", "web-01", vm_ref), ("host", "esxi-09", host_ref)]
-    tl = _correlate.entity_timeline(si, entities, hours=24)
+    tl, _unavailable = _correlate.entity_timeline(si, entities, hours=24)
 
     # de-dup: the shared event appears once, tagged with the first (vm) scope.
     assert sum(1 for e in tl if e["event_type"] == "VmReconfiguredEvent") == 1
@@ -277,5 +280,5 @@ def test_entity_timeline_severity_threshold(monkeypatch):
         ],
     )
     si = types.SimpleNamespace(RetrieveContent=lambda: types.SimpleNamespace(eventManager=object()))
-    tl = _correlate.entity_timeline(si, [("vm", "web-01", ref)], min_severity="warning")
+    tl, _unavailable = _correlate.entity_timeline(si, [("vm", "web-01", ref)], min_severity="warning")
     assert [e["event_type"] for e in tl] == ["HostConnectionLostEvent"]

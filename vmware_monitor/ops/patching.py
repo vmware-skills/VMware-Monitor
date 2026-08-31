@@ -53,7 +53,12 @@ REQUIRES_DEPLOYMENT_SIZE = Requires(
 _COMPLIANCE_TMPL = "/api/esx/settings/clusters/{cluster}/software/compliance"
 _LAST_APPLY_TMPL = "/api/esx/settings/clusters/{cluster}/software/reports/last-apply-result"
 
-_BEST_EFFORT = "endpoint verified (spec §D); field parse best-effort pending live 9.1 vCenter"
+#: Replayed against a live VCF 9.1 vCenter on 2026-08-31: both endpoints
+#: returned 200 and the fields below parsed as written, on two clusters
+#: (status/impact/commit/stage_status, and the four host buckets). The note it
+#: replaces said "pending live 9.1 vCenter" -- leaving that in after the replay
+#: would tell the next reader to go and verify what has been verified.
+_VERIFIED = "endpoint and field parse verified against a live VCF 9.1 vCenter (2026-08-31)"
 
 
 def _not_ready(exc: RestNotReadyError, resource: str) -> dict:
@@ -96,37 +101,105 @@ def get_deployment_size(target: TargetConfig) -> dict:
         data = rest.get_json(DEPLOYMENT_SIZE_PATH, requires=REQUIRES_DEPLOYMENT_SIZE)
     except RestNotReadyError as exc:
         return _not_ready(exc, "deployment_size")
-    return {"available": True, "note": _BEST_EFFORT, "fields": _scalar_fields(data)}
+    return {"available": True, "note": _VERIFIED, "fields": _scalar_fields(data)}
 
 
 # Per-host compliance key names. The vLCM HostCompliance *path* is spec-verified,
 # but the field name inside each host row is NOT yet replayed against a live 9.1
 # vCenter — the two plausible schema spellings are tried in order.
+#: The four host buckets vLCM reports at the top level of a compliance response,
+#: mapped to the key each appears under. Read directly rather than derived: a
+#: live 9.1 payload carries `compliant_hosts`, `non_compliant_hosts`,
+#: `unavailable_hosts` and `incompatible_hosts` as sibling arrays, so vCenter
+#: has already made the distinction and there is nothing to infer.
+_HOST_BUCKETS = {
+    "compliant": "compliant_hosts",
+    "non_compliant": "non_compliant_hosts",
+    "unavailable": "unavailable_hosts",
+    "incompatible": "incompatible_hosts",
+}
+
+
+#: Per-host status value -> bucket, for payloads that carry only a `hosts` map.
+#: Everything unrecognised lands in "unknown", which is reported as its own
+#: number and never added to non_compliant.
+_STATUS_BUCKET = {
+    "COMPLIANT": "compliant",
+    "NON_COMPLIANT": "non_compliant",
+    "UNAVAILABLE": "unavailable",
+    "INCOMPATIBLE": "incompatible",
+}
+
+#: Keys a per-host row may use for its status, in preference order.
 _HOST_STATUS_KEYS = ("compliance_status", "status")
 
 
-def _count_non_compliant(hosts: Any) -> int | None:
-    """Count non-compliant host rows, or ``None`` when the schema key is absent.
+def _buckets_from_hosts(hosts: Any) -> dict[str, int] | None:
+    """Fallback: classify a per-host map when the top-level arrays are absent.
 
-    Reads whichever of ``_HOST_STATUS_KEYS`` a host row carries. Critically: if NO
-    host row carries *either* key (a wrong schema guess), returns ``None`` (unknown)
-    rather than ``0`` — a patch-compliance tool must never silently report a false
-    "all compliant / non_compliant: 0" just because it looked for the wrong field
-    (踩坑 形态 #1: an empty/unmatched read is 'unknown', not 'none').
+    Kept so a payload shaped only as ``{"hosts": {...}}`` still yields counts
+    rather than a shrug — dropping to "unknown" there would be a capability
+    regression dressed as caution.
+
+    The bug being fixed is not *where* the count came from, it is that every
+    status other than COMPLIANT was added together:
+
+        sum(1 for s in statuses if s.upper() not in ("", "COMPLIANT"))
+
+    so four UNAVAILABLE hosts were reported as four hosts needing patches. Here
+    each state keeps its own tally and nothing is merged.
     """
     if not isinstance(hosts, dict):
         return None
-    statuses: list[str] = []
-    for h in hosts.values():
-        if not isinstance(h, dict):
+    counts = {label: 0 for label in _HOST_BUCKETS}
+    counts["unknown"] = 0
+    seen = False
+    for row in hosts.values():
+        if not isinstance(row, dict):
             continue
+        status = ""
         for key in _HOST_STATUS_KEYS:
-            if key in h:
-                statuses.append(str(h.get(key, "")))
+            if key in row:
+                status = str(row.get(key) or "")
                 break
-    if not statuses:
-        return None
-    return sum(1 for s in statuses if s.upper() not in ("", "COMPLIANT"))
+        else:
+            continue
+        seen = True
+        counts[_STATUS_BUCKET.get(status.upper(), "unknown")] += 1
+    return counts if seen else None
+
+
+def _host_buckets(data: dict) -> dict[str, int | None]:
+    """Per-bucket host counts. ``None`` for any bucket nothing could establish.
+
+    A live 9.1 compliance payload states the answer outright, as four sibling
+    arrays, so the first choice is to read what vCenter said rather than derive
+    it. On the cluster this was caught with, vCenter reported
+    ``non_compliant_hosts: []`` -- zero -- and ``unavailable_hosts`` with four
+    entries, while the tool reported four hosts needing patches.
+
+    The function it replaces guarded the opposite error, and its docstring said
+    so: "a patch-compliance tool must never silently report a false all
+    compliant". It did guard that, and then made the mirror-image mistake. For a
+    patch tool both are expensive: one hides work, the other invents a
+    maintenance window for hosts that were merely unreachable.
+    """
+    out: dict[str, int | None] = {}
+    stated = False
+    for label, key in _HOST_BUCKETS.items():
+        value = data.get(key)
+        if isinstance(value, (list, dict)):
+            out[label] = len(value)
+            stated = True
+        else:
+            out[label] = None
+    out["unknown"] = None
+
+    if stated:
+        return out
+
+    derived = _buckets_from_hosts(data.get("hosts"))
+    return {**out, **derived} if derived else out
 
 
 def get_patch_compliance(target: TargetConfig, cluster: str) -> dict:
@@ -148,15 +221,24 @@ def get_patch_compliance(target: TargetConfig, cluster: str) -> dict:
     data = data if isinstance(data, dict) else {}
     hosts = data.get("hosts")
     hosts_total = len(hosts) if isinstance(hosts, (dict, list)) else None
-    non_compliant = _count_non_compliant(hosts)
+    buckets = _host_buckets(data)
     return {
         "available": True,
         "cluster": sanitize(cluster),
         "status": sanitize(str(data.get("status", "unknown"))),
         "hosts_total": hosts_total,
-        "non_compliant_hosts": non_compliant,
+        # vCenter's own count, not a derived one. None means this payload did not
+        # report the bucket -- which is "unknown", never "zero".
+        "non_compliant_hosts": buckets["non_compliant"],
+        "compliant_hosts": buckets["compliant"],
+        # Kept separate and never folded into non_compliant: a host that could
+        # not be scanned has not been found to need anything.
+        "unavailable_hosts": buckets["unavailable"],
+        "incompatible_hosts": buckets["incompatible"],
+        # A status this tool does not recognise is its own number too, so a
+        # schema change shows up as "unknown", not as compliant or as work.
+        "unknown_status_hosts": buckets["unknown"],
         "scan_time": sanitize(str(data.get("scan_time", ""))) or None,
-        "note": _BEST_EFFORT,
         "fields": _scalar_fields(data),
     }
 
@@ -183,6 +265,6 @@ def get_last_apply_result(target: TargetConfig, cluster: str) -> dict:
         "cluster": sanitize(cluster),
         "status": sanitize(str(data.get("status", "unknown"))),
         "end_time": sanitize(str(data.get("end_time", ""))) or None,
-        "note": _BEST_EFFORT,
+        "note": _VERIFIED,
         "fields": _scalar_fields(data),
     }

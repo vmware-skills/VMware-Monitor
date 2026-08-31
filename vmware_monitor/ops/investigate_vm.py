@@ -177,7 +177,10 @@ def get_vm_investigation_bundle(si: ServiceInstance, vm_name: str, hours: int = 
         ("cluster", cluster_name, cluster_ref),
         *ds_entities,
     ]
-    timeline = _correlate.entity_timeline(si, entities, hours=hours)
+    # Two values on purpose: an empty timeline because nothing happened and an
+    # empty timeline because this endpoint has no event service must not look
+    # the same to whoever reads the bundle.
+    timeline, timeline_unavailable = _correlate.entity_timeline(si, entities, hours=hours)
 
     # Snapshots + live performance reuse the existing read-only ops.
     snapshots = list_snapshots(si, vm_name)["items"]
@@ -204,6 +207,12 @@ def get_vm_investigation_bundle(si: ServiceInstance, vm_name: str, hours: int = 
         "alarms": alarms,
         "performance": performance,
         "timeline": timeline,
+        # None when the timeline was read. A sentence when this endpoint serves
+        # no event history -- which a standalone ESXi does by exposing an event
+        # manager and then refusing QueryEvents. Before this, that raised a raw
+        # vmodl.fault.NotImplemented at the operator after every other read had
+        # already succeeded, on 4 of the 5 targets configured here.
+        "timeline_unavailable": timeline_unavailable,
         "stats": stats,
         "hours": hours,
         "snapshot": "point-in-time; not a trend (no history retained)",

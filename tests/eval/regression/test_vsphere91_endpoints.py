@@ -266,6 +266,8 @@ def test_compliance_counts_non_compliant_hosts(monkeypatch) -> None:
     assert out["status"] == "NON_COMPLIANT"
     assert out["hosts_total"] == 2
     assert out["non_compliant_hosts"] == 1
+    assert out["compliant_hosts"] == 1
+    assert out["unavailable_hosts"] == 0
 
 
 def test_deployment_size_passes_scalar_fields(monkeypatch) -> None:

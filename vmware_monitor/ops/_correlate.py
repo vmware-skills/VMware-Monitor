@@ -43,7 +43,7 @@ from vmware_monitor.ops.health import (
     CRITICAL_EVENTS,
     SEVERITY_ORDER,
     WARNING_EVENTS,
-    query_events,
+    query_events_or_none,
 )
 
 if TYPE_CHECKING:
@@ -237,7 +237,7 @@ def _entity_events(event_mgr: object, ref: object, begin: datetime, now: datetim
         entity=vim.event.EventFilterSpec.ByEntity(entity=ref, recursion=_SELF),
         time=vim.event.EventFilterSpec.ByTime(beginTime=begin, endTime=now),
     )
-    return query_events(event_mgr, spec)
+    return query_events_or_none(event_mgr, spec)
 
 
 def entity_timeline(
@@ -257,9 +257,18 @@ def entity_timeline(
         min_severity: Drop events below this band ("critical"/"warning"/"info").
 
     Returns:
-        list of ``{time, scope, entity, severity, event_type, message, username}``
-        sorted newest first, de-duplicated across overlapping scopes, capped at
-        ``MAX_TIMELINE_EVENTS``.
+        ``(rows, unavailable_reason)``. ``rows`` is
+        ``{time, scope, entity, severity, event_type, message, username}`` newest
+        first, de-duplicated across overlapping scopes, capped at
+        ``MAX_TIMELINE_EVENTS``. ``unavailable_reason`` is None when the events
+        were read, and a sentence when this endpoint does not serve them.
+
+        The tuple exists so callers cannot accidentally publish an empty
+        timeline as a quiet all-clear. A standalone ESXi exposes an
+        ``eventManager`` object and then refuses ``QueryEvents``
+        (vmodl.fault.NotImplemented, verified on a live 8.0.3), so "no events"
+        and "no event service" arrive looking identical unless they are kept
+        apart here.
     """
     content = si.RetrieveContent()
     event_mgr = content.eventManager
@@ -269,10 +278,15 @@ def entity_timeline(
 
     seen: set = set()
     rows: list[dict] = []
+    refused: list[str] = []
     for scope, display_name, ref in entities:
         if ref is None:
             continue
-        for event in _entity_events(event_mgr, ref, begin, now):
+        events = _entity_events(event_mgr, ref, begin, now)
+        if events is None:
+            refused.append(scope)
+            continue
+        for event in events:
             sev = _classify(event)
             if SEVERITY_ORDER.get(sev, 2) > threshold:
                 continue
@@ -295,4 +309,27 @@ def entity_timeline(
                 }
             )
     rows.sort(key=lambda r: r["time"], reverse=True)
-    return rows[:MAX_TIMELINE_EVENTS]
+    # Any refusal is reported, not only a total one. The first version of this
+    # said `if refused and not rows`, which suppressed the warning as soon as a
+    # single scope answered -- so a timeline missing the host's events entirely
+    # would have looked complete. That is the same "partial failure rendered as
+    # success" this function exists to prevent, reintroduced inside the fix for
+    # it (形态 #5).
+    reason = None
+    if refused:
+        scopes = ", ".join(sorted(set(refused)))
+        if rows:
+            reason = (
+                f"Events could not be read for these scopes: {scopes}. The "
+                f"endpoint exposes an event manager and refuses QueryEvents, "
+                f"which is how a standalone ESXi host behaves. The timeline "
+                f"below is therefore incomplete, not empty."
+            )
+        else:
+            reason = (
+                "This endpoint does not serve event history: it exposes an event "
+                "manager but refuses QueryEvents, which is how a standalone ESXi "
+                "host behaves. Connect to the vCenter that manages it for a "
+                "timeline. Everything else in this bundle was read normally."
+            )
+    return rows[:MAX_TIMELINE_EVENTS], reason

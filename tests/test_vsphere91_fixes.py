@@ -117,6 +117,9 @@ def test_patch_compliance_reads_status_key(monkeypatch):
         },
     )
     assert result["non_compliant_hosts"] == 2  # pre-fix only read compliance_status
+    # Each state keeps its own tally; nothing is folded into non_compliant.
+    assert result["compliant_hosts"] == 1
+    assert result["unavailable_hosts"] == 0
 
 
 def test_patch_compliance_reads_compliance_status_key(monkeypatch):
@@ -174,3 +177,48 @@ def test_skill_md_tool_count_and_names_match_registry():
     assert f"MCP Tools ({count}" in skill, f"SKILL.md tool count != {count}"
     for name in new_tools:
         assert name in skill, f"SKILL.md does not document {name}"
+
+
+def test_unscannable_hosts_are_not_reported_as_needing_patches(monkeypatch):
+    """"Could not scan" and "needs patching" are different actions.
+
+    A live 9.1 cluster returned four UNAVAILABLE hosts and vCenter's own
+    ``non_compliant_hosts: []`` — zero. The tool said four hosts were
+    non-compliant, because the count was
+    ``sum(1 for s in statuses if s.upper() not in ("", "COMPLIANT"))``.
+
+    The function that did it guarded the opposite error and its docstring said
+    so. Guarding one direction of "unknown must not read as a fact" and then
+    walking into the mirror image is the shape this asserts against.
+    """
+    result = _compliance(
+        monkeypatch,
+        {f"h{i}": {"status": "UNAVAILABLE"} for i in range(4)},
+    )
+    assert result["non_compliant_hosts"] == 0, "unscannable hosts counted as needing patches"
+    assert result["unavailable_hosts"] == 4
+    assert result["compliant_hosts"] == 0
+
+
+def test_vcenters_own_arrays_win_over_any_derivation(monkeypatch):
+    """When vCenter states the buckets, read them rather than re-deriving."""
+    import vmware_monitor.ops.patching as patching
+
+    payload = {
+        "status": "UNAVAILABLE",
+        "compliant_hosts": [],
+        "non_compliant_hosts": [],
+        "unavailable_hosts": ["host-1013", "host-1017", "host-1020", "host-1023"],
+        "incompatible_hosts": [],
+    }
+    buckets = patching._host_buckets(payload)
+    assert buckets["non_compliant"] == 0
+    assert buckets["unavailable"] == 4
+
+
+def test_an_unrecognised_status_is_its_own_number(monkeypatch):
+    """A schema change must surface as "unknown", not as compliant or as work."""
+    result = _compliance(monkeypatch, {"h1": {"status": "SOME_FUTURE_STATE"}})
+    assert result["unknown_status_hosts"] == 1
+    assert result["non_compliant_hosts"] == 0
+    assert result["compliant_hosts"] == 0

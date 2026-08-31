@@ -1,3 +1,50 @@
+## v1.10.0 — a cluster that was never recognised, and 1887 event descriptions that were
+
+**`_is_cluster` never matched.** It compared `type(ref).__name__` against
+`"ClusterComputeResource"` while pyVmomi reports the fully-qualified
+`"vim.ClusterComputeResource"`. It never raised — it simply never matched, so
+every investigation bundle returned `cluster: null` and dropped every
+cluster-scoped alarm: 9 of 11 on the host this was caught with. Verified fixed on
+a live 9.1 estate, and the qualified name reproduces on 8.0.3, so this was never
+a 9.x behaviour. AIops re-exports these bundles, so the fix reaches it too —
+hence the raised `vmware-monitor` floor there.
+
+**Event catalogue: 443 usable keys out of 2328 descriptions, now 2328.**
+`EventDetail.key` is a single class for all extended events, so 1887 distinct
+descriptions collapsed onto two buckets and 81% of what vCenter publishes about
+itself was discarded. Their real id sits ahead of a `|` in `fullFormat` — the
+same value `Event.eventTypeId` carries. The two populations do not overlap: 0 of
+441 classic entries contain a pipe, all 1887 extended ones do, the extracted ids
+are distinct and none contains a space. On 9.1: ambiguous keys 2 → 0,
+`esx.problem.*` in the catalogue 0 → 372, events ranked by name-prefix guess 38 → 0.
+
+**Investigation bundles crashed on a standalone ESXi.** It exposes an event
+manager and then refuses `QueryEvents` with `vmodl.fault.NotImplemented`; the
+tolerated-fault list held only `NotSupported`. Its comment reasoned correctly
+about which class *exists* and never checked which one ESXi throws. Both bundles
+died there — on 4 of the 5 targets configured on the machine that found it —
+after every other read had already succeeded. They now return everything else and
+report `timeline_unavailable`, including when only *some* scopes were unreadable.
+
+**vLCM counted hosts it could not scan as hosts needing patches.** Compliance was
+`sum(1 for s in statuses if s.upper() not in ("", "COMPLIANT"))`, so UNAVAILABLE
+and INCOMPATIBLE became findings by default. On a live cluster vCenter said
+`non_compliant_hosts: []` — zero — and the tool reported four. The four
+authoritative arrays are read directly now, and `unavailable_hosts`,
+`incompatible_hosts` and `unknown_status_hosts` are their own numbers. The
+function this replaces guarded the *opposite* error in its own docstring.
+
+**A 404 whose answer was in the response body.** vCenter says "The last
+remediation results for entity mgmt-cl01 are unavailable" — the cluster was never
+remediated — and the tool discarded that to suggest the cluster id might be
+wrong. Its sentence is used now, with the MoID pointer kept alongside on
+cluster-scoped paths rather than replaced.
+
+Also: `.env` permissions go through `vmware_policy.fsperms` instead of POSIX mode
+bits, so this no longer prints an inert `chmod 600` on a platform with no mode
+bits while `doctor` prints the opposite about the same file. Three
+"pending live 9.1 verification" notes are retired — that replay has happened.
+
 ## v1.9.2 — the retention setting the coverage note named does not exist
 
 First live run of the backup-window tool from issue #26, against vCenter 8.0.3.

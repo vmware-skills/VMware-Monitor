@@ -80,7 +80,7 @@ def cluster_patch_compliance(
     What it returns: {available, cluster, status, hosts_total, non_compliant_hosts,
     scan_time, note, fields}. ``available: False`` means vCenter answered 503 — it is
     likely mid-patch (vSphere has no maintenance-ETA endpoint; retry shortly), not an
-    error. Field parse is best-effort pending live 9.1 verification (see ``note``).
+    error. Endpoint and field parse verified against a live VCF 9.1 vCenter (see ``note``).
 
     Gotchas: ``cluster`` must be the cluster MoID (e.g. domain-c123), which the REST
     API requires — get it from list_all_clusters, not the display name. Read-only:
@@ -113,7 +113,7 @@ def cluster_last_apply_result(
     a 503 yields ``available: False`` (mid-patch, retry).
 
     Gotchas: ``cluster`` is the cluster MoID (e.g. domain-c123) — see list_all_clusters.
-    Read-only. Field parse best-effort pending live 9.1 verification.
+    Read-only. Endpoint and field parse verified against a live VCF 9.1 vCenter.
 
     Args:
         cluster: Cluster MoID (e.g. domain-c123).
@@ -141,7 +141,7 @@ def vcenter_deployment_size(
     vCenter answered 503 (busy/restarting); nothing crashed.
 
     Gotchas: 9.1-only endpoint — older vCenters will 404 (authored teaching error).
-    Field parse best-effort pending live 9.1 verification. Read-only.
+    Endpoint and field parse verified against a live VCF 9.1 vCenter. Read-only.
 
     Args:
         target: vCenter target from config (default if omitted).

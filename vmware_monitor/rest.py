@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from vmware_policy import sanitize
 from vmware_policy.compat import Requires, version_remedy
 
 if TYPE_CHECKING:
@@ -70,6 +71,42 @@ def _base_url(target: TargetConfig) -> str:
     return f"https://{target.host}:{target.port}"
 
 
+def _vcenter_explanation(exc: httpx.HTTPStatusError) -> str | None:
+    """vCenter's own sentence about this error, if it wrote one.
+
+    The vSphere Automation REST API returns a structured body on failure::
+
+        {"error_type": "NOT_FOUND",
+         "messages": [{"default_message":
+             "The last remediation results for entity mgmt-cl01 are unavailable."}]}
+
+    That sentence is the actual answer -- the cluster has never been remediated
+    -- and it was being thrown away in favour of "if this used a cluster id,
+    confirm it". The operator was sent to re-check an id that was correct while
+    vCenter's explanation sat unread in the response.
+
+    This is not a raw-body passthrough, which this layer deliberately does not
+    do. One documented field is read, sanitised and length-capped; anything else
+    in the body is ignored, and an unparseable body yields None.
+    """
+    try:
+        body = exc.response.json()
+    except Exception:  # noqa: BLE001 -- a non-JSON body simply has nothing to say
+        return None
+    if not isinstance(body, dict):
+        return None
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return None
+    for entry in messages:
+        if not isinstance(entry, dict):
+            continue
+        text = entry.get("default_message")
+        if isinstance(text, str) and text.strip():
+            return sanitize(text.strip(), max_len=300)
+    return None
+
+
 def _translate_status(
     exc: httpx.HTTPStatusError,
     path: str,
@@ -106,6 +143,24 @@ def _translate_status(
             explained = version_remedy(requires, detected)
             if explained:
                 return RestNotFoundError(f"{explained} Failing call: {path}")
+        # vCenter often explains its own 404 better than any guess we can make
+        # ("...are unavailable" means never remediated, not a bad id). Its
+        # sentence goes first; the id advice stays as the fallback for the case
+        # it really is a bad MoID.
+        said = _vcenter_explanation(exc)
+        if said:
+            # Keep the MoID pointer on cluster-scoped paths. vCenter's sentence is
+            # the better explanation for "these results are unavailable", but for
+            # someone who passed a cluster's display name it names the id back at
+            # them without saying what shape it should have been — so the two are
+            # additive, not alternatives.
+            hint = (
+                " If you passed a cluster's display name, this API wants its MoID "
+                "(e.g. domain-c123) — 'vmware-monitor inventory clusters' lists them."
+                if "/clusters/" in path
+                else ""
+            )
+            return RestNotFoundError(f"vCenter says: {said} (404 at {path}).{hint}")
         return RestNotFoundError(
             f"vCenter has no resource at {path} (404). If this used a cluster id, "
             "confirm it with 'vmware-monitor inventory clusters' — the REST API "
