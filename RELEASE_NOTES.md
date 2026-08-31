@@ -1,3 +1,27 @@
+## v1.9.2 — the retention setting the coverage note named does not exist
+
+First live run of the backup-window tool from issue #26, against vCenter 8.0.3.
+The feature works end to end -- the teaching error for an unknown VM, the bounds
+check, and the coverage note that separates "no backups ran" from "vCenter has
+no record of this VM at all" all behaved as designed.
+
+One thing did not. When task history had aged out, the note told the operator the
+setting responsible was `vpxd.task.maxAge`. That name answers
+`vim.fault.InvalidName` on vCenter 8.0.3 -- `vpxd.task` is what the documentation
+calls the owning service, and the option is `task.maxAge`. An operator following
+the hint got an error instead of a number.
+
+The note now reads the real value rather than quoting the documented default at
+someone whose retention was changed: `vCenter keeps 30 days of task history --
+task.maxAge`. It falls back to naming the setting alone when the read fails,
+because a wrong number is worse than no number.
+
+Verified on live hardware: `task.maxAge = 30`, `task.maxAgeEnabled = True`;
+`QueryOptions("vpxd.task.maxAge")` raises.
+
+The read-only gate flagged the new `QueryOptions` call and it was allowlisted
+with a stated reason, as designed.
+
 ## v1.9.1 — 41 of 50 real events ranked "unknown" — the catalogue was collapsing 2328 descriptions into 443
 
 

@@ -93,6 +93,29 @@ _REMOVE_IDS = frozenset(
 )
 
 
+def _retention_note(si: ServiceInstance) -> str:
+    """Name the setting that aged the history out, with its value where readable.
+
+    The option is ``task.maxAge``. An earlier version of this message said
+    ``vpxd.task.maxAge``, which is what the documentation calls the *service*
+    that owns it -- ``QueryOptions("vpxd.task.maxAge")`` answers
+    ``vim.fault.InvalidName`` on vCenter 8.0.3, so an operator following the
+    hint got an error rather than a number. Verified against a live vCenter:
+    ``task.maxAge = 30``, ``task.maxAgeEnabled = True``.
+
+    Falls back to naming the setting alone when it cannot be read: a wrong
+    number is worse than no number, and the operator can still find it.
+    """
+    try:
+        opts = si.content.setting.QueryOptions("task.maxAge") or []
+        value = opts[0].value if opts else None
+    except Exception:  # noqa: BLE001 — a hint must not be able to fail the call
+        return "vCenter's task.maxAge retention"
+    if value is None:
+        return "vCenter's task.maxAge retention"
+    return f"vCenter keeps {value} days of task history — task.maxAge"
+
+
 def _task_ids(info: vim.TaskInfo) -> set[str]:
     """Every identifier this task carries, read in its declared shape."""
     ids: set[str] = set()
@@ -335,12 +358,13 @@ def get_backup_snapshot_history(
     removals = sum(1 for e in events if e["kind"] == "remove")
 
     # Whether the window was actually covered. vCenter expires task history on
-    # its own retention schedule (vpxd.task.maxAge, 30 days out of the box), so
+    # its own retention schedule (`task.maxAge`, 30 days out of the box), so
     # a 90-day request against a 30-day retention returns 30 days of cycles and
     # nothing marks the difference. Reporting the oldest task of ANY kind seen
     # -- not the oldest snapshot task -- is what separates "no backups ran" from
     # "vCenter no longer remembers".
     coverage_note = None
+    retention_note = _retention_note(si)
     if unavailable is None:
         if oldest_seen is None:
             coverage_note = (
@@ -352,7 +376,7 @@ def get_backup_snapshot_history(
             coverage_note = (
                 f"Requested {days} days but the oldest task vCenter still holds for this VM "
                 f"is {covered} days old. Anything before that has aged out of task history "
-                f"(vpxd.task.maxAge), so the counts below describe {covered} days, not {days}."
+                f"({retention_note}), so the counts below describe {covered} days, not {days}."
             )
 
     result: dict = {

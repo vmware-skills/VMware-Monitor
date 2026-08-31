@@ -109,6 +109,12 @@ ALLOWED_VSPHERE_METHODS: dict[str, str] = {
         "Releases the task history collector this code created moments earlier. Sees "
         "NON_READ_EXEMPTIONS -- pyVmomi reports no privilege for it."
     ),
+    "QueryOptions": (
+        "Reads one vCenter advanced setting by name. Used for `task.maxAge`, so the "
+        "coverage note can say how many days of task history this vCenter actually "
+        "keeps instead of quoting the documented default at an operator whose "
+        "retention was changed."
+    ),
     "QueryPerf": "Reads sampled performance counter values for entities we already found.",
     "QueryPerfProviderSummary": (
         "Reads which counters and sampling intervals an entity's provider offers."
