@@ -110,14 +110,14 @@ def fake_config_dir(monkeypatch, tmp_path):
 
 
 def test_daemon_status_corrupt_pid(fake_config_dir):
-    (fake_config_dir / "daemon.pid").write_text("not-a-pid\n")
+    (fake_config_dir / "daemon.pid").write_text("not-a-pid\n", encoding="utf-8")
     result = runner.invoke(app, ["daemon", "status"])
     assert result.exit_code == 0
     assert "Corrupt PID file" in result.output
 
 
 def test_daemon_status_stale_pid(fake_config_dir, monkeypatch):
-    (fake_config_dir / "daemon.pid").write_text("12345")
+    (fake_config_dir / "daemon.pid").write_text("12345", encoding="utf-8")
 
     def _kill(pid, sig):
         raise ProcessLookupError
@@ -129,7 +129,7 @@ def test_daemon_status_stale_pid(fake_config_dir, monkeypatch):
 
 
 def test_daemon_status_live_pid(fake_config_dir, monkeypatch):
-    (fake_config_dir / "daemon.pid").write_text(str(os.getpid()))
+    (fake_config_dir / "daemon.pid").write_text(str(os.getpid()), encoding="utf-8")
     monkeypatch.setattr(os, "kill", lambda pid, sig: None)
     result = runner.invoke(app, ["daemon", "status"])
     assert result.exit_code == 0
@@ -139,7 +139,7 @@ def test_daemon_status_live_pid(fake_config_dir, monkeypatch):
 
 def test_daemon_stop_corrupt_pid_cleans_up(fake_config_dir):
     pid_file = fake_config_dir / "daemon.pid"
-    pid_file.write_text("garbage")
+    pid_file.write_text("garbage", encoding="utf-8")
     result = runner.invoke(app, ["daemon", "stop"])
     assert result.exit_code == 0
     assert "Traceback" not in result.output
@@ -153,7 +153,7 @@ def test_audit_logger_unwritable_path_warns_not_raises(tmp_path, capsys):
     from vmware_monitor.notify.audit import AuditLogger
 
     blocker = tmp_path / "blocker"
-    blocker.write_text("I am a file, not a directory")
+    blocker.write_text("I am a file, not a directory", encoding="utf-8")
     log_path = blocker / "sub" / "audit.log"  # mkdir/open will fail (OSError)
 
     audit = AuditLogger(log_file=str(log_path))  # must not raise
@@ -170,7 +170,7 @@ def test_audit_logger_happy_path_still_writes(tmp_path):
     log_path = tmp_path / "audit.log"
     audit = AuditLogger(log_file=str(log_path))
     audit.log(operation="list_vms", target="prod", resource="*", result="ok")
-    assert "list_vms" in log_path.read_text()
+    assert "list_vms" in log_path.read_text(encoding="utf-8")
 
 
 # ── Fix 6: scheduler PID lifecycle + per-issue log guard ─────────────────
@@ -218,7 +218,7 @@ def test_scheduler_removes_pid_file_when_first_scan_crashes(monkeypatch, tmp_pat
 def test_scheduler_registers_signal_handlers_before_pid_write():
     """Source-order pin: SIGTERM during the initial scan must hit a handler
     that already knows to clean up the PID file."""
-    src = (REPO_ROOT / "vmware_monitor" / "scanner" / "scheduler.py").read_text()
+    src = (REPO_ROOT / "vmware_monitor" / "scanner" / "scheduler.py").read_text(encoding="utf-8")
     sig_idx = src.index("signal.signal(signal.SIGTERM")
     pid_idx = src.index("PID_FILE.write_text")
     scan_idx = src.rindex("_run_scan(config, conn_mgr)")

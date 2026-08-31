@@ -141,7 +141,7 @@ def test_doctor_recommends_init_which_actually_exists(monkeypatch, tmp_path):
 
 
 def test_doctor_init_reference_is_backed_by_real_command():
-    src = (REPO_ROOT / "vmware_monitor" / "doctor.py").read_text()
+    src = (REPO_ROOT / "vmware_monitor" / "doctor.py").read_text(encoding="utf-8")
     if "vmware-monitor init" in src:
         assert _init_command_is_registered(), (
             "doctor.py references `vmware-monitor init` but no such CLI command is registered"
@@ -190,14 +190,14 @@ def test_query_events_reraises_real_failures(exc):
 
 def test_log_scanner_uses_shared_query_events_guard():
     """scan_logs must go through the shared guard, not raw QueryEvents."""
-    src = (REPO_ROOT / "vmware_monitor" / "scanner" / "log_scanner.py").read_text()
+    src = (REPO_ROOT / "vmware_monitor" / "scanner" / "log_scanner.py").read_text(encoding="utf-8")
     assert "query_events(" in src
     assert "event_mgr.QueryEvents(" not in src
 
 
 def test_health_no_blanket_except_around_query_events():
     """The old ``except Exception: return []`` around QueryEvents is gone."""
-    src = (REPO_ROOT / "vmware_monitor" / "ops" / "health.py").read_text()
+    src = (REPO_ROOT / "vmware_monitor" / "ops" / "health.py").read_text(encoding="utf-8")
     assert "events = query_events(" in src
 
 

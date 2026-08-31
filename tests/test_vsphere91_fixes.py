@@ -170,7 +170,7 @@ def test_skill_md_tool_count_and_names_match_registry():
     }
     assert new_tools <= names, f"registry missing {new_tools - names}"
 
-    skill = (_REPO / "skills" / "vmware-monitor" / "SKILL.md").read_text()
+    skill = (_REPO / "skills" / "vmware-monitor" / "SKILL.md").read_text(encoding="utf-8")
     assert f"MCP Tools ({count}" in skill, f"SKILL.md tool count != {count}"
     for name in new_tools:
         assert name in skill, f"SKILL.md does not document {name}"

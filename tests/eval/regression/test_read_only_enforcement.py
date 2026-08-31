@@ -361,7 +361,7 @@ def _package_sources() -> list[tuple[str, str]]:
         f"no .py files found under {PACKAGE_ROOT} -- an empty scan is not a pass "
         f"(CLAUDE.md 形态 #1)."
     )
-    return [(str(p.relative_to(PACKAGE_ROOT.parent)), p.read_text()) for p in files]
+    return [(str(p.relative_to(PACKAGE_ROOT.parent)), p.read_text(encoding="utf-8")) for p in files]
 
 
 # ---------------------------------------------------------------------------

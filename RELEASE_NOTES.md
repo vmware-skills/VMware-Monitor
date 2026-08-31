@@ -1,3 +1,66 @@
+## v1.9.1 — 41 of 50 real events ranked "unknown" — the catalogue was collapsing 2328 descriptions into 443
+
+
+**Event severity: the catalogue was silently misclassifying, not merely missing.**
+On a real VCF 9.1 estate 41 of 50 events came back `severity="unknown"`, every one
+an `esx.problem.*` -- including `esx.problem.visorfs.ramdisk.full` ("The ramdisk
+'vsantraceFailover' is full."), 41 times on one host.
+
+vCenter published 2328 event descriptions and the catalogue built from them held
+443 keys. pyVmomi's VMODL declares `EventDescription.EventDetail.key` as a *type*,
+and the thousands of distinct `esx.problem.*` types all arrive as the one class
+`vim.event.EventEx`, so writing them into one dict key meant the last description
+parsed won and every event under that key inherited its category. That is a
+confident wrong rank, which is worse than no rank.
+
+A key whose descriptions disagree is now discarded rather than overwritten, and
+every row carries `severity_source` -- `override`, `event`, `catalogue`,
+`name_prefix` or `unclassified`. A caller that cannot tell "vCenter called this
+info" from "nothing could rank it" cannot tell a quiet estate from a blind one.
+An `esx.problem.*` type nothing else ranks is reported as `warning` from the
+naming convention, with the source saying so. When descriptions had to be
+discarded the envelope carries `catalogue_coverage` naming how many.
+
+**The suite now runs on a cp936 machine.** Round 3 of the VCF 9 field testing ran
+on Windows Server 2025 with locale cp936. Across the family four repos' suites --
+1687 tests -- never executed at all, dying at collection reading our own UTF-8
+sources, and 101 more failed the same way. Most of those were the tests that
+verify the destructive-operation guardrails: the guardrails were fine, the tests
+that check them could not open a file. On the UTF-8 CI every one of them was
+green. A security test that cannot run is not a security test.
+
+Every text read and write here names its encoding now, `tests/` included -- the
+previous round fixed only the package, which is why this came back. A gate in
+`family_smoke` scans both trees by AST, and the whole family's suites were re-run
+under an ASCII locale to confirm: 15 of 15 green, from 1 of 15.
+
+**`--help` no longer dies on a console that cannot encode it.** On any console
+whose encoding cannot carry the characters in our own help text, `--help` exited
+with a `UnicodeEncodeError` traceback -- unavailable exactly on the machines
+where it is most needed. Four repos were affected; the handler is now relaxed in
+all fifteen so a glyph degrades instead of killing the command.
+
+**Its environment resolver no longer answers for other skills.**
+`set_environment_resolver` wrote one process-global slot and twelve servers
+registered into it at import time, so the last one won for all of them --
+measured taking a `freeze-production-writes` rule from DENY to ALLOW on another
+skill's production target. Registration is keyed by skill now (requires
+vmware-policy 1.12.0).
+
+**The `.env` permission check stopped being permanently red on Windows.** It was
+POSIX-only, and `chmod 600` there exits 0 without changing any bits -- so
+`doctor` printed a failure on every run with a remedy that could not clear it.
+Three states now, via `vmware_policy.fsperms`: only a demonstrated exposure
+fails, and "this platform cannot answer" says so and offers `icacls`.
+
+**Unknown tool arguments are refused instead of dropped.** The schema declared
+`additionalProperties: false` and the runtime accepted them anyway, so a filter
+argument whose name a model guessed wrong returned the *unfiltered* result with
+nothing to indicate anything had been discarded. Fixed in vmware-policy 1.12.0
+and in force here.
+
+Requires vmware-policy 1.12.0.
+
 ## v1.9.0 — backup windows from snapshot task history (issue #26)
 
 New read-only tool `vm_backup_snapshot_history` (31 → 32 tools), requested by

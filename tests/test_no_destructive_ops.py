@@ -30,7 +30,7 @@ def _collect_function_names(directory: Path) -> list[tuple[str, str]]:
     """Return [(file_name, func_name), ...] for every def in *directory*."""
     results: list[tuple[str, str]] = []
     for py_file in sorted(directory.rglob("*.py")):
-        tree = ast.parse(py_file.read_text())
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 results.append((py_file.name, node.name))

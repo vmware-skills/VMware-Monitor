@@ -92,25 +92,55 @@ def query_events(event_mgr: vim.event.EventManager, filter_spec: vim.event.Event
 
 
 def _event_catalogue(event_mgr: object) -> dict[str, str]:
-    """vCenter's ``event type key -> category`` map, or ``{}`` if unavailable.
+    """vCenter's ``event type key -> category`` map, minus the ambiguous keys.
 
     ``EventManager.description.eventInfo`` is vCenter telling us how it ranks
-    every event type it knows — roughly a thousand of them. The three sets above
-    name 23. Consulting this instead of guessing is the whole fix; consulting it
-    is also one property read, not a round trip per event.
+    every event type it knows. On a real VCF 9.1 vCenter it publishes 2328
+    entries -- and they collapse to 443 distinct keys, because pyVmomi's VMODL
+    declares ``EventDetail.key`` as a *type* and the thousands of distinct
+    ``esx.problem.*`` types all arrive as the one class ``vim.event.EventEx``.
+
+    The 1885 lost entries were not merely lost. Writing them into the same dict
+    key meant the last one won, so every ``esx.problem.*`` event took the
+    category of whichever description happened to be parsed last -- a confident
+    wrong rank, which is worse than no rank. A key whose entries disagree is
+    therefore dropped: ranking falls through to the event's own ``severity``,
+    then to the name-prefix rule, then to "unknown", each of which says what it
+    is (see ``severity_source``).
 
     Returns ``{}`` rather than raising when the property is missing (older or
     permission-restricted vCenter): the overrides still work, and losing the
     catalogue must not lose the events.
     """
+    return _catalogue_and_coverage(event_mgr)[0]
+
+
+def _catalogue_and_coverage(
+    event_mgr: object,
+) -> tuple[dict[str, str], dict[str, int]]:
+    """The catalogue plus what had to be discarded to build it.
+
+    The counts are reported to the caller rather than kept private: "vCenter
+    described 2328 event types and we could use 443 of them" is the difference
+    between a rank we do not have and a rank we silently guessed.
+    """
     info = getattr(getattr(event_mgr, "description", None), "eventInfo", None)
-    catalogue: dict[str, str] = {}
+    seen: dict[str, set[str]] = {}
+    described = 0
     for detail in info or []:
         key = _detail_key(getattr(detail, "key", None))
         category = getattr(detail, "category", None)
-        if key and category:
-            catalogue[key] = str(category).lower()
-    return catalogue
+        if not key or not category:
+            continue
+        described += 1
+        seen.setdefault(key, set()).add(str(category).lower())
+    catalogue = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
+    coverage = {
+        "described": described,
+        "usable": len(catalogue),
+        "ambiguous": len(seen) - len(catalogue),
+    }
+    return catalogue, coverage
 
 
 def _detail_key(key: object) -> str:
@@ -149,32 +179,64 @@ def _event_key(event: object) -> str:
     return str(getattr(event, "eventTypeId", None) or type(event).__name__)
 
 
+#: ESXi names its own problem events ``esx.problem.<subsystem>.<condition>``.
+#: The prefix is vCenter's own convention and it is the last thing consulted --
+#: only after the overrides, the event's own severity, and the catalogue have
+#: all declined to rank it. "warning" rather than "critical" because the prefix
+#: says a problem was reported, not how bad it is; ``severity_source`` says the
+#: rank came from the name so a caller can tell it apart from vCenter's word.
+_PROBLEM_PREFIX = "esx.problem."
+
+
 def _event_severity(event: object, key: str, catalogue: dict[str, str]) -> str:
-    """Rank one event: this skill's judgement first, then vCenter's, then unknown.
+    """Rank one event. See :func:`_event_severity_with_source` for the reasoning."""
+    return _event_severity_with_source(event, key, catalogue)[0]
+
+
+def _event_severity_with_source(
+    event: object, key: str, catalogue: dict[str, str]
+) -> tuple[str, str]:
+    """Rank one event, and say where the rank came from.
+
+    Order: this skill's judgement, then the event's own ``severity``, then
+    vCenter's catalogue, then the ``esx.problem.`` naming convention, then
+    "unknown".
 
     The override sets come first on purpose. vCenter files HostShutdownEvent
     under "info"; for a monitoring skill a host that shut down is critical, and
     that disagreement is the product rather than a defect.
 
-    ``"unknown"`` is a real fourth answer and is NOT folded into "info". An
-    event nobody can rank is not evidence that nothing happened, and defaulting
-    it to the quietest rank is what let five warning-level events be reported as
+    ``"unknown"`` is a real fifth answer and is NOT folded into "info". An event
+    nobody can rank is not evidence that nothing happened, and defaulting it to
+    the quietest rank is what let five warning-level events be reported as
     "No events above warning" (VCF 9.1, 2026-08-30).
+
+    The source is returned because the five answers are not interchangeable. On
+    the same estate 41 of 50 events ranked "unknown", every one of them an
+    ``esx.problem.*`` -- and one of those was a full ramdisk. A caller that
+    cannot tell "vCenter called this info" from "nothing would rank it" cannot
+    tell a quiet estate from a blind one.
     """
     if key in CRITICAL_EVENTS:
-        return "critical"
+        return "critical", "override"
     if key in WARNING_EVENTS:
-        return "warning"
+        return "warning", "override"
     if key in INFO_EVENTS:
-        return "info"
+        return "info", "override"
     # EventEx carries its own severity inline; prefer it over the catalogue
     # lookup because a vendor-defined type may not be in the catalogue at all.
+    # ExtendedEvent has no such field, which is why the fallbacks below exist.
     own = getattr(event, "severity", None)
     if own:
         rank = _VC_CATEGORY_RANK.get(str(own).lower())
         if rank:
-            return rank
-    return _VC_CATEGORY_RANK.get(catalogue.get(key, ""), "unknown")
+            return rank, "event"
+    from_catalogue = _VC_CATEGORY_RANK.get(catalogue.get(key, ""))
+    if from_catalogue:
+        return from_catalogue, "catalogue"
+    if key.startswith(_PROBLEM_PREFIX):
+        return "warning", "name_prefix"
+    return "unknown", "unclassified"
 
 
 def _get_event_entity(event: object) -> str | None:
@@ -313,13 +375,13 @@ def get_recent_events(
 
     events = query_events(event_mgr, filter_spec)
     min_level = SEVERITY_ORDER.get(severity, 1)
-    catalogue = _event_catalogue(event_mgr)
+    catalogue, coverage = _catalogue_and_coverage(event_mgr)
 
     results = []
     unclassified = 0
     for event in events:
         event_type = _event_key(event)
-        sev = _event_severity(event, event_type, catalogue)
+        sev, sev_source = _event_severity_with_source(event, event_type, catalogue)
         if sev == "unknown":
             unclassified += 1
 
@@ -334,6 +396,12 @@ def get_recent_events(
 
         results.append({
             "severity": sev,
+            # Where the rank came from: "override" (this skill's own judgement),
+            # "event" (vCenter set it on the event), "catalogue" (vCenter's
+            # published description), "name_prefix" (inferred from the
+            # esx.problem.* convention) or "unclassified". A caller filtering on
+            # severity alone cannot tell a ranked event from an inferred one.
+            "severity_source": sev_source,
             "event_type": event_type,
             "entity_name": entity_name,
             "message": sanitize(event.fullFormattedMessage or str(event), max_len=1000),
@@ -344,6 +412,19 @@ def get_recent_events(
 
     results.sort(key=lambda x: x["time"], reverse=True)
     extra: dict = {"unclassified": unclassified}
+    if coverage["ambiguous"]:
+        # vCenter described more event types than we can key. Say so rather than
+        # let a caller read a short "unknown" count as a well-understood estate:
+        # pyVmomi hands back the same class for thousands of distinct
+        # esx.problem.* descriptions, and entries that disagree are dropped
+        # instead of overwriting one another.
+        extra["catalogue_coverage"] = (
+            f"vCenter described {coverage['described']} event types; "
+            f"{coverage['usable']} could be keyed unambiguously and "
+            f"{coverage['ambiguous']} key(s) were discarded because their "
+            f"descriptions disagreed. Events under a discarded key are ranked "
+            f"from the event's own severity or its name, not from the catalogue."
+        )
     if unclassified:
         # Only when there is something to say — a note on every clean run is a
         # note nobody reads on the run that matters. Its own key rather than the

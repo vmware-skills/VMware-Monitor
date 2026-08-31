@@ -43,7 +43,7 @@ def test_init_writes_grep_safe_env(_wizard_env: Path, monkeypatch: pytest.Monkey
     rc = init_wizard.run_init(skip_test=True)
     assert rc == 0
 
-    env_text = (_wizard_env / ".env").read_text()
+    env_text = (_wizard_env / ".env").read_text(encoding="utf-8")
     # Password is present under the right key, but NOT in plaintext.
     assert "VMWARE_LAB_VC_PASSWORD=b64:" in env_text
     assert "S3cr3t!pw" not in env_text
@@ -68,7 +68,7 @@ def test_init_password_round_trips(_wizard_env: Path, monkeypatch: pytest.Monkey
     # And the on-disk b64 token decodes back to the original via the loader.
     line = next(
         ln
-        for ln in (_wizard_env / ".env").read_text().splitlines()
+        for ln in (_wizard_env / ".env").read_text(encoding="utf-8").splitlines()
         if ln.startswith("VMWARE_PROD1_PASSWORD=")
     )
     stored = line.split("=", 1)[1]
@@ -77,10 +77,10 @@ def test_init_password_round_trips(_wizard_env: Path, monkeypatch: pytest.Monkey
 
 def test_init_declines_overwrite(_wizard_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _wizard_env.mkdir(parents=True)
-    (_wizard_env / "config.yaml").write_text("targets: []\n")
+    (_wizard_env / "config.yaml").write_text("targets: []\n", encoding="utf-8")
     # First confirm = "overwrite?" → False ⇒ abort, no prompts consumed.
     _feed(monkeypatch, answers=[], confirms=[False])
     rc = init_wizard.run_init(skip_test=True)
     assert rc == 0
     # Untouched.
-    assert (_wizard_env / "config.yaml").read_text() == "targets: []\n"
+    assert (_wizard_env / "config.yaml").read_text(encoding="utf-8") == "targets: []\n"
