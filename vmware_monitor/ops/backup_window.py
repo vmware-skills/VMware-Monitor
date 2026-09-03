@@ -93,6 +93,22 @@ _REMOVE_IDS = frozenset(
 )
 
 
+def _retention_days(si: ServiceInstance) -> int | None:
+    """vCenter's configured task retention in days, or ``None`` if unreadable.
+
+    Needed as a number, not just a sentence: whether history *can* have aged out
+    of the requested window is decidable from it, and the note below used to
+    guess. `task.maxAge`, not `vpxd.task.maxAge` — the latter raises
+    vim.fault.InvalidName (issue #26, 2026-08-31).
+    """
+    try:
+        opts = si.content.setting.QueryOptions("task.maxAge") or []
+    except Exception:  # noqa: BLE001 -- unreadable retention is a supported answer
+        return None
+    value = opts[0].value if opts else None
+    return int(value) if isinstance(value, int) else None
+
+
 def _retention_note(si: ServiceInstance) -> str:
     """Name the setting that aged the history out, with its value where readable.
 
@@ -174,8 +190,9 @@ def _resolve_vm_unique(si: ServiceInstance, vm_name: str) -> vim.VirtualMachine:
     matches = [obj for obj, p in _collect(si, [vim.VirtualMachine], ["name"]) if p.get("name") == vm_name]
     if not matches:
         raise VMNotFoundError(
-            f"VM not found. Run list_virtual_machines (filter by name, e.g. "
-            f"'{sanitize(vm_name[:3])}*') to see available VMs and copy an exact name. "
+            f"VM not found. Run list_virtual_machines with "
+            f"name_filter='{sanitize(vm_name[:3])}' — a case-insensitive substring, "
+            f"not a glob — then copy an exact name. "
             f"Requested: '{sanitize(vm_name)}'"
         )
     if len(matches) > 1:
@@ -290,6 +307,58 @@ def _build_cycles(events: list[dict]) -> tuple[list[dict], list[dict]]:
     return complete, orphans
 
 
+def _classify_open_cycles(orphans: list[dict], complete: list[dict], now: datetime) -> None:
+    """Mark an unmatched creation as still running, or as old enough to doubt.
+
+    Field report (issue #26, 2026-09-01): a VM showed 32 creations, 31 removals,
+    `incomplete_cycles: 1` — and the unmatched creation was one minute old, with
+    the backup confirmed running in Veeam. The number was correct and read as a
+    failed backup, because nothing in the payload separated "open" from
+    "abandoned".
+
+    The threshold is not invented here. This VM's own completed cycles say how
+    long its backups take; an open cycle inside that envelope is unremarkable,
+    one past it is worth looking at. A fixed number would be this repo guessing
+    on behalf of every estate, and the estates differ — the reporter's averaged
+    3.10 h and peaked at 8.88 h on one VM.
+
+    With no completed cycle to compare against, ``possibly_in_progress`` is
+    ``None``: unknown, stated as unknown, rather than defaulted either way.
+    """
+    longest = max(
+        (c["total_window_hours"] for c in complete if c.get("total_window_hours") is not None),
+        default=None,
+    )
+    for o in orphans:
+        if "no matching removal" not in o.get("reason", ""):
+            continue
+        started = o.get("started")
+        age = _hours(datetime.fromisoformat(started), now) if started else None
+        o["status"] = "open"
+        o["age_hours"] = age
+        o["longest_completed_cycle_hours"] = longest
+        if age is None or longest is None:
+            o["possibly_in_progress"] = None
+            o["note"] = (
+                "No completed cycle on this VM to compare against, so whether this "
+                "snapshot belongs to a running backup or was left behind cannot be "
+                "told from task history alone."
+            )
+        elif age <= longest:
+            o["possibly_in_progress"] = True
+            o["note"] = (
+                f"Open for {age}h; this VM's longest completed backup cycle is "
+                f"{longest}h, so a backup still running is the ordinary explanation. "
+                f"Do not read this as a failure without checking the backup product."
+            )
+        else:
+            o["possibly_in_progress"] = False
+            o["note"] = (
+                f"Open for {age}h, longer than this VM's longest completed cycle "
+                f"({longest}h). Worth checking whether the snapshot was left behind."
+            )
+
+
 def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt is not None else None
 
@@ -353,6 +422,7 @@ def get_backup_snapshot_history(
 
     events.sort(key=lambda e: e["start"])
     complete, orphans = _build_cycles(events)
+    _classify_open_cycles(orphans, complete, now)
 
     creations = sum(1 for e in events if e["kind"] == "create")
     removals = sum(1 for e in events if e["kind"] == "remove")
@@ -365,6 +435,7 @@ def get_backup_snapshot_history(
     # "vCenter no longer remembers".
     coverage_note = None
     retention_note = _retention_note(si)
+    retention = _retention_days(si)
     if unavailable is None:
         if oldest_seen is None:
             coverage_note = (
@@ -373,11 +444,24 @@ def get_backup_snapshot_history(
             )
         elif (oldest_seen - since).total_seconds() > 86400:
             covered = max(0, round((now - oldest_seen).total_seconds() / 86400, 1))
-            coverage_note = (
-                f"Requested {days} days but the oldest task vCenter still holds for this VM "
-                f"is {covered} days old. Anything before that has aged out of task history "
-                f"({retention_note}), so the counts below describe {covered} days, not {days}."
-            )
+            if retention is not None and retention >= days:
+                # Nothing inside the window CAN have aged out, so a young oldest
+                # task is this VM's own first activity, not a truncated history.
+                # Reported as a fact rather than a caveat -- the previous wording
+                # made every quiet or recently-created VM look partially covered
+                # (issue #26, field report 2026-09-01).
+                coverage_note = (
+                    f"The whole {days}-day window is covered: vCenter retains {retention} days "
+                    f"of task history, so nothing in it has expired. This VM simply has no "
+                    f"recorded activity of any kind before {covered} days ago — a quiet or "
+                    f"recently-created VM, not a gap in the record."
+                )
+            else:
+                coverage_note = (
+                    f"Requested {days} days but the oldest task vCenter still holds for this VM "
+                    f"is {covered} days old. Anything before that has aged out of task history "
+                    f"({retention_note}), so the counts below describe {covered} days, not {days}."
+                )
 
     result: dict = {
         "vm": sanitize(vm_name),

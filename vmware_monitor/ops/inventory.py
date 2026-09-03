@@ -132,6 +132,7 @@ def list_vms(
     power_state: str | None = None,
     fields: list[str] | None = None,
     folder_filter: str | None = None,
+    name_filter: str | None = None,
     compact_threshold: int = 50,
 ) -> dict:
     """List virtual machines with optional filtering, sorting, and field selection.
@@ -167,6 +168,12 @@ def list_vms(
             Available: name, power_state, cpu, memory_mb, guest_os, ip_address,
                        host, uuid, tools_status, folder_path.
         folder_filter: Case-insensitive substring match against folder_path.
+        name_filter: Case-insensitive substring match against the VM name. The
+            one filter this was missing: on an estate with thousands of VMs there
+            was no way to find one by name, so a caller told to "find the VM with
+            list_virtual_machines" reached for folder_filter and passed it a VM
+            name (issue #26, field report 2026-09-01). An error whose remedy
+            cannot be carried out is worse than no remedy.
             Example: "Colocation" returns VMs anywhere under a Colocation folder
             (including nested subfolders like /Colocation/Colo - ISER).
         compact_threshold: Auto-compact when VM count exceeds this (default 50).
@@ -203,6 +210,11 @@ def list_vms(
     if folder_filter:
         needle = folder_filter.lower()
         results = [r for r in results if needle in r["folder_path"].lower()]
+
+    # Filter by VM name (case-insensitive substring)
+    if name_filter:
+        needle = name_filter.lower()
+        results = [r for r in results if needle in r["name"].lower()]
 
     # Sort
     sort_key = sort_by if sort_by in _VM_SORT_KEYS else "name"

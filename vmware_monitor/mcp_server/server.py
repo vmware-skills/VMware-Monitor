@@ -246,6 +246,7 @@ def list_virtual_machines(
     power_state: Optional[str] = None,
     fields: Optional[list[str]] = None,
     folder_filter: Optional[str] = None,
+    name_filter: Optional[str] = None,
 ) -> dict:
     """[READ] List virtual machines, with filtering, sorting, and field selection.
 
@@ -266,6 +267,9 @@ def list_virtual_machines(
         power_state: poweredOn | poweredOff | suspended.
         fields: Any of name, power_state, cpu, memory_mb, folder_path, guest_os,
             ip_address, host, uuid, tools_status (None = auto).
+        name_filter: Case-insensitive substring of the VM name. Use this to find
+            one VM by name on a large estate — it is what the "VM not found"
+            errors elsewhere tell you to come here for.
         folder_filter: Case-insensitive folder_path substring; nested folders
             match.
     """
@@ -277,6 +281,7 @@ def list_virtual_machines(
         power_state=power_state,
         fields=fields,
         folder_filter=folder_filter,
+        name_filter=name_filter,
     )
 
 
