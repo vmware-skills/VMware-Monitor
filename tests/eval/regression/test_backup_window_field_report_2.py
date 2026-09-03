@@ -137,3 +137,41 @@ def test_a_genuinely_truncated_window_still_says_so() -> None:
     from vmware_monitor.ops import backup_window as bw
 
     assert bw._retention_days(_si(31)) < 90
+
+
+def test_coverage_note_still_only_means_something_is_missing() -> None:
+    """Its contract is load-bearing in two places, and the fix nearly broke it.
+
+    The CLI prints `coverage_note` in yellow and the tool description tells an
+    agent that non-null means vCenter expired part of the window. The first cut
+    of the quiet-VM fix put "the whole window is covered" *into that field* —
+    trading their false partial-coverage for a false warning, on every quiet VM.
+    The positive statement lives in `window_fully_covered`.
+    """
+    import inspect
+
+    from vmware_monitor.ops import backup_window
+
+    src = inspect.getsource(backup_window.get_backup_snapshot_history)
+    assert '"window_fully_covered"' in src
+    assert "whole {days}-day window is covered" not in src
+
+
+def test_the_tool_description_names_the_option_that_exists() -> None:
+    """`vpxd.task.maxAge` raises InvalidName and was corrected in the code two
+    days before this — but stayed in the description an agent actually reads,
+    and in the CLI reference a person reads."""
+    import inspect
+    import pathlib
+
+    from vmware_monitor.mcp_server import server
+
+    desc = inspect.getsource(server.vm_backup_snapshot_history)
+    assert "task.maxAge" in desc
+    assert "NOT" in desc or "not called" in desc, "the wrong name must be marked wrong, not just absent"
+
+    doc = pathlib.Path(__file__).resolve().parents[3] / "skills/vmware-monitor/references/cli-reference.md"
+    text = doc.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if "vpxd.task.maxAge" in line and "not called" not in line and "InvalidName" not in line:
+            raise AssertionError(f"stale option name still presented as correct: {line.strip()}")

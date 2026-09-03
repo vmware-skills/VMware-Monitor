@@ -1001,8 +1001,19 @@ def vm_backup_snapshot_history(
     Read two fields before reporting all-clear. ``history_unavailable`` non-null
     means the history could not be read at all — that is not "no backups".
     ``coverage_note`` non-null means vCenter has already expired part of the
-    requested window (vpxd.task.maxAge, 30 days by default), so the counts
-    describe a shorter period than ``days`` asked for.
+    requested window (``task.maxAge`` — 30 days by default; the option is NOT
+    called vpxd.task.maxAge, which raises vim.fault.InvalidName), so the counts
+    describe a shorter period than ``days`` asked for. ``window_fully_covered``
+    is the positive form: True when retention is at least ``days`` and nothing
+    in the window can have expired, so a VM whose oldest task is recent was
+    simply quiet; None when retention or the history could not be read.
+
+    An unmatched creation is not a failed backup. Each one carries ``status:
+    "open"``, ``age_hours``, this VM's ``longest_completed_cycle_hours`` and
+    ``possibly_in_progress`` — True while it is inside that VM's own observed
+    envelope, False past it, None when there is no completed cycle to compare
+    against. Do not report ``incomplete_cycles`` as failures without reading
+    those.
 
     Duplicate VM names raise rather than resolve to one, because a duration
     attributed to the wrong same-named VM looks exactly like a correct answer.

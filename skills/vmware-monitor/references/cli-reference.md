@@ -120,7 +120,8 @@ creations that never got a matching removal.
 Two lines in the output change what the numbers mean, and both are printed
 rather than left to the reader: a note when vCenter could not be read at all
 (which is not "no backups"), and a note when part of the requested window has
-already aged out of task history (`vpxd.task.maxAge`, 30 days by default).
+already aged out of task history (`task.maxAge`, 30 days by default — the
+option is not called `vpxd.task.maxAge`; that name raises `vim.fault.InvalidName`).
 Duplicate VM names are refused rather than resolved to one. The same data is
 exposed via the MCP tool `vm_backup_snapshot_history`.
 

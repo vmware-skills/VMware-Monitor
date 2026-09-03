@@ -446,16 +446,16 @@ def get_backup_snapshot_history(
             covered = max(0, round((now - oldest_seen).total_seconds() / 86400, 1))
             if retention is not None and retention >= days:
                 # Nothing inside the window CAN have aged out, so a young oldest
-                # task is this VM's own first activity, not a truncated history.
-                # Reported as a fact rather than a caveat -- the previous wording
-                # made every quiet or recently-created VM look partially covered
-                # (issue #26, field report 2026-09-01).
-                coverage_note = (
-                    f"The whole {days}-day window is covered: vCenter retains {retention} days "
-                    f"of task history, so nothing in it has expired. This VM simply has no "
-                    f"recorded activity of any kind before {covered} days ago — a quiet or "
-                    f"recently-created VM, not a gap in the record."
-                )
+                # task is this VM's own first activity and there is nothing to
+                # warn about. coverage_note stays None: its contract is "part of
+                # the window is missing", the CLI prints it in yellow, and the
+                # tool description tells an agent that non-null means expired
+                # history. Saying "you are fine" through a field that means
+                # "something is wrong" would have traded their false partial
+                # coverage for a false warning (issue #26, field report
+                # 2026-09-01). The positive statement goes in
+                # `window_fully_covered` instead.
+                pass
             else:
                 coverage_note = (
                     f"Requested {days} days but the oldest task vCenter still holds for this VM "
@@ -474,6 +474,14 @@ def get_backup_snapshot_history(
         "window_start": _iso(since),
         "window_end": _iso(now),
         "history_oldest_task_seen": _iso(oldest_seen),
+        # True when vCenter's retention is at least the requested window, so
+        # nothing in it can have expired; False when it is shorter; None when the
+        # retention could not be read or the history could not be fetched. A
+        # quiet VM inside its retention window is fully covered — its oldest task
+        # is simply its first activity.
+        "window_fully_covered": (
+            None if unavailable is not None or retention is None else retention >= days
+        ),
         "snapshot_creations": creations,
         "snapshot_removals": removals,
         "complete_cycles": len(complete),
