@@ -336,9 +336,12 @@ def _classify_open_cycles(orphans: list[dict], complete: list[dict], now: dateti
     for an operation that has not opened one.
 
     Establishing the three states took real ``TaskInfo`` objects replayed
-    through the whole chain rather than observation: neither lab has snapshot
-    activity to watch (the 9.1 estate holds 0 snapshots and 0 snapshot tasks
-    among 20000 over 30 days), so these transitions cannot be caught happening.
+    through the whole chain rather than observation. The pairing arithmetic
+    below has had real data -- one snapshot created and removed on a live 8.0.3
+    gave 1 create / 1 remove / 1 complete cycle / 0 unmatched -- but an
+    *unmatched* creation has never been observed: neither lab runs backups (the
+    9.1 estate holds 0 snapshots and 0 snapshot tasks among 20000 over 30 days),
+    so an open cycle cannot be caught happening, only replayed.
     """
     longest = max(
         (c["total_window_hours"] for c in complete if c.get("total_window_hours") is not None),

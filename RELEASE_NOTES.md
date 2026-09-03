@@ -1,3 +1,29 @@
+## v1.11.1 — the window this does not cover, said out loud
+
+A live 9.1 round settled two things that until now lived only in a report.
+
+**A snapshot creation that is still executing is absent from the reply.** It has
+no `completeTime` and a state other than `success`, so it is filtered out before
+cycles are built: no cycle, no `unmatched` row, no hint one is coming. That lasts
+only the seconds the creation takes, and the reported case landed after it — a
+backup whose snapshot already exists *is* reported, as an open cycle. But the
+tool description framed this feature as telling you whether a backup is running,
+which over-promised by exactly that window. It now says so, and a test drives
+`get_backup_snapshot_history` to keep the sentence and the code together.
+
+**`str(state) != "success"` is safe, and now says why.** It has the shape this
+family has been burned by three times — a pyVmomi type compared against a bare
+string. `vim.TaskInfo.State` subclasses `str`: across 3000 live tasks `str()`
+gave the bare `'success'` every time, and `==` held too. An unexplained
+comparison of that shape invites someone to "fix" a working one.
+
+Also recorded in the source: the `coverage_note` half of v1.11.0 was *observed*,
+not replayed. On the estate that produced the false warning, the same VM at
+`days=30` now returns `coverage_note: null` / `window_fully_covered: true`, and
+at `days=60` — genuinely partial — still warns.
+
+No behaviour change: comment, docstring and test only.
+
 ## v1.11.0 — an open backup is not a failed one
 
 Three findings from a field report on issue #26 — a large vCenter 8.0.3 with

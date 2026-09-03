@@ -1015,9 +1015,11 @@ def vm_backup_snapshot_history(
     against. Do not report ``incomplete_cycles`` as failures without reading
     those.
 
-    A snapshot creation still in flight is absent entirely — it has no
-    completion time yet, so it forms neither a cycle nor an ``unmatched`` row.
-    No open cycle does not mean no backup is running.
+    The creation *task* itself, during the seconds it executes, is absent
+    entirely: no completion time yet, so it forms neither a cycle nor an
+    ``unmatched`` row. A backup whose snapshot already exists is not this case —
+    that is the open cycle described above. So no open cycle does not prove no
+    backup is running.
 
     Duplicate VM names raise rather than resolve to one, because a duration
     attributed to the wrong same-named VM looks exactly like a correct answer.
