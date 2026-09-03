@@ -175,3 +175,22 @@ def test_the_tool_description_names_the_option_that_exists() -> None:
     for line in text.splitlines():
         if "vpxd.task.maxAge" in line and "not called" not in line and "InvalidName" not in line:
             raise AssertionError(f"stale option name still presented as correct: {line.strip()}")
+
+
+def test_the_cli_stops_calling_a_running_backup_unmatched() -> None:
+    """The payload learned to tell open from abandoned; the renderer had not.
+
+    The CLI printed `incomplete_cycles` in yellow and every unmatched row with a
+    "!", which is the presentation the report described as reading like a failed
+    backup. Fixing the payload and leaving the renderer would have shipped the
+    fix to the MCP path only.
+    """
+    import inspect
+
+    from vmware_monitor import cli_observability
+
+    src = inspect.getsource(cli_observability)
+    assert "[yellow]{result['incomplete_cycles']}[/]" not in src, \
+        "the unmatched count is being shown as a warning again"
+    assert "possibly_in_progress" in src, "the renderer does not consult the new field"
+    assert "backup still running" in src

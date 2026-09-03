@@ -359,7 +359,7 @@ def snapshots_backup_window(
     console.print(
         f"[bold]{result['vm']}[/] over {result['period_days']}d: "
         f"[bold]{result['complete_cycles']}[/] complete cycle(s), "
-        f"[yellow]{result['incomplete_cycles']}[/] unmatched."
+        f"{result['incomplete_cycles']} unmatched."
     )
     if result["coverage_note"]:
         console.print(f"[yellow]{result['coverage_note']}[/]")
@@ -399,8 +399,32 @@ def snapshots_backup_window(
         if result.get("cycles_truncated"):
             console.print("[yellow]Cycle list truncated; raise --limit for more.[/]")
 
+    # An open cycle is not a failure. Printing the count in yellow and every
+    # unmatched row with a "!" is what made a running backup read as a broken
+    # one (issue #26, field report 2026-09-01) — the payload learned to tell
+    # them apart and this renderer had not.
     for row in result["unmatched"]:
-        console.print(f"[yellow]! {row['reason']} at {row['started']}[/]")
+        running = row.get("possibly_in_progress")
+        if running is True:
+            console.print(
+                f"[cyan]· open {row['age_hours']}h at {row['started']} — inside this VM's "
+                f"usual {row['longest_completed_cycle_hours']}h envelope, so most likely a "
+                f"backup still running.[/]"
+            )
+        elif running is False:
+            console.print(
+                f"[yellow]! open {row['age_hours']}h at {row['started']} — longer than this "
+                f"VM's longest completed cycle ({row['longest_completed_cycle_hours']}h). "
+                f"Worth checking whether the snapshot was left behind.[/]"
+            )
+        elif running is None and row.get("status") == "open":
+            console.print(
+                f"[dim]· open at {row['started']} — no completed cycle on this VM to compare "
+                f"against, so whether a backup is still running cannot be told from task "
+                f"history.[/dim]"
+            )
+        else:
+            console.print(f"[yellow]! {row['reason']} at {row['started']}[/]")
 
     console.print(f"[dim]{result['basis']}[/dim]")
 

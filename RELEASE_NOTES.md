@@ -1,3 +1,42 @@
+## v1.11.0 — an open backup is not a failed one
+
+Three findings from a field report on issue #26 — a large vCenter 8.0.3 with
+Veeam driving the snapshots, which is the environment this feature was built for
+and had never run against. Thirty complete cycles matching that estate's known
+backup activity settle the correlation arithmetic; these are what the run found
+wrong.
+
+**An unmatched creation now says whether the backup is still running.** The
+reporter saw 32 creations, 31 removals, `incomplete_cycles: 1` — and that
+creation was one minute old with the job confirmed running in Veeam. The number
+was right and read as a failure. Each open cycle now carries `status: "open"`,
+`age_hours`, `longest_completed_cycle_hours` and `possibly_in_progress`, and the
+CLI stops printing the count as a warning.
+
+The threshold is the VM's own history rather than a number chosen here: that
+estate averaged 3.10 h and peaked at 8.88 h, another's will differ, and a fixed
+cut-off would be this package guessing on every operator's behalf. With no
+completed cycle to compare against, `possibly_in_progress` is `null` — unknown,
+said as unknown.
+
+**`list_virtual_machines` gained `name_filter`.** Told to "find the VM with
+list_virtual_machines", their model reached for `folder_filter` and passed it a
+VM name, because that was the only filter there and an estate of thousands has
+no other way to search. The remedy this package's own error text prescribed
+could not be carried out. The error now names the parameter and says it is a
+substring, not the glob the old `abc*` wording implied.
+
+**A quiet VM no longer looks like a truncated history.** When `task.maxAge >=
+days` — 31 against their 30 — nothing inside the window can have expired, so a
+recent oldest-task is the VM's first activity. That is now reported as
+`window_fully_covered: true`, and `coverage_note` keeps its meaning of "part of
+the window is missing": the CLI prints it as a warning, so saying "you are fine"
+through it would have traded a false gap for a false alarm.
+
+Also: `vpxd.task.maxAge` was still standing in the MCP tool description and the
+CLI reference. That name raises `vim.fault.InvalidName`; it had been corrected
+in the code and in the issue thread, and left in both documents.
+
 ## v1.10.0 — a cluster that was never recognised, and 1887 event descriptions that were
 
 **`_is_cluster` never matched.** It compared `type(ref).__name__` against
