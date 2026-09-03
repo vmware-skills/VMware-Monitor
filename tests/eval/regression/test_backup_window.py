@@ -352,3 +352,34 @@ def test_the_qualifier_travels_with_the_numbers(patched) -> None:
     r = bw.get_backup_snapshot_history(si, "vm-a", days=30)
     assert "lower bound" in r["basis"]
     assert "Not the official job duration" in r["basis"]
+
+
+@pytest.mark.unit
+def test_a_creation_still_in_flight_is_absent_entirely(patched) -> None:
+    """The documented gap, pinned so it stays a known one.
+
+    While a snapshot creation is still running it has no ``completeTime`` and a
+    state other than ``success``, so it never reaches cycle building: neither a
+    cycle nor an unmatched row appears for it. The tool description says as much
+    -- "no open cycle does not mean no backup is running" -- and this keeps the
+    code and that sentence from drifting apart.
+
+    Driven through ``get_backup_snapshot_history`` rather than by re-applying the
+    filter here. A test that restates the condition it is checking passes just as
+    happily when the production one is deleted; the first draft of this did that
+    and survived exactly that mutation.
+
+    Two guards exclude an in-flight creation independently -- the state is not
+    ``success``, and there is no ``completeTime`` -- so deleting either one alone
+    leaves this green. That is depth, not a weak test: removing both does turn it
+    red, which was checked.
+    """
+    t0 = NOW - timedelta(minutes=2)
+    running = _task({"descriptionId": "VirtualMachine.createSnapshot"}, t0, None, state="running")
+    si = _SI(["vm-a"], collector=_Collector([[running]]))
+    r = bw.get_backup_snapshot_history(si, "vm-a", days=30)
+
+    assert r["snapshot_creations"] == 0, "an in-flight creation is not counted as one"
+    assert r["complete_cycles"] == 0
+    assert r["incomplete_cycles"] == 0, "and it does not become an open cycle either"
+    assert r["unmatched"] == []

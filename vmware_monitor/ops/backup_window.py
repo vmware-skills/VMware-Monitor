@@ -324,6 +324,21 @@ def _classify_open_cycles(orphans: list[dict], complete: list[dict], now: dateti
 
     With no completed cycle to compare against, ``possibly_in_progress`` is
     ``None``: unknown, stated as unknown, rather than defaulted either way.
+
+    One window this does not cover: while the creation task *itself* is still
+    running it carries no ``completeTime`` and a state other than ``success``,
+    so it is filtered out before cycles are built and the payload shows neither
+    an open cycle nor any sign that one is coming. That lasts only as long as
+    the snapshot creation -- seconds, longer on a large VM -- and the reported
+    case landed after it, in the branch above. It is a real gap between what
+    this reports and "is a backup running right now", and it is left as a gap
+    rather than papered over, because the alternative is reporting an open cycle
+    for an operation that has not opened one.
+
+    Establishing the three states took real ``TaskInfo`` objects replayed
+    through the whole chain rather than observation: neither lab has snapshot
+    activity to watch (the 9.1 estate holds 0 snapshots and 0 snapshot tasks
+    among 20000 over 30 days), so these transitions cannot be caught happening.
     """
     longest = max(
         (c["total_window_hours"] for c in complete if c.get("total_window_hours") is not None),
@@ -413,6 +428,15 @@ def get_backup_snapshot_history(
         # Only successful operations describe a real backup window. A failed
         # creation opened nothing; a failed removal left the snapshot in place
         # and its cycle is correctly reported as incomplete.
+        #
+        # The ``str()`` here is checked, not assumed. It has the shape this
+        # family has been burned by three times -- comparing a pyVmomi type
+        # against a bare string (踩坑 #40; the fully-qualified VMODL name that
+        # made `_is_cluster` never match on real hardware) -- so leaving it
+        # unexplained invites the next reader to "fix" a working comparison.
+        # ``vim.TaskInfo.State`` subclasses ``str``: across 3000 live tasks on a
+        # 9.1 estate ``str()`` yielded the bare ``'success'`` with no type
+        # prefix on every one, and a direct ``==`` held too.
         if str(getattr(info, "state", "")) != "success":
             continue
         end = _aware(getattr(info, "completeTime", None))
@@ -455,6 +479,13 @@ def get_backup_snapshot_history(
                 # coverage for a false warning (issue #26, field report
                 # 2026-09-01). The positive statement goes in
                 # `window_fully_covered` instead.
+                #
+                # Verified live on the estate that produced the false warning:
+                # the same VM at days=30 with task.maxAge=30 now returns
+                # `coverage_note: null` / `window_fully_covered: true`, and the
+                # same VM at days=60 -- genuinely partial -- still warns. This
+                # half needs no snapshots to exercise, which is why it is the
+                # one part of this fix observed rather than replayed.
                 pass
             else:
                 coverage_note = (
