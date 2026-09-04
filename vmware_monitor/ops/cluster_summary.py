@@ -288,7 +288,7 @@ def get_cluster_health_summary(
     #
     #   rootFolder "Datacenters"  -> 3 alarms, each tagged with its true .entity
     #   Datacenter  "home"        -> 1, the HOST's alarm propagated up
-    #   HostSystem  192.168.60.15 -> 1, its own
+    #   HostSystem  (the one host) -> 1, its own
     #
     # Two things follow. Alarms propagate upward, so reading a parent's list
     # wholesale double-counts what the host and cluster passes already have.
