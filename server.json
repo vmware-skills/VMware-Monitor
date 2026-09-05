@@ -7,12 +7,12 @@
     "url": "https://github.com/vmware-skills/VMware-Monitor",
     "source": "github"
   },
-  "version": "1.11.1",
+  "version": "1.11.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "vmware-monitor",
-      "version": "1.11.1",
+      "version": "1.11.2",
       "runtimeHint": "uvx",
       "packageArguments": [
         {
