@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import atexit
 import ssl
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pyVmomi import vim
@@ -75,6 +76,30 @@ def _unreachable_reason(exc: BaseException) -> str:
     return type(exc).__name__
 
 
+# atexit cleanups for live connections, keyed by id(si) so a connection dropped
+# before interpreter exit can take its handler with it.
+_SI_ATEXIT: dict[int, Callable[[], None]] = {}
+
+
+def _release_si(si: ServiceInstance) -> None:
+    """Unregister the atexit cleanup registered for ``si``.
+
+    Every connect() registers a cleanup that closes over si, and atexit holds
+    that closure -- and therefore si -- until the process exits. A long-running
+    MCP server that reconnects after each session expiry (踩坑 #40) accumulates
+    one dead ServiceInstance and one handler per reconnect, and at exit runs a
+    Disconnect against every session it ever opened.
+
+    Measured before this existed: 50 evict-and-reconnect cycles left 50 handlers
+    registered and all 50 evicted ServiceInstance objects still reachable, while
+    the id(si) side stores stayed correctly at one entry -- the side-store
+    discipline was never the leak, the registration was.
+    """
+    fn = _SI_ATEXIT.pop(id(si), None)
+    if fn is not None:
+        atexit.unregister(fn)
+
+
 class ConnectionManager:
     """Manages connections to multiple vCenter/ESXi targets."""
 
@@ -107,6 +132,7 @@ class ConnectionManager:
                 alive = False
             if alive:
                 return si
+            _release_si(si)
             del self._connections[target.name]
 
         si = self._create_connection(target)
@@ -118,6 +144,7 @@ class ConnectionManager:
         if target_name in self._connections:
             from pyVim.connect import Disconnect
 
+            _release_si(self._connections[target_name])
             Disconnect(self._connections[target_name])
             del self._connections[target_name]
 
@@ -191,6 +218,7 @@ class ConnectionManager:
             except Exception:
                 pass
 
+        _SI_ATEXIT[id(si)] = _cleanup
         atexit.register(_cleanup)
         return si
 
