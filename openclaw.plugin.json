@@ -1,0 +1,24 @@
+{
+  "id": "vmware-monitor",
+  "name": "VMware Monitor",
+  "description": "Read-only VMware vCenter/ESXi monitoring for OpenClaw: the vmware-monitor skill plus its MCP server (32 read-only tools). No code path writes to vSphere.",
+  "skills": [
+    "./skills"
+  ],
+  "mcpServers": {
+    "vmware-monitor": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "vmware-monitor==1.11.2",
+        "vmware-monitor-mcp"
+      ]
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

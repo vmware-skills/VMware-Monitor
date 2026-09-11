@@ -1,0 +1,20 @@
+{
+  "name": "@zw008/vmware-monitor",
+  "version": "1.11.2",
+  "description": "Read-only VMware vCenter/ESXi monitoring for OpenClaw: the vmware-monitor skill plus its MCP server (32 read-only tools). No code path writes to vSphere.",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/vmware-skills/VMware-Monitor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vmware-skills/VMware-Monitor.git"
+  },
+  "openclaw": {
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2"
+    }
+  }
+}
