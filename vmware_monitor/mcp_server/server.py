@@ -765,15 +765,19 @@ def host_log_scan(
     envelope {items, returned, limit, total, truncated, hint}; each row has
     severity, source (``host_log:<key>``), message, time and entity. ``total`` is
     null on purpose — this is "errors within the scanned window", not all errors
-    ever, and empty ``items`` means nothing matched.
+    ever. ``logs_unavailable`` lists every host/log that could NOT be read, with
+    the reason (e.g. the account lacks Global.Diagnostics); empty ``items`` means
+    nothing matched only when ``logs_unavailable`` is empty too.
 
     Use this when get_events or host_investigation_bundle show a host in trouble
     but not why: vCenter events and ESXi syslog are different sources. Filter
-    with ``host_name`` to keep the scan fast on large clusters.
+    with ``host_name`` to keep the scan fast on large clusters; a name that
+    matches no host returns an error (get the exact name from list_esxi_hosts),
+    not an empty result. Every call reads the last ``lines`` lines afresh.
 
     Args:
         host_name: Filter to a single host by exact name (None = all hosts).
-        lines: How many recent lines per log to scan (default 500).
+        lines: How many recent lines per log to scan (default 500, at least 1).
         target: vCenter/ESXi target from config (default if omitted).
     """
     si = _get_connection(target)

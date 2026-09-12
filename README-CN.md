@@ -11,7 +11,9 @@
 
 > **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数——不是提示词约束，是这些代码根本不存在。
 >
-> **这一点具体由什么守住。** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) 用 `ast` 解析每个源文件，要求本包调用的每一个 vSphere 方法都出现在一份经人工审阅的白名单里，并对照 pyVmomi 自带的类型元数据交叉核验：凡是返回 `vim.Task`、或 vCenter 要求非只读权限的方法，都必须有人写明理由才放行。当前白名单只有九个方法。它守的是**写出来的代码**——看不见运行时拼出来的方法名；而且本仓没有任何 CI，所以它只在有人跑测试时才生效。若要一份不依赖本仓的保证，请用只读权限的 vCenter 账号连接。
+> **这一点具体由什么守住。** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) 用 `ast` 解析每个源文件，要求本包调用的每一个 vSphere 方法都出现在一份经人工审阅的白名单里，并对照 pyVmomi 自带的类型元数据交叉核验：凡是返回 `vim.Task`、或 vCenter 要求非只读权限的方法，都必须有人写明理由才放行。当前白名单有十四个方法。它守的是**写出来的代码**——看不见运行时拼出来的方法名；而且本仓没有任何 CI，所以它只在有人跑测试时才生效。若要一份不依赖本仓的保证，请用一个专用账号、授予 vCenter 内置的 **Read-Only（只读）** 角色来连接（[哪些读取需要超出该角色的权限](skills/vmware-monitor/references/setup-guide.md#security)）。
+>
+> **"只读"不覆盖什么。** 这是针对 vCenter/ESXi 的承诺：没有任何代码路径会改变它们的状态。在 vCenter 上，本 skill 只会建立自己的登录会话，以及用完即释放的短期查询句柄。它会写本机文件：`~/.vmware-monitor/config.yaml` 和 `.env`（由 `init` 写入；`.env` 里的明文密码会在加载时被改写为 `b64:`）、审计日志（MCP 调用写 `~/.vmware/audit.db`，CLI 命令写 `~/.vmware-monitor/audit.log`）、`--html` 生成的快照（`~/vmware-health/`），以及——仅在 `daemon start` 之后——`daemon.pid`、`scan.log` 和发往你所配置 webhook 的推送。完整列表见 [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally)。
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -143,22 +145,25 @@ ESXi 独立主机 ──→ VM
 |------|------|
 | 守护进程 | 基于 APScheduler，可配置间隔（默认 15 分钟） |
 | 多目标扫描 | 依次扫描所有配置的 vCenter/ESXi 目标 |
-| 日志分析 | 正则匹配：error, fail, critical, panic, timeout, corrupt |
-| 结构化日志 | JSONL 输出到 `~/.vmware-monitor/scan.log` |
-| Webhook 通知 | 支持 Slack、Discord 或任意 HTTP 端点 |
+| 扫描内容 | 每轮：已触发告警、最近 `lookback_hours` 内的 vCenter 事件，以及 ESXi 主机日志 `hostd`、`vmkernel`、`vpxa` 的新增行 |
+| 主机日志 | 增量读取：同一个 daemon 进程内每行只报告一次（daemon 重启后会把每个日志的最后 500 行再读一遍）。日志轮转，或两轮之间新增超过 500 行时，会追加一条 `info` 记录说明哪些行没被扫描。读取主机日志需要 `Global.Diagnostics` 权限，vCenter 内置的 Read-Only 角色不含该权限；读不到的日志会变成一条带原因的 `info` 记录，绝不会被当成“一切正常” |
+| 日志分析 | 匹配 error、fail、critical、panic、lost access、cannot、timeout、refused、corrupt 的主机日志行——含 critical/panic/corrupt 的为 `critical`，其余为 `warning` |
+| 结构化日志 | JSONL 输出到 `~/.vmware-monitor/scan.log`——记录所有问题，包括 `info` 记录 |
+| Webhook 通知 | 支持 Slack、Discord 或任意 HTTP 端点。发送所有 critical 问题和所有告警/事件类 warning；主机日志的 warning 只写入扫描日志，`info` 记录从不发送 |
+| 每轮摘要 | daemon 日志输出里每轮一行：发现数（以及其中发往 webhook 的数量）、读不到的主机日志数、有未扫描行的日志数、失败的扫描环节数。只要有环节失败或某个目标连不上，就显示 `Scan INCOMPLETE`，绝不会说“一切正常” |
 
 ### 5. 安全特性
 
 | 功能 | 说明 |
 |------|------|
 | **代码级隔离** | 独立仓库 — 代码中零破坏性函数，由一道 AST 白名单闸门逐个核验全部 vSphere 调用（[`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)）|
-| **审计日志** | 所有查询记录到 `~/.vmware-monitor/audit.log`（JSONL） |
+| **审计日志** | MCP 工具调用记录到 `~/.vmware/audit.db`（SQLite，经 vmware-policy）；CLI 命令记录到 `~/.vmware-monitor/audit.log`（JSONL） |
 | **密码保护** | 通过 `.env` 加载密码并检查文件权限（warn if not 600） |
 | **配置文件内容** | `config.yaml` 仅存储主机名、端口和 `.env` 引用路径，**不含密码或 Token** |
 | **SSL 自签名** | 仅用于 ESXi 自签名证书的隔离实验环境；生产环境应使用 CA 签名证书 |
 | **Prompt 注入防护** | vSphere 事件消息和主机日志在输出前进行截断、控制字符清理和边界标记（`[VSPHERE_EVENT]`/`[VSPHERE_HOST_LOG]`）包裹 |
-| **Webhook 数据范围** | **默认禁用**。启用后仅向用户自配置的 URL 发送告警摘要，payload 不含凭据、IP 或 PII |
-| **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 消除此风险：代码中不存在任何破坏性代码路径。仅在开发/实验环境使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) |
+| **Webhook 数据范围** | **默认禁用**。配置后，daemon 只向你配置的 URL 发送：所有 critical 问题（告警、事件、匹配 critical/panic/corrupt 的 ESXi 日志行、连不上的目标）和所有告警/事件类 warning——主机日志的 warning 只写入扫描日志，`info` 记录从不发送。每条问题带实体名和消息：经过清洗的告警、事件或 ESXi 日志文本，或连接错误信息，其中可能含主机名、IP 和用户名。不会发送 skill 配置或 `.env` 里的任何凭据 |
+| **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 从自身代码中消除了这一类风险：不存在任何破坏性代码路径，一旦加入，白名单闸门就会让构建失败。再配合一个只读 vCenter 账号，就有了不依赖本代码库的防线。仅在开发/实验环境使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) |
 
 ### 不包含的操作（设计如此）
 
@@ -290,7 +295,7 @@ chmod 600 ~/.vmware-monitor/.env
 # 编辑并填入真实密码
 ```
 
-> **安全提示**：推荐使用 `.env` 文件而非命令行 `export`，避免密码出现在 shell 历史记录中。
+> **安全提示**：推荐使用 `.env` 文件而非命令行 `export`，避免密码出现在 shell 历史记录中。`config.yaml` 只存主机名、端口和 `.env` 的引用路径——**不含**密码或 Token。所有密钥只存放在 `.env`（`chmod 600`）。Webhook 通知默认禁用；启用后 payload 只发往用户自配置的 URL，不含你配置里的任何凭据——但会带上 vSphere 自己的告警、事件和日志文本，其中可能含主机名、IP 和用户名。推荐使用一个授予 vCenter 内置 Read-Only 角色的专用服务账号。
 
 密码环境变量命名规则：`VMWARE_{目标名大写}_PASSWORD`
 

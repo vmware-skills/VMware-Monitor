@@ -411,13 +411,15 @@ def _f_scan_host_logs(mp, n):
         lineEnd=n,
         lineText=[f"error: disk {i} degraded" for i in range(n)],
     )
-    diag = SimpleNamespace(BrowseDiagnosticLog=lambda key, start: log)
-    mp.setattr(
-        log_scanner,
-        "_collect",
-        _collect_rows([(_Ref(), {"name": "esx-01", "configManager.diagnosticSystem": diag})]),
+    # The method lives on content.diagnosticManager. This fixture used to put it
+    # on the host's diagnosticSystem — the one shape pyVmomi never produces,
+    # which is how host_log_scan returned nothing for years with this test green.
+    diag = SimpleNamespace(BrowseDiagnosticLog=lambda key, start, **scope: log)
+    content = SimpleNamespace(
+        diagnosticManager=diag, about=SimpleNamespace(apiType="VirtualCenter")
     )
-    return lambda limit=None: log_scanner.scan_host_logs(_si(), log_keys=("hostd",))
+    mp.setattr(log_scanner, "_collect", _collect_rows([(_Ref(), {"name": "esx-01"})]))
+    return lambda limit=None: log_scanner.scan_host_logs(_si(content), log_keys=("hostd",))
 
 
 # ---------------------------------------------------------------------------

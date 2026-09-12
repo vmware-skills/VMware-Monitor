@@ -11,7 +11,9 @@ English | [中文](README-CN.md)
 
 > **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). No power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase — not a prompt constraint, an absence.
 >
-> **How that is enforced, precisely.** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) parses every source file with `ast` and requires each vSphere method the package calls to appear on a reviewed allowlist, cross-checked against pyVmomi's own type metadata: anything returning a `vim.Task`, or gated by vCenter on a non-read privilege, fails unless a human wrote down why. Today that allowlist is nine methods. The check is a gate on the code as written — it cannot see a method name assembled at runtime, and nothing runs it automatically, so it holds only as far as someone runs the test suite. For a guarantee that does not depend on this repository at all, point the skill at a vCenter account with read-only permissions.
+> **How that is enforced, precisely.** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) parses every source file with `ast` and requires each vSphere method the package calls to appear on a reviewed allowlist, cross-checked against pyVmomi's own type metadata: anything returning a `vim.Task`, or gated by vCenter on a non-read privilege, fails unless a human wrote down why. Today that allowlist is fourteen methods. The check is a gate on the code as written — it cannot see a method name assembled at runtime, and nothing runs it automatically, so it holds only as far as someone runs the test suite. For a guarantee that does not depend on this repository at all, point the skill at a dedicated account holding vCenter's built-in **Read-Only** role ([which reads need more than that role](skills/vmware-monitor/references/setup-guide.md#security)).
+>
+> **What "read-only" does not cover.** It is a claim about vCenter/ESXi: no code path changes their state. On vCenter the skill opens only its own login session and short-lived query handles it releases. It does write locally: `~/.vmware-monitor/config.yaml` and `.env` (via `init`; plaintext passwords in `.env` are rewritten as `b64:` on load), audit logs (`~/.vmware/audit.db` for MCP calls, `~/.vmware-monitor/audit.log` for CLI commands), `--html` snapshots in `~/vmware-health/`, and — only after `daemon start` — `daemon.pid`, `scan.log`, and posts to a webhook you configured. Full table: [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally).
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -189,10 +191,12 @@ ESXi Standalone ──→ VMs
 |---------|---------|
 | Daemon | APScheduler-based, configurable interval (default 15 min) |
 | Multi-target Scan | Sequentially scan all configured vCenter/ESXi targets |
-| Scan Content | Alarms + Events + Host logs (hostd, vmkernel, vpxd) |
-| Log Analysis | Regex pattern matching: error, fail, critical, panic, timeout |
-| Structured Log | JSONL output to `~/.vmware-monitor/scan.log` |
-| Webhook | Slack, Discord, or any HTTP endpoint |
+| Scan Content | Each cycle: triggered alarms, vCenter events from the last `lookback_hours`, and new lines in the ESXi host logs `hostd`, `vmkernel`, `vpxa` |
+| Host Logs | Read incrementally: each line is reported once per daemon run (a restarted daemon re-reads each log's last 500 lines once). A rotated log, or more than 500 new lines between cycles, adds an `info` row saying which lines were not scanned. Reading host logs needs the `Global.Diagnostics` privilege, which vCenter's Read-Only role does not include; a log that cannot be read becomes an `info` row with the reason, never a silent "all clear" |
+| Log Analysis | Host-log lines matching error, fail, critical, panic, lost access, cannot, timeout, refused, corrupt — lines with critical/panic/corrupt are `critical`, the rest `warning` |
+| Structured Log | JSONL output to `~/.vmware-monitor/scan.log` — every issue, `info` rows included |
+| Webhook | Slack, Discord, or any HTTP endpoint. Receives every critical issue and every alarm/event warning; host-log warnings go to the scan log only, and `info` rows are never sent |
+| Cycle Summary | One line per cycle in the daemon's log output: findings (and how many went to the webhook), unreadable host logs, logs with unscanned lines, failed passes. If any pass failed or a target could not be reached it reads `Scan INCOMPLETE`, never "all clear" |
 | Daemon Management | `daemon start/stop/status`, PID file, graceful shutdown |
 
 ### 5. Safety Features
@@ -200,11 +204,11 @@ ESXi Standalone ──→ VMs
 | Feature | Details |
 |---------|---------|
 | **Code-Level Isolation** | Independent repository — zero destructive functions in codebase, checked by an AST allowlist gate over every vSphere call ([`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)) |
-| **Audit Trail** | All queries logged to `~/.vmware-monitor/audit.log` (JSONL) |
+| **Audit Trail** | MCP tool calls logged to `~/.vmware/audit.db` (SQLite, via vmware-policy); CLI commands to `~/.vmware-monitor/audit.log` (JSONL) |
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
 | **SSL Self-signed Support** | `verify_ssl: false` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
-| **Webhook Data Scope** | Sends monitoring summaries to user-configured URLs only — no third-party services by default |
+| **Webhook Data Scope** | Disabled by default. When configured, the daemon posts to your URL only: every critical issue (alarms, events, ESXi log lines matching critical/panic/corrupt, targets it could not connect to) and every alarm/event warning — host-log warnings stay in the scan log, and `info` rows are never sent. Each issue carries its entity name and message: sanitized alarm, event, or ESXi log text, or the connection error, which can include host names, IPs, and user names. No credentials from the skill's config or `.env` are sent |
 | **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor removes that class of risk from its own code: no destructive code paths exist, and the allowlist gate fails the build if one is added. Pair it with a read-only vCenter account for defence that does not rely on this codebase. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
 
 ### What's NOT Included (By Design)
@@ -366,7 +370,7 @@ chmod 600 ~/.vmware-monitor/.env
 # Edit and fill in your passwords
 ```
 
-> **Security note**: Prefer `.env` file over command-line `export` to avoid passwords appearing in shell history. `config.yaml` stores only hostnames, ports, and a reference to the `.env` file — it does **not** contain passwords or tokens. All secrets are stored exclusively in `.env` (`chmod 600`). Webhook notifications are disabled by default; when enabled, payloads contain no credentials, IPs, or PII — only aggregated alert metadata sent to user-configured URLs only. We recommend using a least-privilege read-only vCenter service account.
+> **Security note**: Prefer `.env` file over command-line `export` to avoid passwords appearing in shell history. `config.yaml` stores only hostnames, ports, and a reference to the `.env` file — it does **not** contain passwords or tokens. All secrets are stored exclusively in `.env` (`chmod 600`). Webhook notifications are disabled by default; when enabled, payloads go to user-configured URLs only and carry no credentials from your config — but they do carry vSphere's own alarm, event, and log text, which can include host names, IPs, and user names. We recommend a dedicated service account with vCenter's built-in Read-Only role.
 
 Password environment variable naming convention:
 ```

@@ -1,3 +1,64 @@
+## v1.11.3 — host_log_scan reads host logs, for the first time
+
+**`host_log_scan` never read a line, from v0.1.0 until now.** It called `BrowseDiagnosticLog`
+on the host's `configManager.diagnosticSystem`, which has no such method; the `AttributeError`
+was swallowed and every host reported "checked, nothing found" — the daemon's host-log pass too.
+It now reads through `content.diagnosticManager` (naming the host through vCenter, not on a
+standalone ESXi). Verified live on vCenter 8.0.3 and standalone ESXi 8.0.3: 131 and 129 findings
+where the old code returned none. A log that cannot be read is listed in `logs_unavailable` with
+the reason, and a WARNING naming the host, log and fault goes to the server log. Only vSphere
+faults and connection errors count as "could not be read": a bug in the scanner now raises
+instead of being filed as one more unreadable log, which is how the original bug stayed hidden.
+The tool still reads the last `lines` lines of each log on every call; a `host_name` that matches
+no host now returns an error pointing at `list_esxi_hosts` instead of an empty, clean-looking
+result, and `lines` below 1 is refused.
+
+**The daemon reports each host-log line once, and pages only critical ones.** With the scanner
+reading for real, every 15-minute cycle re-read the last 500 lines of each log and reported the
+same lines again — on one live vCenter 228 matching lines a cycle, 135 of them a single routine
+hostd line — and every warning among them went to the webhook. The daemon now remembers, in
+process memory, the last line it read of each log (per target, host and log) and reads only what
+came after. After a restart, the first cycle reads the last 500 lines again. A log whose line count
+went down has rotated: the daemon reads its last 500 lines and writes an `info` row saying lines
+written between its previous read and the rotation were not scanned. More than 500 new lines in
+one interval: the newest 500 are read and an `info` row says how many were skipped. Host-log
+**warnings are written to the scan log only; host-log criticals** (lines containing
+critical/panic/corrupt) **still go to the webhook**, as do alarm and event warnings, unchanged. If
+you watched host-log warnings in the webhook, read them in the scan log now. The cycle summary
+counts findings, unreadable host logs and failed passes separately, and a cycle in which any pass
+raised ends with a WARNING "Scan INCOMPLETE" naming the pass — never "all clear".
+
+*With a Read-Only account* (vCenter's Read-Only role lacks `Global.Diagnostics`), no host log can
+be read. `host_log_scan` returns empty `items` and one `logs_unavailable` row per host and log
+naming that privilege; the daemon writes one `info` row per host and log to the scan log each
+cycle and a WARNING per log to its own log, pages nothing for it, and its summary shows the
+unreadable count instead of "all clear".
+
+**`cluster_health_summary` counted a standalone host as a cluster.** On a vCenter with one
+standalone host and no clusters, `list_all_clusters` said 0 and the summary said 1. The standalone
+bucket is still shown; only the cluster tally skips it.
+
+Docs: "read-only" now says exactly what it covers (nothing writes to vSphere; the local files the
+skill does write are listed), the webhook no longer claims to send only aggregated metadata (it
+sends issue text), and the setup guide lists all 32 tools. This release is also published on
+ClawHub as the OpenClaw bundle plugin `@zw008/vmware-monitor`.
+
+**OpenClaw could not show this skill to the model.** `metadata.openclaw.requires` listed
+config *file paths* under `requires.config`, which OpenClaw reads as `openclaw.json` keys that
+must be truthy — so the skill was "needs setup / not visible to the model" whatever was on disk
+(verified on OpenClaw 2026.6.35). `requires.env` named an optional override and `requires.bins`
+demanded a CLI that a plugin install (uvx) never has. `requires` is now `anyBins: [<cli>, "uvx"]`;
+the variables are still declared, under `optional.env`.
+
+**Install commands in the skill pin this release.** ClawHub reviews SKILL.md and references/,
+not the package they install, so an unpinned `uv tool install` vouched for code nobody reviewed.
+Every install command for this package in the skill now names this version.
+
+**A config path written as `~/…` now resolves.** Every MCP example config and setup-guide snippet
+sets `VMWARE_MONITOR_CONFIG` to `~/.vmware-monitor/config.yaml`, but MCP clients pass env values verbatim and the
+path was used unexpanded, so copying the snippet gave "Config file not found" for a file that was
+there. `~` is now expanded in the variable and in `--config`.
+
 ## v1.11.2 — a dropped connection no longer keeps itself alive
 
 Every `connect()` registered an `atexit` cleanup that closes over the

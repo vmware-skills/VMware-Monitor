@@ -26,7 +26,7 @@ These are structural, so it cannot.
 
 | Guardrail you would otherwise prompt for | Now enforced by |
 |---|---|
-| "Work read-only and never modify anything" | **Zero write tools.** This skill has no create, modify, delete, or power operation in its registry at all — `list_tools()` only ever offers reads, so the model cannot call what does not exist. |
+| "Work read-only and never modify anything" | **Zero write tools.** This skill has no vSphere create, modify, delete, or power operation in its registry at all — `list_tools()` only ever offers reads, so the model cannot call what does not exist. |
 | "First resolve the affected resource_id through vmware-aria before querying vmware-monitor" | **`investigate_alert`** does the whole alert → resource → confirmed-name sequence in one call. |
 | "Do not confuse the alert ID with the affected resource ID" | `investigate_alert` returns a `correlation` block with both UUIDs explicitly labelled. |
 | "Only correlate Aria and vCenter data after the resource name and type have been confirmed" | `investigate_alert` returns `correlation.confirmed`, and withholds its `next_step` handoff until name and kind are known. |

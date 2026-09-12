@@ -150,7 +150,7 @@ vmware-monitor daemon stop
 vmware-monitor daemon status
 ```
 
-- `scan now`: Run a one-time scan of alarms, events, and host logs
+- `scan now`: Run a one-time scan of alarms and events. It does not read ESXi host logs — those are read by the daemon's host-log pass and by the MCP tool `host_log_scan`
 - `daemon start`: Start APScheduler-based background scanner (default: every 15 min)
 - `daemon stop`: Stop the background scanner
 - `daemon status`: Check if the daemon is running

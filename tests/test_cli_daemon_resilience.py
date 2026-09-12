@@ -204,7 +204,7 @@ def test_scheduler_removes_pid_file_when_first_scan_crashes(monkeypatch, tmp_pat
         )
     )
 
-    def _boom(config, conn_mgr):
+    def _boom(config, conn_mgr, cursors=None):
         assert pid_file.exists(), "PID file must exist while first scan runs"
         raise RuntimeError("first scan exploded")
 
@@ -221,7 +221,7 @@ def test_scheduler_registers_signal_handlers_before_pid_write():
     src = (REPO_ROOT / "vmware_monitor" / "scanner" / "scheduler.py").read_text(encoding="utf-8")
     sig_idx = src.index("signal.signal(signal.SIGTERM")
     pid_idx = src.index("PID_FILE.write_text")
-    scan_idx = src.rindex("_run_scan(config, conn_mgr)")
+    scan_idx = src.rindex("_run_scan(config, conn_mgr, cursors)")
     assert sig_idx < pid_idx < scan_idx
 
 

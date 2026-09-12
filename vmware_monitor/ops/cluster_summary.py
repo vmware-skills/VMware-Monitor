@@ -515,11 +515,13 @@ def _finalize(
             rec.pop("vms_total", None)
             rec.pop("vms_on", None)
 
-        # The vCenter-level bucket is an alarm scope, not a compute scope — no
-        # hosts, no VMs, no capacity. Counting it made an estate with one host
-        # and no clusters report "2 clusters". Its alarms still roll up below;
-        # only the cluster tally skips it.
-        if rec["name"] != _VCENTER_SCOPE:
+        # Only real clusters are counted. The vCenter-level bucket is an alarm
+        # scope, and the standalone bucket is the hosts that belong to NO
+        # cluster — counting either made an estate with one host and no
+        # clusters report "2", then "1", while list_all_clusters said 0. Both
+        # rows are still shown and their hosts, VMs and alarms still roll up;
+        # only the cluster tally skips them.
+        if rec["name"] not in (_VCENTER_SCOPE, _STANDALONE):
             totals["clusters"] += 1
         totals["hosts_total"] += rec["hosts_total"]
         totals["hosts_connected"] += rec["hosts_connected"]

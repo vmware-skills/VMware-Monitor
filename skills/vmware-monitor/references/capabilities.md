@@ -33,6 +33,14 @@ per log are read). Everywhere else the total is a real count taken before the
 limit was applied, which is what lets a full page be recognised as complete
 instead of flagged as possibly-truncated.
 
+`host_log_scan` adds one field to the envelope: `logs_unavailable`, one row per
+host/log it could **not** read, with the reason (for example, the account lacks
+`Global.Diagnostics`, which `BrowseDiagnosticLog` requires). Its `items` holds
+only the lines that matched a trouble pattern in the logs it *did* read, so an
+empty `items` with `truncated: false` means "checked, found none" only when
+`logs_unavailable` is empty as well. With unread logs, the honest answer is
+"nothing matched in the logs that could be read" — name the ones that could not.
+
 The envelope adds ~30 tokens to a response. It exists because a bare list gave
 smaller models nothing to distinguish a complete answer from page one, and they
 sometimes resolved that ambiguity as "no data was returned"
@@ -48,7 +56,7 @@ Tools with purpose-built return objects — `vm_info`, `snapshot_aging`,
 
 ## Automation Level Reference
 
-Each operation is classified by autonomy level per the Enterprise Harness Engineering framework. **vmware-monitor is L1/L2 only by design** — no write operations exist in the codebase, enforced at the test level.
+Each operation is classified by autonomy level per the Enterprise Harness Engineering framework. **vmware-monitor is L1/L2 only by design** — no vSphere write operations exist in the codebase, gated by an allowlist test in the source repository.
 
 | Level | Meaning | Agent autonomy | Examples in this skill |
 |:-:|---|---|---|
@@ -59,8 +67,8 @@ Each operation is classified by autonomy level per the Enterprise Harness Engine
 | **L5** | Auto-remediation from learned pattern | *N/A* | — *(remediation is out of scope by design)* |
 
 **Notes**:
-- All tools are safe for agents to call without confirmation — the skill is read-only, enforced by the allowlist gate in `tests/eval/regression/test_read_only_enforcement.py`.
-- Test file `test_no_destructive_operations.py` enforces this invariant on every commit.
+- No tool changes vCenter/ESXi state, so agents can call them without confirmation — gated by [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) (source repository; a check on the code as written, run by the test suite — there is no CI). Results still carry sensitive inventory, event, log, and session data: scope the account as in `setup-guide.md` → Least Privilege.
+- Local files the skill writes (config, `.env`, audit logs, HTML snapshots, daemon state) are listed in `setup-guide.md` → What "read-only" covers.
 
 ## 0. Cluster Health Summary (triage)
 
@@ -85,6 +93,15 @@ Aria Operations replacement.
 | `cluster_filter` | str (optional) | None (all) | Case-insensitive substring; suppresses standalone-hosts bucket |
 | `include_vms` | bool | True | Roll up VM power counts; False skips the VM pass (faster on huge fleets) |
 | `top_n` | int | 10 | Cap the `top_issues` focus list; `issues_total` keeps the pre-cap count; 0 hides the list |
+
+**`totals.clusters` counts real clusters only.** Hosts that belong to no cluster
+— a standalone ESXi target, or standalone hosts under a vCenter — are rolled into
+a `(standalone hosts)` row, and alarms raised above any cluster or host get a
+`(vCenter-level)` row when there are any; neither row is counted as a cluster. Their hosts, VMs and alarms still count in the
+other `totals` fields and feed `top_issues`. So a vCenter with only standalone
+hosts reports `clusters: 0` next to a non-zero `hosts_total` and a populated
+standalone row: read that row, not an alternative tool. `cluster_filter` hides
+the standalone row, so a filtered `clusters: 0` means the filter matched nothing.
 
 **Typical response tokens**: ~120–400 (one compact row per cluster + totals);
 scales with cluster count, not VM count. This is the aggregation-in-the-tool
@@ -178,16 +195,18 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 |---------|---------|
 | Daemon | APScheduler-based, configurable interval (default 15 min) |
 | Multi-target Scan | Sequentially scan all configured vCenter/ESXi targets |
-| Scan Content | Alarms + Events + Host logs (hostd, vmkernel, vpxd) |
-| Log Analysis | Regex pattern matching: error, fail, critical, panic, timeout |
-| Webhook | Slack, Discord, or any HTTP endpoint |
+| Scan Content | Each cycle: triggered alarms, vCenter events from the last `lookback_hours`, and new lines in the ESXi host logs `hostd`, `vmkernel`, `vpxa` |
+| Host Logs | Read incrementally: each line is reported once per daemon run (a restart re-reads each log's last 500 lines once). A rotated log, or more than 500 new lines between cycles, adds an `info` row. Needs `Global.Diagnostics` (not in vCenter's Read-Only role); an unreadable log becomes an `info` row with the reason |
+| Log Analysis | Host-log lines matching error, fail, critical, panic, lost access, cannot, timeout, refused, corrupt — critical/panic/corrupt lines are `critical`, the rest `warning` |
+| Webhook | Slack, Discord, or any HTTP endpoint. Every critical issue and every alarm/event warning; host-log warnings stay in `scan.log`; `info` rows are never sent |
+| Cycle Summary | One line per cycle: findings (and how many were sent), unreadable host logs, logs with unscanned lines, failed passes; `Scan INCOMPLETE` if any pass failed or a target could not be reached |
 
 ## Safety Features
 
 | Feature | Details |
 |---------|---------|
 | Code-Level Isolation | Independent repository — zero destructive functions in codebase, gated by an AST allowlist over every vSphere call |
-| Audit Trail | All queries logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy) |
+| Audit Trail | MCP tool calls logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy); CLI commands to `~/.vmware-monitor/audit.log` (JSON Lines) |
 | Password Protection | `.env` file loading with permission check (warn if not 600) |
 | SSL Self-signed Support | `verify_ssl: false` — **only** for ESXi hosts with self-signed certificates in isolated lab/home environments. Production environments should use CA-signed certificates with full TLS verification enabled. |
 

@@ -538,11 +538,19 @@ def test_the_vcenter_bucket_is_not_counted_as_a_cluster(monkeypatch):
     added to surface — a wrong number stated confidently.
 
     Its alarms still roll into the totals; only the cluster tally excludes it.
+
+    This test used to assert 1 here — with a failure message that said "no
+    clusters exist". The fix above stopped counting the vCenter bucket but kept
+    counting the standalone one, and the test wrote that half-fix down as the
+    contract. Live on a vCenter 8.0.3 with one standalone host
+    (2026-09-11): list_all_clusters returned 0 while this summary said 1, and
+    the agent repeated "Clusters: 1" to the user while explaining it was not a
+    real cluster.
     """
     host_ref = vim.HostSystem("host-1")
     monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
     out = cluster_summary.get_cluster_health_summary(_FakeSI([_vcenter_scoped("red")]))
-    assert out["totals"]["clusters"] == 1, (
+    assert out["totals"]["clusters"] == 0, (
         f"counted {out['totals']['clusters']} clusters where one standalone "
         f"host and no clusters exist"
     )
@@ -559,7 +567,10 @@ def test_an_empty_vcenter_bucket_never_appears(monkeypatch):
     monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, ["red"]))
     out = cluster_summary.get_cluster_health_summary(_FakeSI([_host_scoped("red", host_ref)]))
     assert not any(c["name"] == "(vCenter-level)" for c in out["clusters"])
-    assert out["totals"]["clusters"] == 1
+    assert out["totals"]["clusters"] == 0, "a standalone host is not a cluster"
+    assert any(c["name"] == "(standalone hosts)" for c in out["clusters"]), (
+        "the standalone row itself must still be shown — only the tally skips it"
+    )
 
 
 def test_an_unreadable_root_folder_is_reported_not_silently_empty(monkeypatch):
