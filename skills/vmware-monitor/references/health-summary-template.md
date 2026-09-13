@@ -89,7 +89,8 @@ to retune:
 
 Status is also forced to `critical` by **any disconnected host** or **any critical
 alarm**, and to at least `warn` by warning alarms or **HA disabled on a multi-host
-cluster**. Change `_rollup_status()` to add or relax rules.
+cluster**. The HA rule applies only to real clusters — HA is a cluster setting, so
+the `(standalone hosts)` row never gets it. Change `_rollup_status()` to add or relax rules.
 
 ---
 

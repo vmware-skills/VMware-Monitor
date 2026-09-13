@@ -1,3 +1,12 @@
+## Unreleased
+
+**`cluster_health_summary` no longer warns about HA on hosts that are in no cluster.** On a
+vCenter with two standalone hosts it reported "HA disabled on a multi-host cluster" against the
+`(standalone hosts)` row, and raised that row to `warn` on that alone. vSphere HA is a cluster
+setting, so the rule now applies only to real clusters; a multi-host cluster with HA off still
+warns. AIops's delegated summary gets the same fix. Verified live on vCenter 8.0.3: the focus list
+went from 7 issues to 6, and the only one dropped was the HA warning.
+
 ## v1.11.3 — host_log_scan reads host logs, for the first time
 
 **`host_log_scan` never read a line, from v0.1.0 until now.** It called `BrowseDiagnosticLog`

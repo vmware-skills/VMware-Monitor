@@ -123,6 +123,19 @@ def _empty_cluster(name: str, ha: bool, drs: bool) -> dict:
     }
 
 
+def _ha_gap(rec: dict) -> bool:
+    """True for a real cluster with more than one host and vSphere HA off.
+
+    HA is a cluster setting. The standalone bucket is the hosts that belong to
+    no cluster, so there is no HA to enable on it; applying the rule there told
+    a vCenter with two un-clustered hosts it had "a multi-host cluster" with HA
+    disabled (live, 2026-09-13). The vCenter-level bucket holds no hosts.
+    """
+    if rec["name"] in (_STANDALONE, _VCENTER_SCOPE):
+        return False
+    return rec["hosts_total"] > 1 and not rec["ha_enabled"]
+
+
 def _severity(state: object) -> str | None:
     """Map an AlarmState overallStatus to 'critical'/'warning' (None if green)."""
     status = str(getattr(state, "overallStatus", ""))
@@ -193,7 +206,7 @@ def _rollup_status(rec: dict) -> tuple[str, list[str]]:
             status = "warn"
         reasons.append(f"{warn} warning alarm(s)")
 
-    if rec["hosts_total"] > 1 and not rec["ha_enabled"]:
+    if _ha_gap(rec):
         if status == "ok":
             status = "warn"
         reasons.append("HA disabled on a multi-host cluster")
@@ -443,7 +456,7 @@ def _capacity_issues(rec: dict) -> list[dict]:
                     "drilldown": _DRILLDOWN["capacity"],
                 }
             )
-    if rec["hosts_total"] > 1 and not rec["ha_enabled"]:
+    if _ha_gap(rec):
         out.append(
             {
                 "severity": "warning",

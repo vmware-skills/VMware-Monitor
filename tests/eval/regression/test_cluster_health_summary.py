@@ -595,3 +595,55 @@ def test_an_unreadable_root_folder_is_reported_not_silently_empty(monkeypatch):
     assert "alarm" in top and ("could not" in top or "unread" in top or "unknown" in top), (
         f"nothing says vCenter-level alarms went unchecked: {out['top_issues']}"
     )
+
+
+# ── HA is a cluster setting ─────────────────────────────────────────────────
+
+
+def test_two_standalone_hosts_are_not_a_multi_host_cluster_without_ha(monkeypatch):
+    """Live on vCenter 8.0.3 with two hosts in no cluster (2026-09-13): the
+    summary warned "HA disabled on a multi-host cluster" against the
+    "(standalone hosts)" row. That row is the hosts that belong to NO cluster,
+    and vSphere HA can only be turned on for a cluster — the warning named a
+    setting that does not exist for these hosts and a cluster that does not
+    exist at all, and it raised the row to warn on that alone.
+    """
+    host_a, host_b = object(), object()
+
+    def fake_collect(si, obj_type, paths):
+        t = obj_type[0]
+        if t is vim.ClusterComputeResource:
+            return []
+        if t is vim.HostSystem:
+            return [
+                (host_a, {**_standalone_host(330, 1024), "name": "esx-a"}),
+                (host_b, {**_standalone_host(330, 1024), "name": "esx-b"}),
+            ]
+        return []
+
+    monkeypatch.setattr(cluster_summary, "_collect", fake_collect)
+    out = cluster_summary.get_cluster_health_summary(_si())
+    [row] = out["clusters"]
+    assert row["name"] == "(standalone hosts)" and row["hosts_total"] == 2
+    assert not any("HA" in r for r in row["attention"]), row["attention"]
+    assert not any("HA" in i["detail"] for i in out["top_issues"]), out["top_issues"]
+    assert row["status"] == "ok", "two idle, connected, alarm-free hosts raised to warn"
+
+
+def test_a_multi_host_cluster_without_ha_still_warns(monkeypatch):
+    """The other direction: the rule itself stays for real clusters."""
+    h1, h2 = object(), object()
+    monkeypatch.setattr(
+        cluster_summary,
+        "_collect",
+        _mk_collect(
+            {"noha": (False, False, 10000, 64 * 1024**3, [h1, h2], [])},
+            {h1: {"conn": "connected", "cpu_mhz": 100, "mem_mb": 1024, "alarms": []},
+             h2: {"conn": "connected", "cpu_mhz": 100, "mem_mb": 1024, "alarms": []}},
+            [],
+        ),
+    )
+    out = cluster_summary.get_cluster_health_summary(_si())
+    [row] = [r for r in out["clusters"] if r["name"] == "noha"]
+    assert any("HA disabled" in r for r in row["attention"])
+    assert any(i["detail"] == "HA disabled on a multi-host cluster" for i in out["top_issues"])
