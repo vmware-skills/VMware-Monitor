@@ -54,8 +54,8 @@ The rollup's `clusters` array renders one row per cluster, worst status first:
 | VMs on       | `vms_on`/`vms_total`          | Powered-on vs total VMs (omitted when `include_vms=false`) |
 | CPU%         | `cpu_used_pct`                | Live cluster CPU utilisation |
 | Mem%         | `mem_used_pct`                | Live cluster memory utilisation |
-| HA           | `ha_enabled`                  | vSphere HA on/off |
-| DRS          | `drs_enabled`                 | DRS on/off |
+| HA           | `ha_enabled`                  | vSphere HA on/off; `null` (shown `n/a`) on the `(standalone hosts)` and `(vCenter-level)` rows |
+| DRS          | `drs_enabled`                 | DRS on/off; `null` (shown `n/a`) on the same two rows |
 | Alarms C/W   | `alarms.critical`/`.warning`  | Triggered alarm counts (cluster + its hosts) |
 | Attention    | `attention[]`                 | Plain-language reasons the status is not OK |
 

@@ -135,3 +135,14 @@ def test_include_vms_false_omits_vm_cells():
     assert "VMs on" not in doc
     # Three totals cells now (no VMs) → --tc:3.
     assert "--tc:3" in doc
+
+
+def test_ha_and_drs_render_not_applicable_for_rows_without_a_cluster():
+    """None means the row has no cluster to carry the setting; rendering it as
+    "off" claims a setting was turned off that never existed."""
+    data = _base_data()
+    data["clusters"][0].update(name="(standalone hosts)", ha_enabled=None, drs_enabled=None)
+    data["clusters"][1].update(ha_enabled=False, drs_enabled=False)
+    doc = render_cluster_health_html(data, "vc", _NOW)
+    assert doc.count("HA <b>n/a</b>") == 1 and doc.count("DRS <b>n/a</b>") == 1
+    assert doc.count("HA <b>off</b>") == 1 and doc.count("DRS <b>off</b>") == 1

@@ -647,3 +647,32 @@ def test_a_multi_host_cluster_without_ha_still_warns(monkeypatch):
     [row] = [r for r in out["clusters"] if r["name"] == "noha"]
     assert any("HA disabled" in r for r in row["attention"])
     assert any(i["detail"] == "HA disabled on a multi-host cluster" for i in out["top_issues"])
+
+
+def test_rows_with_no_cluster_report_ha_and_drs_as_not_applicable(monkeypatch):
+    """HA and DRS are cluster settings. The (standalone hosts) and
+    (vCenter-level) rows have no cluster, so False there read as "turned off"
+    — the table showed HA OFF in red against both (live, 2026-09-13). None says
+    the setting does not apply; a real cluster still reports a bool."""
+    host_ref = vim.HostSystem("host-1")
+    monkeypatch.setattr(cluster_summary, "_collect", _dc_collect(host_ref, []))
+    out = cluster_summary.get_cluster_health_summary(_FakeSI([_vcenter_scoped("red")]))
+    rows = {c["name"]: c for c in out["clusters"]}
+    assert set(rows) == {"(standalone hosts)", "(vCenter-level)"}, set(rows)
+    for name, row in rows.items():
+        assert row["ha_enabled"] is None and row["drs_enabled"] is None, (name, row)
+
+    h1, h2 = object(), object()
+    monkeypatch.setattr(
+        cluster_summary,
+        "_collect",
+        _mk_collect(
+            {"noha": (False, True, 10000, 64 * 1024**3, [h1, h2], [])},
+            {h1: {"conn": "connected", "cpu_mhz": 100, "mem_mb": 1024, "alarms": []},
+             h2: {"conn": "connected", "cpu_mhz": 100, "mem_mb": 1024, "alarms": []}},
+            [],
+        ),
+    )
+    [row] = [r for r in cluster_summary.get_cluster_health_summary(_si())["clusters"]
+             if r["name"] == "noha"]
+    assert row["ha_enabled"] is False and row["drs_enabled"] is True

@@ -105,8 +105,12 @@ def _root_alarm_states(si: ServiceInstance) -> list:
         return [], f"{type(exc).__name__}: {exc}"
 
 
-def _empty_cluster(name: str, ha: bool, drs: bool) -> dict:
-    """A fresh per-cluster accumulator with all counters zeroed."""
+def _empty_cluster(name: str, ha: bool | None, drs: bool | None) -> dict:
+    """A fresh per-cluster accumulator with all counters zeroed.
+
+    ``ha``/``drs`` are None for the standalone and vCenter-level buckets: HA and
+    DRS are cluster settings, and False there read as "turned off".
+    """
     return {
         "name": sanitize(name),
         "hosts_total": 0,
@@ -253,7 +257,8 @@ def get_cluster_health_summary(
           - ``issues_total``: total anomalies found before the top_n cap.
           - ``clusters``: list of per-cluster rows sorted worst-status-first,
             each with hosts_connected/total, vms_on/total, cpu_used_pct,
-            mem_used_pct, ha_enabled, drs_enabled, alarms, status, attention.
+            mem_used_pct, ha_enabled, drs_enabled (None on the standalone and
+            vCenter-level rows, which have no cluster), alarms, status, attention.
           - ``snapshot``: honesty note that this is point-in-time.
           - ``customization_hint``: the friendly "reshape this view" line to
             echo to the operator.
@@ -293,7 +298,7 @@ def get_cluster_health_summary(
 
     # Standalone bucket only when not filtering to a named cluster.
     if needle is None:
-        clusters[_STANDALONE] = _empty_cluster(_STANDALONE, ha=False, drs=False)
+        clusters[_STANDALONE] = _empty_cluster(_STANDALONE, ha=None, drs=None)
 
     # Pass 1b — alarms raised ABOVE any cluster or host.
     #
@@ -335,7 +340,7 @@ def get_cluster_health_summary(
                 continue
             rec = clusters.get(_VCENTER_SCOPE)
             if rec is None:
-                rec = _empty_cluster(_VCENTER_SCOPE, ha=False, drs=False)
+                rec = _empty_cluster(_VCENTER_SCOPE, ha=None, drs=None)
                 clusters[_VCENTER_SCOPE] = rec
             scope_name = sanitize(getattr(entity, "name", None) or "vCenter")
             _scan_alarms([state], rec, "vcenter", scope_name, _VCENTER_SCOPE, raw_alarms)

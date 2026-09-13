@@ -7,6 +7,12 @@ setting, so the rule now applies only to real clusters; a multi-host cluster wit
 warns. AIops's delegated summary gets the same fix. Verified live on vCenter 8.0.3: the focus list
 went from 7 issues to 6, and the only one dropped was the HA warning.
 
+**HA and DRS read `n/a`, not OFF, on the rows that have no cluster.** The `(standalone hosts)` and
+`(vCenter-level)` rows showed HA in red as OFF, which says a setting was turned off that does not
+exist for them. Their `ha_enabled` and `drs_enabled` are now `null` in the tool's output and show as
+`n/a` in the terminal table and the HTML snapshot; real clusters still report `true`/`false`. A
+consumer that read those two fields as booleans on every row now gets `null` on these two rows.
+
 ## v1.11.3 — host_log_scan reads host logs, for the first time
 
 **`host_log_scan` never read a line, from v0.1.0 until now.** It called `BrowseDiagnosticLog`

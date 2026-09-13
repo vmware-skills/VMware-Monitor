@@ -610,6 +610,13 @@ def cluster_summary_cmd(
     render_summary_console(data, top)
 
 
+def _setting_cell(value: bool | None, off: str) -> str:
+    """ON / the given off cell / n/a when the row has no cluster (None)."""
+    if value is None:
+        return "[dim]n/a[/]"
+    return "[green]ON[/]" if value else off
+
+
 def render_summary_console(data: dict, top: int) -> None:
     """Render a cluster-health summary dict to the terminal (header + top-N + table).
 
@@ -652,8 +659,8 @@ def render_summary_console(data: dict, top: int) -> None:
         row += [
             f"[{_pct_style(c['cpu_used_pct'])}]{c['cpu_used_pct']}[/]",
             f"[{_pct_style(c['mem_used_pct'])}]{c['mem_used_pct']}[/]",
-            "[green]ON[/]" if c["ha_enabled"] else "[red]OFF[/]",
-            "[green]ON[/]" if c["drs_enabled"] else "[dim]off[/]",
+            _setting_cell(c["ha_enabled"], "[red]OFF[/]"),
+            _setting_cell(c["drs_enabled"], "[dim]off[/]"),
             f"{c['alarms']['critical']}/{c['alarms']['warning']}",
             "; ".join(c["attention"]) or "[dim]—[/]",
         ]

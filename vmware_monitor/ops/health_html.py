@@ -95,11 +95,13 @@ def _cluster_card(c: dict, has_vms: bool) -> str:
     parts.append(_metric("CPU", cpu, _meter_class(cpu), f"{cpu:g}%"))
     parts.append(_metric("Memory", mem, _meter_class(mem), f"{mem:g}%"))
 
-    ha = "on" if c.get("ha_enabled") else "off"
-    drs = "on" if c.get("drs_enabled") else "off"
+    # None = the row has no cluster (standalone hosts, vCenter-level alarms),
+    # so the setting does not apply; "off" would claim it was turned off.
+    ha = "n/a" if c.get("ha_enabled") is None else ("on" if c["ha_enabled"] else "off")
+    drs = "n/a" if c.get("drs_enabled") is None else ("on" if c["drs_enabled"] else "off")
     al = c.get("alarms", {})
     parts.append(
-        f'<div class="kv"><span class="tag {ha}">HA <b>{ha}</b></span>'
+        f'<div class="kv"><span class="tag {"dim" if ha == "n/a" else ha}">HA <b>{ha}</b></span>'
         f'<span class="tag {"on" if drs == "on" else "dim"}">DRS <b>{drs}</b></span>'
         f'<span class="tag">alarms <b>{al.get("critical", 0)}</b>c / <b>{al.get("warning", 0)}</b>w</span></div>'
     )
