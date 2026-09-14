@@ -170,8 +170,8 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `datastore_investigation_bundle` | Same correlated drill-down around a datastore. Params: `datastore_name`, `hours` |
 | `cross_vcenter_attention` | "What needs attention now?" across **every** configured vCenter — one globally-ranked `top_issues` list (each tagged with its `vcenter`) + per-target rollup; unreachable targets degrade gracefully. Params: `cluster_filter`, `top_n` |
 | `list_all_networks` | Networks with attached VM count and accessibility |
-| `get_alarms` | All active/triggered alarms — `suggested_actions`, who acknowledged and when, and `condition_now` (`cleared` = stale: vCenter still shows it but the state condition is false) |
-| `get_events` | Recent events filtered by severity and time — includes `suggested_actions` hints |
+| `get_alarms` | Active alarms: `suggested_actions`, acknowledger, `condition_now` (`cleared` = stale) |
+| `get_events` | Events by severity and time window (`start`/`end`) |
 | `get_host_sensors` | Hardware sensor status (temperature/voltage/fan) per host with green/yellow/red health |
 | `get_host_services` | Host service status (running state and startup policy), optionally filtered by host |
 | `vm_info` | Detailed VM info (CPU, memory, disks, NICs, snapshots) |
@@ -181,13 +181,13 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `snapshot_aging` | Inventory-wide snapshot sweep with age + sprawl; flags snapshots older than N days |
 | `vm_backup_snapshot_history` | Backup windows for one VM from snapshot task history; a lower bound, not job duration |
 | `certificate_status` | Per-host ESXi management certificate expiry (days until expiry, expiring flag) |
-| `license_status` | vCenter/ESXi license inventory with used/total and expiration, plus `assignments`: which license each asset (vCenter, hosts) is assigned and whether it has expired |
+| `license_status` | Licenses and per-asset `assignments` |
 | `ntp_status` | Per-host NTP config health (servers + ntpd state); live offset not in SOAP API |
 | `datastore_capacity` | Datastore over-commit (provisioned vs capacity); thin-provisioning risk |
 | `resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
 | `active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
-| `active_sessions` | Currently authenticated vCenter/ESXi sessions (who is logged in, from which client) — vCenter's own solution-user sessions folded into `service_sessions` unless `include_service` |
-| `host_log_scan` | Scan recent ESXi host syslog (hostd/vmkernel/vpxa) for trouble patterns — grouped by pattern (count, hosts, log time span), severity from the line's own ESXi level; `group=false` for raw lines (CLI: `scan logs`) |
+| `active_sessions` | Who is logged in, and from which client |
+| `host_log_scan` | ESXi host log trouble lines, grouped by pattern (CLI: `scan logs`) |
 | `host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
 | `cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
 | `cluster_last_apply_result` | **vSphere 9.1** — result of the last vLCM remediation (apply) on one cluster (REST). Param: `cluster` (MoID). Reports outcome only; never runs a remediation |
