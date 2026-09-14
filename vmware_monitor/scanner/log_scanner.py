@@ -22,7 +22,12 @@ from vmware_policy import paginated, sanitize
 
 from vmware_monitor.config import ScannerConfig
 from vmware_monitor.ops._collect import _collect
-from vmware_monitor.ops.health import CRITICAL_EVENTS, WARNING_EVENTS, query_events
+from vmware_monitor.ops.health import (
+    CRITICAL_EVENTS,
+    WARNING_EVENTS,
+    query_events,
+    short_event_type,
+)
 from vmware_monitor.ops.investigate_host import HostNotFoundError
 
 if TYPE_CHECKING:
@@ -103,9 +108,9 @@ def scan_logs(
     for event in events:
         event_type = type(event).__name__
 
-        if event_type in CRITICAL_EVENTS:
+        if short_event_type(event_type) in CRITICAL_EVENTS:
             severity = "critical"
-        elif event_type in WARNING_EVENTS:
+        elif short_event_type(event_type) in WARNING_EVENTS:
             severity = "warning"
         else:
             continue  # Skip info-level for scanner

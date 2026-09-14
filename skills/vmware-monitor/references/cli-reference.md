@@ -87,13 +87,15 @@ vmware-monitor inventory networks [--target <name>]
 
 ```bash
 vmware-monitor health alarms [--target <name>]
-vmware-monitor health events [--hours 24] [--severity warning] [--target <name>]
+vmware-monitor health events [--hours 24] [--severity warning] [--start <iso>] [--end <iso>] [--include-routine] [--target <name>]
 vmware-monitor health sensors [--target <name>]
 vmware-monitor health services [--host <esxi-name>] [--target <name>]
 ```
 
 - `--hours`: Time range for event query (default: 24)
 - `--severity`: Minimum severity filter — `info`, `warning`, `error`, `critical` (default: `warning`)
+- `--start` / `--end`: Query a specific window instead of the last `--hours` — ISO 8601, a time with no zone is UTC (e.g. `--start 2026-09-03T12:00Z --end 2026-09-03T16:00Z`). `--start` alone runs to now.
+- `--include-routine`: List routine login/logout events too. By default they are folded and counted, because one local agent's logins can outnumber everything else
 - `--host` (services only): Filter service status to a single host by exact name (default: all hosts)
 
 ## VM Info (Read-Only)

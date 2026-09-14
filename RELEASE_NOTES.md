@@ -1,5 +1,25 @@
 ## Unreleased
 
+**Event ranking, suggestions and the daemon's event scan work on a real vCenter.** The sets that
+rank events (`CRITICAL_EVENTS`, `WARNING_EVENTS`, `INFO_EVENTS`), the routine set and the suggestion
+map are written as bare class names (`HostConnectionLostEvent`); a real pyVmomi event's class is named
+`vim.event.HostConnectionLostEvent`, so on a live vCenter none of them ever matched. Every
+investigation-timeline row was `INFO` — a host that stopped responding included —; `get_events` never
+applied the skill's own judgement (a `HostShutdownEvent` is critical, not vCenter's "info") or attached a
+`suggested_action`; and the daemon's event scan, which keeps only critical and warning events, reported a
+quiet estate. Found on the lab vCenter 8.0.3 while adding routine-event folding, which did not fold
+either. Every earlier test used stand-ins whose class name was the bare name; the new ones use real
+pyVmomi event objects. Type names in the output are unchanged.
+
+**Events for a chosen window, and routine logins folded.** `get_events` / `health events` take
+`start` / `end` (ISO 8601; `--start` / `--end`), so "what happened on 2026-09-03?" can be asked
+instead of only "the last N hours"; `window` echoes what was queried and a bad or reversed window is
+refused with the expected format. Routine `UserLoginSessionEvent` / `UserLogoutSessionEvent` — on
+the lab, one local agent every five minutes, nearly all of 1174 events in 48 h — are folded by default
+and counted in `routine_folded` with a `routine_note`; `include_routine` (`--include-routine`) lists
+them. Failed logins are never folded. The investigation bundles fold them too and say how many: the
+50-row timeline of `investigate vm test-llm` held 50 host logins and no event of the VM.
+
 **Alarms say whether their condition still holds.** vCenter keeps an alarm triggered until it is
 reset. "Host connection and power state" stayed red for eleven days on a lab host that was
 connected and running VMs, and nothing in `get_alarms` / `health alarms` could tell it from a live

@@ -42,11 +42,14 @@ from vmware_monitor.ops._collect import _collect_objects
 from vmware_monitor.ops.health import (
     CRITICAL_EVENTS,
     MAX_EVENTS_READ,
+    ROUTINE_EVENT_TYPES,
     SEVERITY_ORDER,
     WARNING_EVENTS,
     EventRead,
     read_events,
+    short_event_type,
 )
+from vmware_monitor.ops.health import _event_key as _event_type
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
@@ -208,7 +211,7 @@ def collect_alarms(si: ServiceInstance, entities_triggered: list[tuple]) -> list
 # ── Event timeline ──────────────────────────────────────────────────────────
 def _classify(event: object) -> str:
     """Map an event object to critical/warning/info via ``health``'s maps."""
-    et = type(event).__name__
+    et = short_event_type(type(event).__name__)
     if et in CRITICAL_EVENTS:
         return "critical"
     if et in WARNING_EVENTS:
@@ -296,6 +299,7 @@ def entity_timeline(
     rows: list[dict] = []
     refused: list[str] = []
     cut: list[str] = []
+    routine = 0
     for scope, display_name, ref in entities:
         if ref is None:
             continue
@@ -313,6 +317,11 @@ def entity_timeline(
             if key in seen:
                 continue
             seen.add(key)
+            if short_event_type(_event_type(event)) in ROUTINE_EVENT_TYPES:
+                # Counted, not listed: a local agent's login/logout every five
+                # minutes filled all 50 rows on the lab and hid the VM's own events.
+                routine += 1
+                continue
             rows.append(
                 {
                     "time": str(getattr(event, "createdTime", "")),
@@ -360,6 +369,11 @@ def entity_timeline(
         notes.append(
             f"More than {MAX_EVENTS_READ} events matched for {', '.join(sorted(set(cut)))}; "
             f"only the newest were read, so older events in the window are not included."
+        )
+    if routine:
+        notes.append(
+            f"Folded {routine} routine login/logout events; list them with "
+            f"get_events(include_routine=true) for this window."
         )
     note = " ".join(notes) or None
     return rows[:MAX_TIMELINE_EVENTS], reason, note

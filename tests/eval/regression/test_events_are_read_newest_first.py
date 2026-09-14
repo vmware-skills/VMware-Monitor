@@ -127,7 +127,9 @@ def test_the_timeline_says_a_scope_was_cut_and_how_many_it_shows(monkeypatch) ->
 def test_a_complete_short_timeline_carries_no_note(monkeypatch) -> None:
     monkeypatch.setattr(
         _correlate, "_entity_events",
-        lambda mgr, ref, begin, now: health.EventRead(events=tuple(_events(3)), truncated=False),
+        lambda mgr, ref, begin, now: health.EventRead(
+            events=tuple(_events(3, "VmPoweredOnEvent")), truncated=False
+        ),
     )
     _tl, _unavailable, note = _correlate.entity_timeline(
         _si(object()), [("vm", "web-01", object())], hours=24

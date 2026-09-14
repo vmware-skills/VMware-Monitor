@@ -53,6 +53,49 @@ INFO_EVENTS = {
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "unknown": 1, "info": 2}
 
+#: Session events routine automation produces in volume. On a lab vCenter 8.0.3
+#: (2026-09-14) nearly all of 1174 events in 48 h were these, one login/logout
+#: pair every five minutes from a local agent, and they filled the bundles'
+#: timelines. Folded by default and always counted; failed logins
+#: (BadUsernameSessionEvent) are not routine and are never folded.
+ROUTINE_EVENT_TYPES = frozenset({"UserLoginSessionEvent", "UserLogoutSessionEvent"})
+
+_VIM_EVENT_PREFIX = "vim.event."
+
+
+def short_event_type(name: str) -> str:
+    """An event type as the override sets spell it.
+
+    A real pyVmomi event's class is named ``vim.event.HostConnectionLostEvent``;
+    CRITICAL_EVENTS, WARNING_EVENTS, INFO_EVENTS, ROUTINE_EVENT_TYPES and the
+    suggestion map say ``HostConnectionLostEvent``. Comparing the two directly
+    matched nothing on a live vCenter (found 2026-09-14): every timeline row was
+    "info" and the daemon's event scan never found a critical event. Extended ids
+    (``esx.problem.*``, ``com.vmware.*``) are returned unchanged.
+    """
+    text = str(name)
+    return text[len(_VIM_EVENT_PREFIX):] if text.startswith(_VIM_EVENT_PREFIX) else text
+
+
+def parse_event_time(value: str, name: str) -> datetime:
+    """An ISO 8601 time as an aware UTC datetime; a time with no zone is UTC.
+
+    Raises a ``ValueError`` that says what was expected, so a caller passing
+    "yesterday" learns the format instead of getting a parser trace.
+    """
+    text = str(value).strip()
+    try:
+        # Python 3.11+ reads a trailing "Z" itself.
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        raise ValueError(
+            f"{name} must be an ISO 8601 time such as 2026-09-03T12:00:00Z "
+            f"(got {value!r})."
+        ) from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
 #: vCenter's own event categories, as published by
 #: ``EventManager.description.eventInfo``, mapped onto this skill's three ranks.
 #: "user" is an operator action (a login, a reconfigure) — routine unless one of
@@ -356,11 +399,12 @@ def _event_severity_with_source(
     cannot tell "vCenter called this info" from "nothing would rank it" cannot
     tell a quiet estate from a blind one.
     """
-    if key in CRITICAL_EVENTS:
+    name = short_event_type(key)
+    if name in CRITICAL_EVENTS:
         return "critical", "override"
-    if key in WARNING_EVENTS:
+    if name in WARNING_EVENTS:
         return "warning", "override"
-    if key in INFO_EVENTS:
+    if name in INFO_EVENTS:
         return "info", "override"
     # EventEx carries its own severity inline; prefer it over the catalogue
     # lookup because a vendor-defined type may not be in the catalogue at all.
@@ -592,6 +636,9 @@ def get_recent_events(
     si: ServiceInstance,
     hours: int = 24,
     severity: str = "warning",
+    start: str | None = None,
+    end: str | None = None,
+    include_routine: bool = False,
 ) -> dict:
     """Get recent events filtered by severity.
 
@@ -607,12 +654,24 @@ def get_recent_events(
     ``MAX_EVENTS_READ`` events matched the window, and ``read_note`` then says how
     far back the read got — the oldest events in the window were not examined.
     ``total`` stays ``None``: the read stops rather than counting the window.
+
+    ``start`` / ``end`` (ISO 8601; no zone = UTC) choose the window instead of
+    "the last ``hours``": ``start`` alone runs to now, ``end`` alone reaches back
+    ``hours``. ``window`` echoes what was queried. Routine login/logout events
+    (``ROUTINE_EVENT_TYPES``) that pass the severity filter are folded unless
+    ``include_routine`` — counted per type in ``routine_folded``, with
+    ``routine_note`` when any were.
     """
+    explicit = start is not None or end is not None
+    now = parse_event_time(end, "end") if end is not None else datetime.now(tz=timezone.utc)
+    begin = parse_event_time(start, "start") if start is not None else now - timedelta(hours=hours)
+    if begin >= now:
+        raise ValueError(
+            f"start ({begin.isoformat()}) must be before end ({now.isoformat()}). "
+            f"Pass an earlier start or a later end."
+        )
     content = si.RetrieveContent()
     event_mgr = content.eventManager
-
-    now = datetime.now(tz=timezone.utc)
-    begin = now - timedelta(hours=hours)
 
     filter_spec = vim.event.EventFilterSpec(
         time=vim.event.EventFilterSpec.ByTime(beginTime=begin, endTime=now)
@@ -625,6 +684,7 @@ def get_recent_events(
 
     results = []
     unclassified = 0
+    folded: dict[str, int] = {}
     for event in events:
         event_type = _event_key(event)
         sev, sev_source = _event_severity_with_source(event, event_type, catalogue)
@@ -633,9 +693,13 @@ def get_recent_events(
 
         if SEVERITY_ORDER.get(sev, 2) > min_level:
             continue
+        short = short_event_type(event_type)
+        if not include_routine and short in ROUTINE_EVENT_TYPES:
+            folded[short] = folded.get(short, 0) + 1
+            continue
 
         entity_name = _get_event_entity(event)
-        suggestion_template = _EVENT_SUGGESTIONS.get(event_type)
+        suggestion_template = _EVENT_SUGGESTIONS.get(short)
         actions: list[str] = []
         if suggestion_template:
             actions.append(suggestion_template.format(entity=entity_name or "?"))
@@ -658,11 +722,24 @@ def get_recent_events(
 
     results.sort(key=lambda x: x["time"], reverse=True)
     truncated = bool(read and read.truncated)
-    extra: dict = {"unclassified": unclassified, "read_truncated": truncated}
+    extra: dict = {
+        "unclassified": unclassified,
+        "read_truncated": truncated,
+        "window": {"start": begin.isoformat(), "end": now.isoformat()},
+        "routine_folded": folded,
+    }
+    if folded:
+        count = sum(folded.values())
+        breakdown = ", ".join(f"{n} {t}" for t, n in sorted(folded.items()))
+        extra["routine_note"] = (
+            f"{count} routine login/logout event(s) were folded ({breakdown}). Pass "
+            f"include_routine=true (CLI --include-routine) to list them."
+        )
     if truncated:
         oldest = getattr(events[-1], "createdTime", None) if events else None
+        span = f"{begin.isoformat()} – {now.isoformat()}" if explicit else f"the last {hours}h"
         extra["read_note"] = (
-            f"More than {MAX_EVENTS_READ} events matched the last {hours}h. The newest "
+            f"More than {MAX_EVENTS_READ} events matched {span}. The newest "
             f"{MAX_EVENTS_READ} were read (back to {oldest}); older events in the window "
             f"were not examined. Narrow hours to see the rest."
         )

@@ -655,6 +655,9 @@ def get_events(
     hours: int = 24,
     severity: Literal["critical", "warning", "info"] = "warning",
     target: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    include_routine: bool = False,
 ) -> dict:
     """[READ] Get recent vCenter/ESXi events filtered by severity.
 
@@ -676,12 +679,21 @@ def get_events(
     syslog lines are not events — use host_log_scan for those.
 
     Args:
-        hours: How many hours back to query (default 24).
+        hours: How many hours back to query (default 24). Ignored when both
+            start and end are given; with end alone, how far back from end.
         severity: Minimum severity: "critical", "warning", or "info".
         target: vCenter/ESXi target from config (default if omitted).
+        start: Window start, ISO 8601 (e.g. "2026-09-03T12:00:00Z"; no zone = UTC).
+            Use it to ask about a specific day rather than the last N hours.
+        end: Window end, ISO 8601; defaults to now.
+        include_routine: List routine login/logout session events too. By default
+            they are folded and counted in ``routine_folded`` — one local agent's
+            logins can outnumber everything else in a window.
     """
     si = _get_connection(target)
-    return get_recent_events(si, hours=hours, severity=severity)
+    return get_recent_events(
+        si, hours=hours, severity=severity, start=start, end=end, include_routine=include_routine
+    )
 
 
 @mcp.tool(

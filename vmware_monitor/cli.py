@@ -319,18 +319,37 @@ def health_events(
     severity: Annotated[str, typer.Option(help="Min severity: info/warning/error")] = "warning",
     target: TargetOption = None,
     config: ConfigOption = None,
+    start: Annotated[
+        str | None, typer.Option("--start", help="Window start, ISO 8601 (no zone = UTC)")
+    ] = None,
+    end: Annotated[
+        str | None, typer.Option("--end", help="Window end, ISO 8601; default now")
+    ] = None,
+    include_routine: Annotated[
+        bool, typer.Option("--include-routine", help="List routine login/logout events too")
+    ] = False,
 ) -> None:
     """Show recent events."""
-    from vmware_monitor.ops.health import get_recent_events
+    from vmware_monitor.ops import health as _health
 
     si, _, tgt = _get_connection(target, config)
-    result = get_recent_events(si, hours=hours, severity=severity)
+    result = _health.get_recent_events(
+        si, hours=hours, severity=severity, start=start, end=end, include_routine=include_routine
+    )
     events = result["items"]
     _audit.log_query(target=tgt, resource="events", query_type="get_recent_events")
     note = result.get("classification_note")
     read_note = result.get("read_note")
     if read_note:
         console.print(f"[yellow]{read_note}[/]")
+    if result.get("routine_note"):
+        console.print(f"[dim]{result['routine_note']}[/]")
+    window = result.get("window") or {}
+    span = (
+        f"{window.get('start', '')} → {window.get('end', '')}"
+        if start is not None or end is not None
+        else f"last {hours}h"
+    )
     if not events:
         # Green only when the quiet is established. The window may also be quiet
         # because nothing in it could be ranked, and painting that green is how
@@ -338,9 +357,9 @@ def health_events(
         if note:
             console.print(f"[yellow]{note}[/]")
         else:
-            console.print(f"[green]No events above '{severity}' in the last {hours}h.[/]")
+            console.print(f"[green]No events above '{severity}' in {span}.[/]")
         return
-    table = Table(title=f"Events (last {hours}h, >= {severity})")
+    table = Table(title=f"Events ({span}, >= {severity})")
     table.add_column("Severity")
     table.add_column("Time")
     table.add_column("Type", style="cyan")
