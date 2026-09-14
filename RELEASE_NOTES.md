@@ -1,5 +1,15 @@
 ## Unreleased
 
+**Sessions tell people from vCenter's own services, and name the client.** On the lab
+`activity sessions` listed 33 sessions; 24 were vCenter's SSO solution users
+(`vpxd-extension-<machine id>`, `vpxd-svcs-user-…`, `sps-…`, `vsphere-webclient-…`, `vmware-vsm-…`),
+burying the nine that answer "who is logged in". Those are now folded by default into
+`service_sessions` (count per account) with a `service_note`; `include_service`
+(`--include-service`) lists them. Recognition uses the solution-user naming convention — a service
+name followed by the machine UUID — because `extensionSession` was False on every session. Rows gain
+`user_agent`, `call_count` and `kind`, so six `Administrator` sessions from one IP read as Aria's
+adapter (`VMware vim-java`) rather than six people.
+
 **`host_log_scan` groups its findings, ranks them by the log's own level, and has a CLI.** One call
 on the lab returned 353 rows (~150 KB), all `warning` — informational `In(166)` lines that merely
 contain "timeout" included — and 195 of them one statistics-provider line with a different process

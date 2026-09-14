@@ -475,25 +475,39 @@ def activity_sessions(
     target: TargetOption = None,
     config: ConfigOption = None,
     limit: LimitOption = None,
+    include_service: Annotated[
+        bool, typer.Option("--include-service", help="List vCenter's own service sessions too")
+    ] = False,
 ) -> None:
     """Currently authenticated vCenter/ESXi sessions."""
     from vmware_monitor.ops.activity import get_active_sessions
 
     si, _, tgt = get_connection(target, config)
-    rows = get_active_sessions(si, limit=limit)["items"]
+    result = get_active_sessions(si, limit=limit, include_service=include_service)
+    rows = result["items"]
     audit.log_query(target=tgt, resource="sessions", query_type="get_active_sessions")
     if rows and rows[0].get("user_name") == "N/A" and "note" in rows[0]:
         console.print(f"[yellow]{rows[0]['note']}[/]")
         return
     table = Table(title="Active Sessions")
     table.add_column("User", style="cyan")
-    table.add_column("Full Name")
+    table.add_column("Client")
+    table.add_column("Calls", justify="right")
     table.add_column("Last Active")
     table.add_column("IP")
     for r in rows:
         marker = " [green](this)[/]" if r.get("current") else ""
-        table.add_row(r["user_name"] + marker, r["full_name"], r["last_active"], r["ip_address"])
+        calls = r.get("call_count")
+        table.add_row(
+            r["user_name"] + marker,
+            r.get("user_agent") or "",
+            "" if calls is None else str(calls),
+            r["last_active"],
+            r["ip_address"],
+        )
     console.print(table)
+    if result.get("service_note"):
+        console.print(f"[dim]{result['service_note']}[/]")
 
 
 # ─── summary (opinionated cross-cluster triage) ──────────────────────────────

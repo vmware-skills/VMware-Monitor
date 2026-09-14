@@ -10,6 +10,7 @@ session (those are writes owned by vmware-aiops / vSphere admin).
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from pyVmomi import vim
@@ -83,16 +84,40 @@ def get_active_tasks(
     return paginated(results, limit=limit, total=total)
 
 
+#: vCenter's SSO solution users: a service name, a dash, then the machine UUID
+#: (``vpxd-extension-c995e30c-d0ee-4851-8cc9-c403ac02ba3e``). On a lab vCenter
+#: 8.0.3 they were 24 of 33 sessions (2026-09-14); ``extensionSession`` was False
+#: on every one, so the naming convention is the only discriminator.
+_SOLUTION_USER = re.compile(
+    r"^(?P<service>[A-Za-z][\w.-]*?)-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+    r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _service_account(user_name: str) -> str | None:
+    """``DOMAIN\\service-<machine id>`` for a solution user, else None."""
+    domain, _, name = str(user_name).rpartition("\\")
+    match = _SOLUTION_USER.match(name)
+    if not match:
+        return None
+    prefix = domain + "\\" if domain else ""
+    return prefix + match.group("service") + "-<machine id>"
+
+
 def get_active_sessions(
     si: ServiceInstance,
     limit: int | None = None,
+    include_service: bool = False,
 ) -> dict:
     """Currently authenticated vCenter/ESXi sessions.
 
     Returns the family list envelope with a real ``total`` — the whole session
     list is materialised before ``limit`` is applied. Each row has user_name,
     full_name, login_time, last_active, ip_address, and a
-    ``current`` flag for the session this skill is using. Requires Sessions
+    ``current`` flag for the session this skill is using, ``user_agent``,
+    ``call_count`` and ``kind`` (``user`` / ``service``). vCenter's own solution
+    users are folded unless ``include_service``: ``service_sessions`` counts them
+    per account and ``service_note`` says how many were left out. Requires Sessions
     privileges; low-privilege service accounts may be denied — in that case a
     single explanatory row is returned instead of a traceback (consistent with
     the read-only degradation pattern used for standalone-ESXi events).
@@ -130,7 +155,15 @@ def get_active_sessions(
         )
 
     results: list[dict] = []
+    folded: dict[str, int] = {}
     for s in sessions:
+        account = _service_account(s.userName or "")
+        if account is not None and not include_service:
+            label = sanitize(account)
+            folded[label] = folded.get(label, 0) + 1
+            continue
+        agent = getattr(s, "userAgent", None)
+        calls = getattr(s, "callCount", None)
         results.append(
             {
                 "user_name": sanitize(s.userName),
@@ -139,10 +172,20 @@ def get_active_sessions(
                 "last_active": str(s.lastActiveTime) if s.lastActiveTime else "N/A",
                 "ip_address": sanitize(s.ipAddress) if s.ipAddress else "N/A",
                 "current": s.key == current_key,
+                "user_agent": sanitize(agent) if agent else None,
+                "call_count": int(calls) if calls is not None else None,
+                "kind": "service" if account is not None else "user",
             }
         )
     results.sort(key=lambda x: x["last_active"], reverse=True)
     total = len(results)
     if limit is not None:
         results = results[:limit]
-    return paginated(results, limit=limit, total=total)
+    extra: dict = {"service_sessions": dict(sorted(folded.items()))}
+    if folded:
+        extra["service_note"] = (
+            f"{sum(folded.values())} service session(s) of vCenter's own solution users "
+            f"({len(folded)} account(s)) were folded. Pass include_service=true "
+            f"(CLI --include-service) to list them."
+        )
+    return paginated(results, limit=limit, total=total, **extra)

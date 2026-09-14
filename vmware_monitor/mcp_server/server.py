@@ -1304,13 +1304,17 @@ def active_tasks(
 def active_sessions(
     target: Optional[str] = None,
     limit: Optional[int] = None,
+    include_service: bool = False,
 ) -> dict:
     """[READ] Currently authenticated vCenter/ESXi sessions (who is logged in).
 
     Returns the list envelope with a real ``total``; each row has user_name,
-    full_name, login_time, last_active, ip_address and a ``current`` flag for this
-    skill's own session. Requires the Sessions privilege; low-privilege accounts get
-    a single explanatory row instead of a traceback.
+    full_name, login_time, last_active, ip_address, user_agent (which client —
+    e.g. Aria's adapter shows ``VMware vim-java``), call_count, kind (user/service)
+    and a ``current`` flag for this skill's own session. vCenter's own solution
+    users (``vpxd-extension-<machine id>`` and similar) are folded by default and
+    counted in ``service_sessions``. Requires the Sessions privilege; low-privilege
+    accounts get a single explanatory row instead of a traceback.
 
     Use this to attribute a change to a person — pair it with active_tasks, which
     names the user who started each task. Read-only — terminating a session is
@@ -1319,9 +1323,11 @@ def active_sessions(
     Args:
         target: vCenter/ESXi target from config (default if omitted).
         limit: Max session rows to return (None = all).
+        include_service: List vCenter's own solution-user sessions too. On a lab
+            vCenter they were 24 of 33 sessions.
     """
     si = _get_connection(target)
-    return get_active_sessions(si, limit=limit)
+    return get_active_sessions(si, limit=limit, include_service=include_service)
 
 
 # ---------------------------------------------------------------------------

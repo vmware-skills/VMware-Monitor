@@ -186,7 +186,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `datastore_capacity` | Datastore over-commit (provisioned vs capacity); thin-provisioning risk |
 | `resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
 | `active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
-| `active_sessions` | Currently authenticated vCenter/ESXi sessions (who is logged in) |
+| `active_sessions` | Currently authenticated vCenter/ESXi sessions (who is logged in, from which client) — vCenter's own solution-user sessions folded into `service_sessions` unless `include_service` |
 | `host_log_scan` | Scan recent ESXi host syslog (hostd/vmkernel/vpxa) for trouble patterns — grouped by pattern (count, hosts, log time span), severity from the line's own ESXi level; `group=false` for raw lines (CLI: `scan logs`) |
 | `host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
 | `cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
