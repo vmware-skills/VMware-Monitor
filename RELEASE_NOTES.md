@@ -1,5 +1,16 @@
 ## Unreleased
 
+**Alarms say whether their condition still holds.** vCenter keeps an alarm triggered until it is
+reset. "Host connection and power state" stayed red for eleven days on a lab host that was
+connected and running VMs, and nothing in `get_alarms` / `health alarms` could tell it from a live
+alarm. Each row now carries `condition_now`: the state parts of the alarm definition are
+re-evaluated against the object's current properties (`holds`), found false (`cleared`, with a
+`condition_note` naming the property and its value, and the reset as the first suggested action),
+or left `unknown` — event- and metric-based alarms are never guessed at, and an unreadable
+property is unknown, not cleared. `stale_alarms` counts the cleared rows. Definitions and
+properties are read in one batched call per type. Rows also carry `acknowledged_by` and
+`acknowledged_at`; the CLI table shows both and the verdict, and prints the stale note.
+
 **Event reads return the newest events — they returned the oldest.** `get_events` /
 `health events` and the three investigation bundles read events with `QueryEvents`, which on
 vCenter returns at most 1000 events and they are the **oldest** 1000 in the window (measured on

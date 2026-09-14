@@ -170,7 +170,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `datastore_investigation_bundle` | Same correlated drill-down around a datastore. Params: `datastore_name`, `hours` |
 | `cross_vcenter_attention` | "What needs attention now?" across **every** configured vCenter — one globally-ranked `top_issues` list (each tagged with its `vcenter`) + per-target rollup; unreachable targets degrade gracefully. Params: `cluster_filter`, `top_n` |
 | `list_all_networks` | Networks with attached VM count and accessibility |
-| `get_alarms` | All active/triggered alarms — includes `suggested_actions` remediation hints |
+| `get_alarms` | All active/triggered alarms — `suggested_actions`, who acknowledged and when, and `condition_now` (`cleared` = stale: vCenter still shows it but the state condition is false) |
 | `get_events` | Recent events filtered by severity and time — includes `suggested_actions` hints |
 | `get_host_sensors` | Hardware sensor status (temperature/voltage/fan) per host with green/yellow/red health |
 | `get_host_services` | Host service status (running state and startup policy), optionally filtered by host |

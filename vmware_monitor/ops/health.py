@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from pyVmomi import vim, vmodl
 from vmware_policy import paginated, sanitize
 
+from vmware_monitor.ops import alarm_condition
 from vmware_monitor.ops._collect import _collect, _collect_objects
 
 if TYPE_CHECKING:
@@ -387,7 +388,74 @@ def _get_event_entity(event: object) -> str | None:
     return None
 
 
-def _append_alarm(alarm_state: object, name_map: dict, results: list[dict]) -> None:
+def _ref_key(obj: object) -> object:
+    """A dict key for a managed-object reference; ``id()`` for unhashable stand-ins."""
+    try:
+        hash(obj)
+        return obj
+    except TypeError:
+        return ("id", id(obj))
+
+
+def _alarm_definitions(si: ServiceInstance, alarm_refs: list) -> dict:
+    """``{alarm ref: (name, expression)}`` for every real Alarm, in one batched read.
+
+    References that are not ``vim.alarm.Alarm`` managed objects are left out; the
+    row builder reads those lazily. A failed batch is logged and yields ``{}`` —
+    names then come from the lazy read and every verdict says the definition
+    could not be read, rather than the whole alarm list failing.
+    """
+    real = [r for r in alarm_refs if isinstance(r, vim.alarm.Alarm)]
+    if not real:
+        return {}
+    try:
+        rows = _collect_objects(si, real, vim.alarm.Alarm, ["info.name", "info.expression"])
+    except Exception as exc:  # noqa: BLE001 — degrade to lazy names, verdicts unknown
+        _log.warning("Could not batch-read alarm definitions: %s", exc)
+        return {}
+    return {
+        _ref_key(ref): (props.get("info.name"), props.get("info.expression"))
+        for ref, props in rows
+    }
+
+
+def _entity_state_values(si: ServiceInstance, states: list, definitions: dict) -> dict:
+    """``{entity ref: {path: value}}`` for the paths each alarm's state parts compare.
+
+    One batched read per managed-object type. A failed batch is logged and the
+    affected verdicts come out ``unknown``, never ``cleared``.
+    """
+    wanted: dict[type, tuple[dict, set]] = {}
+    for state in states:
+        definition = definitions.get(_ref_key(state.alarm))
+        entity = state.entity
+        if definition is None or not isinstance(entity, vim.ManagedEntity):
+            continue
+        paths = alarm_condition.state_paths(definition[1])
+        if not paths:
+            continue
+        entities, all_paths = wanted.setdefault(type(entity), ({}, set()))
+        entities[_ref_key(entity)] = entity
+        all_paths |= paths
+    values: dict = {}
+    for obj_type, (entities, paths) in wanted.items():
+        try:
+            rows = _collect_objects(si, list(entities.values()), obj_type, sorted(paths))
+        except Exception as exc:  # noqa: BLE001 — verdicts for these become unknown
+            _log.warning("Could not read alarm state properties for %s: %s", obj_type.__name__, exc)
+            continue
+        for ref, props in rows:
+            values[_ref_key(ref)] = props
+    return values
+
+
+def _append_alarm(
+    alarm_state: object,
+    name_map: dict,
+    results: list[dict],
+    definition: tuple | None = None,
+    values: dict | None = None,
+) -> None:
     """Turn one triggered AlarmState into a result row, appending to ``results``."""
     severity = str(alarm_state.overallStatus)
     severity_map = {"red": "critical", "yellow": "warning", "green": "info"}
@@ -405,19 +473,35 @@ def _append_alarm(alarm_state: object, name_map: dict, results: list[dict]) -> N
         except Exception:
             raw_entity_name = None
     entity_name = sanitize(raw_entity_name) if raw_entity_name else "[inaccessible]"
-    alarm_name = sanitize(alarm_state.alarm.info.name)
+    if definition is not None:
+        raw_alarm_name, expression = definition
+    else:
+        info = getattr(alarm_state.alarm, "info", None)
+        raw_alarm_name = getattr(info, "name", None)
+        expression = getattr(info, "expression", None)
+    alarm_name = sanitize(raw_alarm_name or "alarm")
     acknowledged = getattr(alarm_state, "acknowledged", False)
+    acked_by = getattr(alarm_state, "acknowledgedByUser", None)
+    acked_at = getattr(alarm_state, "acknowledgedTime", None)
+    verdict = alarm_condition.evaluate(
+        expression, severity, entity_ref, (values or {}).get(_ref_key(entity_ref), {})
+    )
 
+    reset = (
+        f"vmware-aiops: reset_vcenter_alarm"
+        f"(entity_name='{entity_name}', alarm_name='{alarm_name}')"
+    )
     actions: list[str] = []
+    if verdict.state == alarm_condition.CLEARED:
+        # The condition is gone; the useful next step is the reset, not an ack.
+        actions.append(reset)
     if not acknowledged:
         actions.append(
             f"vmware-aiops: acknowledge_vcenter_alarm"
             f"(entity_name='{entity_name}', alarm_name='{alarm_name}')"
         )
-    actions.append(
-        f"vmware-aiops: reset_vcenter_alarm"
-        f"(entity_name='{entity_name}', alarm_name='{alarm_name}')"
-    )
+    if verdict.state != alarm_condition.CLEARED:
+        actions.append(reset)
 
     results.append({
         "severity": severity_map.get(severity, severity),
@@ -426,6 +510,12 @@ def _append_alarm(alarm_state: object, name_map: dict, results: list[dict]) -> N
         "entity_type": type(entity_ref).__name__,
         "time": str(alarm_state.time),
         "acknowledged": acknowledged,
+        "acknowledged_by": sanitize(acked_by) if acked_by else None,
+        "acknowledged_at": str(acked_at) if acked_at else None,
+        # holds / cleared / unknown — see ops/alarm_condition.py. "cleared" means
+        # vCenter still shows the alarm although its state condition is false now.
+        "condition_now": verdict.state,
+        "condition_note": verdict.note,
         "suggested_actions": actions,
     })
 
@@ -434,7 +524,10 @@ def get_active_alarms(si: ServiceInstance, limit: int | None = None) -> dict:
     """Get all active/triggered alarms across the inventory.
 
     Returns the family list envelope with a real ``total``: every triggered
-    alarm is collected and deduplicated before ``limit`` is applied.
+    alarm is collected and deduplicated before ``limit`` is applied. Each row
+    says who acknowledged it and when, and whether its condition still holds
+    (``condition_now``: holds / cleared / unknown). ``stale_alarms`` counts the
+    rows whose condition no longer holds, with ``stale_note`` when any do.
 
     Args:
         si: vSphere ServiceInstance.
@@ -461,9 +554,15 @@ def get_active_alarms(si: ServiceInstance, limit: int | None = None) -> dict:
             if triggered:
                 triggered_lists.append(triggered)
 
-    for triggered in triggered_lists:
-        for alarm_state in triggered:
-            _append_alarm(alarm_state, name_map, results)
+    states = [state for triggered in triggered_lists for state in triggered]
+    # Two batched reads cover every alarm: the definitions, then the entity
+    # properties their state conditions compare (one call per entity type).
+    definitions = _alarm_definitions(si, [s.alarm for s in states])
+    values = _entity_state_values(si, states, definitions)
+    for alarm_state in states:
+        _append_alarm(
+            alarm_state, name_map, results, definitions.get(_ref_key(alarm_state.alarm)), values
+        )
 
     # Deduplicate by alarm + entity
     seen = set()
@@ -476,9 +575,17 @@ def get_active_alarms(si: ServiceInstance, limit: int | None = None) -> dict:
 
     unique.sort(key=lambda x: SEVERITY_ORDER.get(x["severity"], 9))
     total = len(unique)
+    stale = sum(1 for a in unique if a["condition_now"] == alarm_condition.CLEARED)
+    extra: dict = {"stale_alarms": stale}
+    if stale:
+        extra["stale_note"] = (
+            f"{stale} alarm(s) are still triggered although their condition no longer "
+            f"holds — vCenter did not reset them. Confirm on the object, then reset "
+            f"(vSphere Client, or vmware-aiops reset_vcenter_alarm)."
+        )
     if limit is not None:
         unique = unique[:limit]
-    return paginated(unique, limit=limit, total=total)
+    return paginated(unique, limit=limit, total=total, **extra)
 
 
 def get_recent_events(

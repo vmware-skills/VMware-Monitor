@@ -272,7 +272,8 @@ def health_alarms(target: TargetOption = None, config: ConfigOption = None) -> N
     from vmware_monitor.ops.health import get_active_alarms
 
     si, _, tgt = _get_connection(target, config)
-    alarms = get_active_alarms(si)["items"]
+    result = get_active_alarms(si)
+    alarms = result["items"]
     _audit.log_query(target=tgt, resource="alarms", query_type="get_active_alarms")
     if not alarms:
         console.print("[green]No active alarms.[/]")
@@ -282,15 +283,33 @@ def health_alarms(target: TargetOption = None, config: ConfigOption = None) -> N
     table.add_column("Alarm", style="cyan")
     table.add_column("Entity")
     table.add_column("Time")
+    table.add_column("Acknowledged")
+    table.add_column("Condition now")
+    now_style = {"holds": "red", "cleared": "green", "unknown": "dim"}
     for a in alarms:
         sev_style = {"red": "red", "yellow": "yellow"}.get(a["severity"], "white")
+        if a.get("acknowledged"):
+            when = (a.get("acknowledged_at") or "")[:16]
+            ack = f"{a.get('acknowledged_by') or 'yes'} {when}".strip()
+        else:
+            ack = "no"
+        now = a.get("condition_now", "unknown")
         table.add_row(
             f"[{sev_style}]{a['severity']}[/]",
             a["alarm_name"],
             a["entity_name"],
             a["time"],
+            ack,
+            f"[{now_style.get(now, 'white')}]{now}[/]",
         )
     console.print(table)
+    for a in alarms:
+        if a.get("condition_now") == "cleared" and a.get("condition_note"):
+            console.print(
+                f"[green]{a['alarm_name']} on {a['entity_name']}:[/] {a['condition_note']}"
+            )
+    if result.get("stale_note"):
+        console.print(f"[yellow]{result['stale_note']}[/]")
 
 
 @health_app.command("events")

@@ -153,10 +153,20 @@ Each VM dict in the `vms` array contains:
 
 | Feature | vCenter | ESXi | Details |
 |---------|:-------:|:----:|---------|
-| Active Alarms | Y | Y | Severity, alarm name, entity, timestamp |
+| Active Alarms | Y | Y | Severity, alarm name, entity, timestamp, who acknowledged it and when, and `condition_now` (holds / cleared / unknown) |
 | Event/Log Query | Y | Y | Filter by time range, severity; 50+ event types |
 | Hardware Sensors | Y | Y | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red) — CLI `health sensors`, MCP `get_host_sensors` |
 | Host Services | Y | Y | hostd, vpxa running/stopped status — CLI `health services`, MCP `get_host_services` |
+
+### Stale alarms — `condition_now`
+
+vCenter keeps an alarm triggered until something resets it. `get_alarms` re-evaluates the
+**state** parts of each alarm's definition against the object's current properties:
+`holds` (live), `cleared` (still shown, but the condition is false now — reset it after
+confirming), or `unknown` (event- or metric-based, or a property could not be read; never
+guessed). `stale_alarms` counts the cleared ones and `stale_note` explains. On a lab vCenter
+8.0.3, "Host connection and power state" was red for eleven days on a connected host and now
+reads `cleared` with the note `runtime.connectionState is connected, not notResponding`.
 
 ### Alarm/Event `suggested_actions` example
 

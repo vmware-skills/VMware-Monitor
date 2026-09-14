@@ -619,7 +619,13 @@ def get_alarms(
     """[READ] Get active/triggered alarms across the VMware inventory.
 
     Returns the list envelope with a real ``total``. Each alarm carries
-    suggested_actions naming the companion skill and tool for remediation. Empty
+    suggested_actions naming the companion skill and tool for remediation, who
+    acknowledged it and when (``acknowledged_by`` / ``acknowledged_at``), and
+    ``condition_now``: ``holds`` (live), ``cleared`` (vCenter still shows it but
+    its state condition is false now — a stale alarm; see ``condition_note``), or
+    ``unknown`` (event/metric-based or unreadable — never guessed). The envelope's
+    ``stale_alarms`` counts the cleared ones. Do not report a ``cleared`` alarm as
+    a live problem; do not report an ``unknown`` one as resolved. Empty
     ``items`` with ``truncated`` False means there genuinely are no active alarms —
     never report "no data" otherwise.
 
