@@ -27,9 +27,12 @@ than a bare array:
 | `truncated` | `true` = more rows exist behind this page; `false` = this is complete |
 | `hint` | What to do about truncation; `null` when complete |
 
-Two tools report `total: null` on purpose: `get_events` (vCenter's event
-collector applies its own bounds) and `host_log_scan` (only the last N lines
-per log are read). Everywhere else the total is a real count taken before the
+Two tools report `total: null` on purpose: `get_events` (events are read newest
+first and the read stops at 5000 — `read_truncated: true` and `read_note` say
+when it did and how far back it got) and `host_log_scan` (only the last N lines
+per log are read). The investigation bundles add `timeline_note` when their
+timeline is not every event in the window: how many of how many are shown, and
+which scopes' reads stopped at 5000. Everywhere else the total is a real count taken before the
 limit was applied, which is what lets a full page be recognised as complete
 instead of flagged as possibly-truncated.
 

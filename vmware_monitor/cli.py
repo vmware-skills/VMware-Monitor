@@ -309,6 +309,9 @@ def health_events(
     events = result["items"]
     _audit.log_query(target=tgt, resource="events", query_type="get_recent_events")
     note = result.get("classification_note")
+    read_note = result.get("read_note")
+    if read_note:
+        console.print(f"[yellow]{read_note}[/]")
     if not events:
         # Green only when the quiet is established. The window may also be quiet
         # because nothing in it could be ranked, and painting that green is how

@@ -1,4 +1,11 @@
-"""A standalone ESXi exposes an event manager and then refuses QueryEvents.
+"""An endpoint that exposes an event manager and then refuses its event history.
+
+History: a standalone ESXi 8.0.3 refuses ``QueryEvents`` with
+``vmodl.fault.NotImplemented`` — what this file was written for. Since
+2026-09-14 events are read through an event history collector, which the same
+ESXi *does* serve (609 events in 24 h, measured), so a standalone host now gets
+a timeline. The refusal handling stays for any endpoint that refuses the
+collector too; the fakes below refuse it.
 
 Both investigation bundles died there with a raw ``vmodl.fault.NotImplemented``
 after every other read had already succeeded — on 4 of the 5 targets configured
@@ -23,17 +30,14 @@ import pytest
 from pyVmomi import vmodl
 
 from vmware_monitor.ops import _correlate
-from vmware_monitor.ops.health import query_events, query_events_or_none
+from vmware_monitor.ops.health import EventRead, query_events, query_events_or_none
 
 
-class _RefusingEventManager:
-    """Answers QueryEvents the way a standalone ESXi host does."""
+def _RefusingEventManager(fault: type[Exception]):  # noqa: N802
+    """An event manager that refuses to serve event history at all."""
+    from tests.eval.regression._fake_events import FakeEventManager
 
-    def __init__(self, fault: type[Exception]) -> None:
-        self._fault = fault
-
-    def QueryEvents(self, _spec):  # noqa: N802 — mirrors pyVmomi's own name
-        raise self._fault()
+    return FakeEventManager(fault=fault())
 
 
 @pytest.mark.parametrize("fault", [vmodl.fault.NotImplemented, vmodl.fault.NotSupported])
@@ -58,16 +62,18 @@ def test_the_timeline_says_it_could_not_read_rather_than_showing_nothing(monkeyp
         _correlate, "_entity_events", lambda mgr, ref, begin, now: None
     )
     si = type("SI", (), {"RetrieveContent": lambda self: type("C", (), {"eventManager": object()})()})()
-    rows, reason = _correlate.entity_timeline(si, [("host", "esxi01", object())], hours=24)
+    rows, reason, _note = _correlate.entity_timeline(si, [("host", "esxi01", object())], hours=24)
     assert rows == []
     assert reason and "does not serve event history" in reason
 
 
 def test_a_genuinely_empty_window_is_not_reported_as_unavailable(monkeypatch) -> None:
     """The other half. An honest empty result must stay honestly empty."""
-    monkeypatch.setattr(_correlate, "_entity_events", lambda mgr, ref, begin, now: [])
+    monkeypatch.setattr(
+        _correlate, "_entity_events", lambda mgr, ref, begin, now: EventRead((), False)
+    )
     si = type("SI", (), {"RetrieveContent": lambda self: type("C", (), {"eventManager": object()})()})()
-    rows, reason = _correlate.entity_timeline(si, [("host", "esxi01", object())], hours=24)
+    rows, reason, _note = _correlate.entity_timeline(si, [("host", "esxi01", object())], hours=24)
     assert rows == []
     assert reason is None, "an empty window was reported as a missing event service"
 
@@ -95,15 +101,15 @@ def test_a_partial_refusal_is_not_swallowed_by_the_scopes_that_worked(monkeypatc
     from datetime import datetime, timezone
 
     def _events(mgr, ref, begin, now):
-        return None if ref == "refuses" else [
+        return None if ref == "refuses" else EventRead((
             type("E", (), {"createdTime": datetime(2026, 8, 31, tzinfo=timezone.utc),
                            "fullFormattedMessage": "something happened",
-                           "userName": "", "eventTypeId": "x"})()
-        ]
+                           "userName": "", "eventTypeId": "x"})(),
+        ), False)
 
     monkeypatch.setattr(_correlate, "_entity_events", _events)
     si = type("SI", (), {"RetrieveContent": lambda self: type("C", (), {"eventManager": object()})()})()
-    rows, reason = _correlate.entity_timeline(
+    rows, reason, _note = _correlate.entity_timeline(
         si,
         [("cluster", "cl01", "answers"), ("host", "esxi01", "refuses")],
         hours=24,

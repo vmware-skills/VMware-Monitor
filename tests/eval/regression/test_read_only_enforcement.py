@@ -91,7 +91,23 @@ ALLOWED_VSPHERE_METHODS: dict[str, str] = {
         "Releases the transient ContainerView this code created moments earlier. "
         "Sees NON_READ_EXEMPTIONS -- it is a _Task method and needs the receiver pin."
     ),
-    "QueryEvents": "Reads rows out of the vCenter event history; the collector is server-side.",
+    "CreateCollectorForEvents": (
+        "Creates a server-side *event history collector* -- a scoped cursor over events "
+        "that already happened -- for ops/health.read_events. Replaces QueryEvents, which "
+        "returns only the oldest 1000 events in a window (measured on vCenter 8.0.3, "
+        "2026-09-14). The verb creates a query handle, not an estate object."
+    ),
+    "SetCollectorPageSize": (
+        "Sets how many events this code's own collector puts in latestPage (1000, vSphere's "
+        "per-call ceiling). Changes our cursor's page size, not vCenter state."
+    ),
+    "ResetCollector": (
+        "Positions this code's own collector just before its latest page, so "
+        "ReadPreviousEvents walks back from the newest events."
+    ),
+    "ReadPreviousEvents": (
+        "Reads the next-older page of events out of this code's own collector."
+    ),
     "CreateCollectorForTasks": (
         "Creates a server-side *task history collector* -- a scoped cursor over tasks that "
         "already ran. Like CreateContainerView, the verb creates a query handle, not an "
@@ -168,10 +184,37 @@ NON_READ_EXEMPTIONS: dict[str, Exemption] = {
         ),
         receivers=frozenset({"collector"}),
     ),
+    "SetCollectorPageSize": Exemption(
+        reason=(
+            "Sets the page size of the event history collector ops/health.read_events "
+            "created one statement earlier, so latestPage carries vSphere's per-call maximum "
+            "of 1000 events. It sizes our cursor, not vCenter state. pyVmomi reports no "
+            "privilege for HistoryCollector methods; access is gated by the System.View "
+            "checked on CreateCollectorForEvents."
+        ),
+        receivers=frozenset({"collector"}),
+    ),
+    "ResetCollector": Exemption(
+        reason=(
+            "Moves the cursor of ops/health.read_events' own event collector to just before "
+            "its latest page, so paging walks back from the newest events. It moves our "
+            "cursor, not vCenter state; pyVmomi reports no privilege for it."
+        ),
+        receivers=frozenset({"collector"}),
+    ),
+    "ReadPreviousEvents": Exemption(
+        reason=(
+            "Genuinely a read -- it returns vim.event.Event[] that already happened -- but "
+            "pyVmomi reports no privilege for it. Access is gated by the System.View checked "
+            "on CreateCollectorForEvents, allowlisted on its own privilege."
+        ),
+        receivers=frozenset({"collector"}),
+    ),
     "DestroyCollector": Exemption(
         reason=(
             "Destroys the task history collector vmware_monitor/ops/backup_window.py "
-            "created, in a finally: block. vCenter allows a bounded number of collectors "
+            "created, and the event history collector ops/health.read_events created, each "
+            "in a finally: block. vCenter allows a bounded number of collectors "
             "per session (32 by default), so NOT calling this leaks one per invocation "
             "until every later call fails for an unrelated-looking reason. The object "
             "destroyed is our own cursor, never an inventory object -- the receiver pin "

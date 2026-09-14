@@ -20,7 +20,7 @@ import pytest
 from pyVmomi import vim
 from vmware_policy import paginated
 
-from vmware_monitor.ops import _correlate, investigate_vm
+from vmware_monitor.ops import _correlate, health, investigate_vm
 from vmware_monitor.ops.investigate_html import render_bundle_html
 from vmware_monitor.ops.vm_info import VMNotFoundError
 
@@ -129,7 +129,7 @@ def _install_graph(monkeypatch, *, vm_alarms=(), host_alarms=(), with_cluster=Tr
     # Returns the (rows, unavailable_reason) pair the real one does — a stub
     # narrower than the function it replaces lets a signature change pass here
     # and fail on real hardware.
-    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None))
+    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None, None))
     monkeypatch.setattr(investigate_vm, "list_snapshots", lambda si, name: paginated([], total=0))
     monkeypatch.setattr(
         investigate_vm,
@@ -252,11 +252,11 @@ def test_entity_timeline_merges_dedups_and_orders(monkeypatch):
     monkeypatch.setattr(
         _correlate,
         "_entity_events",
-        lambda mgr, ref, begin, now: events_by_ref.get(id(ref), []),
+        lambda mgr, ref, begin, now: health.EventRead(tuple(events_by_ref.get(id(ref), [])), False),
     )
     si = types.SimpleNamespace(RetrieveContent=lambda: types.SimpleNamespace(eventManager=object()))
     entities = [("vm", "web-01", vm_ref), ("host", "esxi-09", host_ref)]
-    tl, _unavailable = _correlate.entity_timeline(si, entities, hours=24)
+    tl, _unavailable, _note = _correlate.entity_timeline(si, entities, hours=24)
 
     # de-dup: the shared event appears once, tagged with the first (vm) scope.
     assert sum(1 for e in tl if e["event_type"] == "VmReconfiguredEvent") == 1
@@ -274,11 +274,11 @@ def test_entity_timeline_severity_threshold(monkeypatch):
     monkeypatch.setattr(
         _correlate,
         "_entity_events",
-        lambda mgr, r, begin, now: [
+        lambda mgr, r, begin, now: health.EventRead((
             _event("HostConnectionLostEvent", 1, "2026-07-14T12:00:00Z", "crit"),
             _event("VmPoweredOnEvent", 2, "2026-07-14T11:00:00Z", "info"),
-        ],
+        ), False),
     )
     si = types.SimpleNamespace(RetrieveContent=lambda: types.SimpleNamespace(eventManager=object()))
-    tl, _unavailable = _correlate.entity_timeline(si, [("vm", "web-01", ref)], min_severity="warning")
+    tl, _unavailable, _note = _correlate.entity_timeline(si, [("vm", "web-01", ref)], min_severity="warning")
     assert [e["event_type"] for e in tl] == ["HostConnectionLostEvent"]

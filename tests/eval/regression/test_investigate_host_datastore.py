@@ -119,7 +119,7 @@ def _install_host(monkeypatch, *, host_alarms=(), with_cluster=True):
     # Returns the (rows, unavailable_reason) pair the real one does — a stub
     # narrower than the function it replaces lets a signature change pass here
     # and fail on real hardware.
-    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None))
+    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None, None))
     monkeypatch.setattr(
         investigate_host,
         "get_host_performance",
@@ -219,7 +219,7 @@ def _install_datastore(monkeypatch, *, ds_alarms=()):
     # Returns the (rows, unavailable_reason) pair the real one does — a stub
     # narrower than the function it replaces lets a signature change pass here
     # and fail on real hardware.
-    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None))
+    monkeypatch.setattr(_correlate, "entity_timeline", lambda si, ents, hours=24: ([], None, None))
     return counter
 
 

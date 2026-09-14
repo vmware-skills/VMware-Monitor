@@ -31,10 +31,11 @@ from types import SimpleNamespace
 
 from pyVmomi import vim
 
+from tests.eval.regression._fake_events import FakeEventManager
 from vmware_monitor.ops import health as ops
 
 
-class _EventMgr:
+class _EventMgr(FakeEventManager):
     """EventManager stand-in whose ``eventInfo`` is a list, so keys may repeat.
 
     A dict of ``{key: category}`` cannot express the defect at all: the collapse
@@ -42,13 +43,10 @@ class _EventMgr:
     """
 
     def __init__(self, events, entries):
-        self._events = events
+        super().__init__(events)
         self.description = SimpleNamespace(
             eventInfo=[SimpleNamespace(key=k, category=c) for k, c in entries]
         )
-
-    def QueryEvents(self, _spec):  # noqa: N802 - mirrors pyVmomi's own name
-        return self._events
 
 
 def _class_key(cls):

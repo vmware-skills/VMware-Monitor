@@ -1,5 +1,24 @@
 ## Unreleased
 
+**Event reads return the newest events — they returned the oldest.** `get_events` /
+`health events` and the three investigation bundles read events with `QueryEvents`, which on
+vCenter returns at most 1000 events and they are the **oldest** 1000 in the window (measured on
+vCenter 8.0.3). A busy 24 h window came back as the previous afternoon, the latest 16 hours
+missing, with nothing saying so; the bundles' "newest-first" timeline was newest-first within a
+week-old slice. Events are now read through an event history collector, newest first: the latest
+page, then older pages back to 5000 events. When more matched, `get_events` sets
+`read_truncated: true` and `read_note` says how far back the read got; the bundles add
+`timeline_note` ("Showing the newest 50 of 617 events in the last 24h", and which scopes stopped
+at 5000). The CLI prints both. Live on the same vCenter: the 24 h read went from 1000 events
+ending at 22:28 the day before to 3047 ending at the current minute; 168 h reads the newest 5000
+and says so.
+
+**A standalone ESXi now has an event timeline.** It refuses `QueryEvents`
+(`vmodl.fault.NotImplemented`) but serves the collector: 613 events in 24 h on a live 8.0.3 host,
+where the bundle used to say the endpoint "does not serve event history". Its datastore scope still
+cannot be filtered (`vmodl.fault.InvalidType`); that scope is now reported as unreadable instead of
+failing the whole host bundle, which the first version of this change did on the live host.
+
 **`cluster_health_summary` no longer warns about HA on hosts that are in no cluster.** On a
 vCenter with two standalone hosts it reported "HA disabled on a multi-host cluster" against the
 `(standalone hosts)` row, and raised that row to `warn` on that alone. vSphere HA is a cluster

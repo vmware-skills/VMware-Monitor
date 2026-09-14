@@ -168,7 +168,9 @@ def get_host_investigation_bundle(si: ServiceInstance, host_name: str, hours: in
     # Two values on purpose: an empty timeline because nothing happened and an
     # empty timeline because this endpoint has no event service must not look
     # the same to whoever reads the bundle.
-    timeline, timeline_unavailable = _correlate.entity_timeline(si, entities, hours=hours)
+    timeline, timeline_unavailable, timeline_note = _correlate.entity_timeline(
+        si, entities, hours=hours
+    )
 
     perf_rows = get_host_performance(si, host_name=host_name, limit=1)["items"]
     performance = (
@@ -194,10 +196,14 @@ def get_host_investigation_bundle(si: ServiceInstance, host_name: str, hours: in
         "timeline": timeline,
         # None when the timeline was read. A sentence when this endpoint serves
         # no event history -- which a standalone ESXi does by exposing an event
-        # manager and then refusing QueryEvents. Before this, that raised a raw
+        # manager and then refusing QueryEvents (events are now read through the
+        # history collector, which that ESXi does serve). Before this, that raised a raw
         # vmodl.fault.NotImplemented at the operator after every other read had
         # already succeeded, on 4 of the 5 targets configured here.
         "timeline_unavailable": timeline_unavailable,
+        # None when `timeline` is every event the window held. Otherwise how many
+        # are shown of how many, and which reads stopped at MAX_EVENTS_READ.
+        "timeline_note": timeline_note,
         "stats": stats,
         "hours": hours,
         "snapshot": "point-in-time; not a trend (no history retained)",

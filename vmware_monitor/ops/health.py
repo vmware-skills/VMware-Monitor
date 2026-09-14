@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -12,6 +14,8 @@ from vmware_monitor.ops._collect import _collect, _collect_objects
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
+
+_log = logging.getLogger(__name__)
 
 # Event types by severity
 CRITICAL_EVENTS = {
@@ -72,7 +76,7 @@ _EVENT_SUGGESTIONS: dict[str, str] = {
 }
 
 
-# Faults meaning "this endpoint does not answer QueryEvents at all". Only these;
+# Faults meaning "this endpoint does not serve event history at all". Only these;
 # auth/network/permission errors must propagate, or a monitoring tool reports
 # all-clear on failure.
 #
@@ -88,27 +92,103 @@ _NOT_SUPPORTED_FAULTS: tuple[type[Exception], ...] = (
 )
 
 
+#: Newest events read per query. The read stops here and reports that it did.
+MAX_EVENTS_READ = 5000
+
+#: vSphere's per-call ceiling for an event history collector page.
+_EVENT_PAGE = 1000
+
+
+@dataclass(frozen=True)
+class EventRead:
+    """Events matching a filter, newest first, and whether the read stopped early.
+
+    ``truncated`` is True when more events matched than were read; the ones not
+    read are the oldest in the window.
+    """
+
+    events: tuple
+    truncated: bool
+
+
+def read_events(
+    event_mgr: vim.event.EventManager,
+    filter_spec: vim.event.EventFilterSpec,
+    max_events: int | None = None,
+) -> EventRead | None:
+    """The newest events matching ``filter_spec``, or ``None`` when this endpoint has none.
+
+    Why not ``QueryEvents``: measured on vCenter 8.0.3 (2026-09-14), it returns at
+    most 1000 events and they are the **oldest** 1000 in the window — a 24 h query
+    came back with the previous afternoon and none of the latest 16 hours, and
+    nothing in the reply said so. A standalone ESXi refuses it outright
+    (``vmodl.fault.NotImplemented``) while serving the collector.
+
+    So this reads through an event history collector, newest first:
+    ``latestPage`` (page size raised to 1000) is the newest page, newest first;
+    after ``ResetCollector``, each ``ReadPreviousEvents`` returns the next-older
+    page, oldest first within it, with no gap or overlap. It stops once more than
+    ``max_events`` are in hand, keeps the newest ``max_events``, and says so in
+    ``truncated``. The collector is always released: vCenter allows a bounded
+    number per session.
+
+    ``None`` means the endpoint does not serve event history at all; ``[]`` in
+    ``events`` means the window really is empty. Auth, permission and network
+    failures propagate — a monitoring tool must not read them as a quiet window.
+    """
+    limit = MAX_EVENTS_READ if max_events is None else max_events
+    try:
+        collector = event_mgr.CreateCollectorForEvents(filter_spec)
+    except _NOT_SUPPORTED_FAULTS:
+        return None
+    try:
+        collector.SetCollectorPageSize(_EVENT_PAGE)
+        events = list(collector.latestPage or [])
+        if len(events) >= _EVENT_PAGE:
+            collector.ResetCollector()
+            while len(events) <= limit:
+                page = collector.ReadPreviousEvents(_EVENT_PAGE)
+                if not page:
+                    break
+                events.extend(reversed(page))
+    finally:
+        try:
+            collector.DestroyCollector()
+        except Exception as exc:  # noqa: BLE001 — the read already has its answer
+            _log.warning("Could not release an event history collector: %s", exc)
+    seen: set = set()
+    unique = []
+    for event in events:
+        key = getattr(event, "key", None)
+        if key is not None:
+            if key in seen:
+                continue
+            seen.add(key)
+        unique.append(event)
+    return EventRead(events=tuple(unique[:limit]), truncated=len(unique) > limit)
+
+
 def query_events_or_none(
     event_mgr: vim.event.EventManager, filter_spec: vim.event.EventFilterSpec
 ) -> list | None:
-    """Events, or ``None`` when this endpoint cannot answer at all.
+    """Events newest first, or ``None`` when this endpoint cannot answer at all.
 
     The two answers are different and callers need them apart: ``[]`` is "the
     window really is empty", ``None`` is "we could not ask". A caller that
     collapses them reports a quiet all-clear on a host it never read (形态 #1).
+    Callers that report to an operator should use :func:`read_events`, which also
+    says whether the read stopped at ``MAX_EVENTS_READ``.
     """
-    try:
-        return event_mgr.QueryEvents(filter_spec)
-    except _NOT_SUPPORTED_FAULTS:
-        return None
+    read = read_events(event_mgr, filter_spec)
+    return None if read is None else list(read.events)
 
 
 def query_events(event_mgr: vim.event.EventManager, filter_spec: vim.event.EventFilterSpec) -> list:
-    """QueryEvents wrapper that reads "unsupported" as "no events".
+    """Events newest first; "unsupported" reads as "no events".
 
     Kept for callers that genuinely have nothing to say about the difference
     (the log scanner scans what it can reach). Anything that reports to an
-    operator should use :func:`query_events_or_none` and say which it got.
+    operator should use :func:`read_events` and say what it got.
     """
     events = query_events_or_none(event_mgr, filter_spec)
     return [] if events is None else events
@@ -415,11 +495,11 @@ def get_recent_events(
     which is how five warning-level events came back as "No events above
     warning" (VCF 9.1, 2026-08-30).
 
-    Returns the family list envelope. ``total`` is deliberately left ``None``:
-    QueryEvents applies its own server-side collector bounds, so the number of
-    events matching the window is not something this code actually knows. No
-    row limit is applied here, so ``truncated`` is False either way — the null
-    total is the honest statement that the window itself may hide more.
+    Returns the family list envelope. Events are read newest first (see
+    :func:`read_events`). ``read_truncated`` is True when more than
+    ``MAX_EVENTS_READ`` events matched the window, and ``read_note`` then says how
+    far back the read got — the oldest events in the window were not examined.
+    ``total`` stays ``None``: the read stops rather than counting the window.
     """
     content = si.RetrieveContent()
     event_mgr = content.eventManager
@@ -431,7 +511,8 @@ def get_recent_events(
         time=vim.event.EventFilterSpec.ByTime(beginTime=begin, endTime=now)
     )
 
-    events = query_events(event_mgr, filter_spec)
+    read = read_events(event_mgr, filter_spec)
+    events = () if read is None else read.events
     min_level = SEVERITY_ORDER.get(severity, 1)
     catalogue, coverage = _catalogue_and_coverage(event_mgr)
 
@@ -469,7 +550,15 @@ def get_recent_events(
         })
 
     results.sort(key=lambda x: x["time"], reverse=True)
-    extra: dict = {"unclassified": unclassified}
+    truncated = bool(read and read.truncated)
+    extra: dict = {"unclassified": unclassified, "read_truncated": truncated}
+    if truncated:
+        oldest = getattr(events[-1], "createdTime", None) if events else None
+        extra["read_note"] = (
+            f"More than {MAX_EVENTS_READ} events matched the last {hours}h. The newest "
+            f"{MAX_EVENTS_READ} were read (back to {oldest}); older events in the window "
+            f"were not examined. Narrow hours to see the rest."
+        )
     if coverage["ambiguous"]:
         # vCenter described more event types than we can key. Say so rather than
         # let a caller read a short "unknown" count as a well-understood estate:

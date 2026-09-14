@@ -166,9 +166,10 @@ def _details(title: str, count: int, body: str, *, open_: bool) -> str:
     return f'<details{attr}><summary>{escape(title)}{cnt}</summary><div class="dbody">{body}</div></details>'
 
 
-def _timeline_section(timeline: list[dict], hours: int) -> str:
+def _timeline_section(timeline: list[dict], hours: int, note: str | None = None) -> str:
+    note_html = f'<div class="empty">{escape(note)}</div>' if note else ""
     if not timeline:
-        body = f'<div class="empty">No events in the last {hours}h.</div>'
+        body = note_html or f'<div class="empty">No events in the last {hours}h.</div>'
         return _details("Event timeline", 0, body, open_=True)
     rows = []
     for e in timeline:
@@ -186,7 +187,7 @@ def _timeline_section(timeline: list[dict], hours: int) -> str:
     return _details(
         f"Event timeline · last {hours}h",
         len(timeline),
-        f'<div class="tl">{"".join(rows)}</div>',
+        f'{note_html}<div class="tl">{"".join(rows)}</div>',
         open_=True,
     )
 
@@ -274,7 +275,8 @@ def render_bundle_html(
 
     # Sections are conditional on what the bundle carries: snapshots are a
     # VM-only concept, so a host/datastore bundle (no "snapshots" key) omits it.
-    sections = _timeline_section(bundle.get("timeline", []), hours) + _alarms_section(
+    note = " ".join(str(bundle[k]) for k in ("timeline_unavailable", "timeline_note") if bundle.get(k))
+    sections = _timeline_section(bundle.get("timeline", []), hours, note or None) + _alarms_section(
         bundle.get("alarms", [])
     )
     if "snapshots" in bundle:

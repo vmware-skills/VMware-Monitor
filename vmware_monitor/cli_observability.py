@@ -762,6 +762,9 @@ def render_bundle_console(bundle: dict, kind: str) -> None:
             e["message"],
         )
     console.print(ttl)
+    for key in ("timeline_unavailable", "timeline_note"):
+        if bundle.get(key):
+            console.print(f"[yellow]{bundle[key]}[/]")
     console.print(f"[dim]{bundle.get('customization_hint', '')}[/]")
 
 

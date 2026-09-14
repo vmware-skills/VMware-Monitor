@@ -151,7 +151,7 @@ def _f_get_recent_events(mp, n):
         )
         for i in range(n)
     ]
-    mp.setattr(health, "query_events", lambda mgr, spec: events)
+    mp.setattr(health, "read_events", lambda mgr, spec: health.EventRead(tuple(events), False))
     return lambda limit=None: health.get_recent_events(_si(SimpleNamespace(eventManager=_Ref())))
 
 

@@ -272,6 +272,11 @@ METHODS = [
     ("view.ViewManager", "CreateContainerView"),
     ("view.ContainerView", "Destroy"),
     ("event.EventManager", "QueryEvents"),
+    ("event.EventManager", "CreateCollectorForEvents"),
+    ("event.EventHistoryCollector", "ReadPreviousEvents"),
+    ("HistoryCollector", "SetCollectorPageSize"),
+    ("HistoryCollector", "ResetCollector"),
+    ("HistoryCollector", "DestroyCollector"),
     ("PerformanceManager", "QueryPerf"),
     ("PerformanceManager", "QueryPerfProviderSummary"),
     # C1 regression: the Folder method is MoveIntoFolder_Task (param 'list');

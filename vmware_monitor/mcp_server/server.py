@@ -652,9 +652,10 @@ def get_events(
 ) -> dict:
     """[READ] Get recent vCenter/ESXi events filtered by severity.
 
-    Returns the list envelope. No row limit is applied, so ``truncated`` is False;
-    ``total`` is null because vCenter's event collector applies its own bounds —
-    widen ``hours`` if you need to be sure nothing older is being missed.
+    Returns the list envelope, newest first. Up to 5000 events in the window are
+    read; when more matched, ``read_truncated`` is true and ``read_note`` says how
+    far back the read got — the oldest events were not examined, so narrow
+    ``hours`` before concluding nothing happened earlier in the window.
 
     Severity is this skill's own ranking where it has one, and otherwise
     vCenter's published event catalogue. An event neither can rank comes back

@@ -31,23 +31,21 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.eval.regression._fake_events import FakeEventManager
 from vmware_monitor.ops import health as ops
 
 
-class _Ref:
+class _Ref(FakeEventManager):
     """Stands in for the EventManager managed object."""
 
     def __init__(self, events, catalogue):
-        self._events = events
+        super().__init__(events)
         self.description = SimpleNamespace(
             eventInfo=[
                 SimpleNamespace(key=key, category=category)
                 for key, category in catalogue.items()
             ]
         )
-
-    def QueryEvents(self, _spec):  # noqa: N802 - mirrors pyVmomi's own method name
-        return self._events
 
 
 def _si(event_mgr):

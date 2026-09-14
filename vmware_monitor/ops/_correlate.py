@@ -12,8 +12,8 @@ types:
 1. **Per-entity event timeline** — vSphere's ``get_recent_events`` only filters by
    time+severity *globally*; nothing in the codebase scopes events to a single
    managed entity. ``entity_timeline`` builds an ``EventFilterSpec.ByEntity`` per
-   object, reuses ``health.query_events`` (which already swallows the standalone-ESXi
-   ``NotSupported`` fault while re-raising real auth/network errors), classifies
+   object, reuses ``health.read_events`` (newest first, bounded, and ``None`` for an
+   endpoint with no event history while re-raising real auth/network errors), classifies
    severity with ``health``'s event maps, de-dupes across overlapping scopes, and
    returns one merged, newest-first list tagged with the source entity.
 
@@ -35,15 +35,17 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from pyVmomi import vim
+from pyVmomi import vim, vmodl
 from vmware_policy import sanitize
 
 from vmware_monitor.ops._collect import _collect_objects
 from vmware_monitor.ops.health import (
     CRITICAL_EVENTS,
+    MAX_EVENTS_READ,
     SEVERITY_ORDER,
     WARNING_EVENTS,
-    query_events_or_none,
+    EventRead,
+    read_events,
 )
 
 if TYPE_CHECKING:
@@ -226,7 +228,9 @@ def _event_key(event: object) -> object:
     )
 
 
-def _entity_events(event_mgr: object, ref: object, begin: datetime, now: datetime) -> list:
+def _entity_events(
+    event_mgr: object, ref: object, begin: datetime, now: datetime
+) -> EventRead | None:
     """Fetch one entity's own events in the window (pyVmomi spec boilerplate).
 
     Split out so the testable classification/de-dup/ordering logic in
@@ -237,7 +241,14 @@ def _entity_events(event_mgr: object, ref: object, begin: datetime, now: datetim
         entity=vim.event.EventFilterSpec.ByEntity(entity=ref, recursion=_SELF),
         time=vim.event.EventFilterSpec.ByTime(beginTime=begin, endTime=now),
     )
-    return query_events_or_none(event_mgr, spec)
+    try:
+        return read_events(event_mgr, spec)
+    except vmodl.fault.InvalidType:
+        # This endpoint cannot filter events by this entity's type. Measured on a
+        # standalone ESXi 8.0.3: the host scope reads, a Datastore scope answers
+        # InvalidType(argument='vim.Datastore'). Reported as an unreadable scope,
+        # like a refusal, rather than taking the whole bundle down.
+        return None
 
 
 def entity_timeline(
@@ -245,7 +256,7 @@ def entity_timeline(
     entities: list[tuple],
     hours: int = 24,
     min_severity: str = "info",
-) -> list[dict]:
+) -> tuple[list[dict], str | None, str | None]:
     """Merged, newest-first event timeline scoped to a set of entities.
 
     Args:
@@ -257,15 +268,20 @@ def entity_timeline(
         min_severity: Drop events below this band ("critical"/"warning"/"info").
 
     Returns:
-        ``(rows, unavailable_reason)``. ``rows`` is
+        ``(rows, unavailable_reason, note)``. ``rows`` is
         ``{time, scope, entity, severity, event_type, message, username}`` newest
         first, de-duplicated across overlapping scopes, capped at
         ``MAX_TIMELINE_EVENTS``. ``unavailable_reason`` is None when the events
         were read, and a sentence when this endpoint does not serve them.
+        ``note`` is None when ``rows`` is every event the window held, and a
+        sentence otherwise: how many of how many are shown, and which scopes'
+        reads stopped at ``health.MAX_EVENTS_READ``.
 
         The tuple exists so callers cannot accidentally publish an empty
         timeline as a quiet all-clear. A standalone ESXi exposes an
-        ``eventManager`` object and then refuses ``QueryEvents``
+        ``eventManager`` object and then refuses ``QueryEvents``; it does serve
+        the event history collector this now reads through (measured 2026-09-14),
+        but an endpoint that refuses that too still arrives here
         (vmodl.fault.NotImplemented, verified on a live 8.0.3), so "no events"
         and "no event service" arrive looking identical unless they are kept
         apart here.
@@ -279,14 +295,17 @@ def entity_timeline(
     seen: set = set()
     rows: list[dict] = []
     refused: list[str] = []
+    cut: list[str] = []
     for scope, display_name, ref in entities:
         if ref is None:
             continue
-        events = _entity_events(event_mgr, ref, begin, now)
-        if events is None:
+        read = _entity_events(event_mgr, ref, begin, now)
+        if read is None:
             refused.append(scope)
             continue
-        for event in events:
+        if read.truncated:
+            cut.append(scope)
+        for event in read.events:
             sev = _classify(event)
             if SEVERITY_ORDER.get(sev, 2) > threshold:
                 continue
@@ -320,16 +339,27 @@ def entity_timeline(
         scopes = ", ".join(sorted(set(refused)))
         if rows:
             reason = (
-                f"Events could not be read for these scopes: {scopes}. The "
-                f"endpoint exposes an event manager and refuses QueryEvents, "
-                f"which is how a standalone ESXi host behaves. The timeline "
-                f"below is therefore incomplete, not empty."
+                f"Events could not be read for these scopes: {scopes}. The endpoint "
+                f"refused them or cannot filter events by that kind of object. The "
+                f"timeline below is therefore incomplete, not empty."
             )
         else:
             reason = (
                 "This endpoint does not serve event history: it exposes an event "
-                "manager but refuses QueryEvents, which is how a standalone ESXi "
-                "host behaves. Connect to the vCenter that manages it for a "
+                "manager but refuses to hand over events. Connect to the vCenter that "
+                "manages it for a "
                 "timeline. Everything else in this bundle was read normally."
             )
-    return rows[:MAX_TIMELINE_EVENTS], reason
+    notes = []
+    if len(rows) > MAX_TIMELINE_EVENTS:
+        notes.append(
+            f"Showing the newest {MAX_TIMELINE_EVENTS} of {len(rows)} events in the "
+            f"last {hours}h."
+        )
+    if cut:
+        notes.append(
+            f"More than {MAX_EVENTS_READ} events matched for {', '.join(sorted(set(cut)))}; "
+            f"only the newest were read, so older events in the window are not included."
+        )
+    note = " ".join(notes) or None
+    return rows[:MAX_TIMELINE_EVENTS], reason, note

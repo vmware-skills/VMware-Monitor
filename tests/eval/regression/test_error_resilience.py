@@ -151,15 +151,10 @@ def test_doctor_init_reference_is_backed_by_real_command():
 # ── Fix 4: QueryEvents guard — NotSupported only, everything else raises ─
 
 
-class _FakeEventMgr:
-    def __init__(self, exc: Exception | None, events: list | None = None):
-        self._exc = exc
-        self._events = events or []
+def _FakeEventMgr(exc: Exception | None, events: list | None = None):  # noqa: N802
+    from tests.eval.regression._fake_events import FakeEventManager
 
-    def QueryEvents(self, spec):  # noqa: N802 — pyVmomi naming
-        if self._exc is not None:
-            raise self._exc
-        return self._events
+    return FakeEventManager(events, fault=exc)
 
 
 def test_query_events_not_supported_returns_empty():
@@ -198,7 +193,7 @@ def test_log_scanner_uses_shared_query_events_guard():
 def test_health_no_blanket_except_around_query_events():
     """The old ``except Exception: return []`` around QueryEvents is gone."""
     src = (REPO_ROOT / "vmware_monitor" / "ops" / "health.py").read_text(encoding="utf-8")
-    assert "events = query_events(" in src
+    assert "read = read_events(" in src
 
 
 # ── Fix 9: one inaccessible alarm entity must not kill get_alarms ────────
