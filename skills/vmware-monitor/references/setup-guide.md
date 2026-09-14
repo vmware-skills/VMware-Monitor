@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==1.11.3
+uv tool install vmware-monitor==1.12.0
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v1.11.3
+npx skills add vmware-skills/VMware-Monitor#v1.12.0
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 1.11.3
+clawhub install @zw008/vmware-monitor --version 1.12.0
 ```
 
 ### Claude Code
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==1.11.3
+uv tool install vmware-monitor==1.12.0
 
 # 2. Verify
 vmware-monitor --version
@@ -95,7 +95,7 @@ pointed at the same vCenter: an environment-scoped `deny` rule in
 ## Development Install
 
 ```bash
-git clone --branch v1.11.3 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v1.12.0 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .

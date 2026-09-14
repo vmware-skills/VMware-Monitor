@@ -1,4 +1,4 @@
-## Unreleased
+## v1.12.0 — alarms say whether they still hold; events newest-first, by window, ranked by their real names
 
 **`license_status` says which license each asset is assigned.** The lab vCenter showed "Expired
 vCenter Server license" while the inventory listed only licenses valid until 2027-06-28, and the tool
