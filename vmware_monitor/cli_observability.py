@@ -227,7 +227,8 @@ def infra_licenses(target: TargetOption = None, config: ConfigOption = None) -> 
     from vmware_monitor.ops.infra_health import get_license_status
 
     si, _, tgt = get_connection(target, config)
-    rows = get_license_status(si)["items"]
+    result = get_license_status(si)
+    rows = result["items"]
     audit.log_query(target=tgt, resource="licenses", query_type="get_license_status")
     if not rows:
         console.print("[yellow]No licenses returned.[/]")
@@ -240,6 +241,20 @@ def infra_licenses(target: TargetOption = None, config: ConfigOption = None) -> 
         total = "∞" if r["unlimited"] else str(r["total"])
         table.add_row(r["name"], f"{r['used']}/{total}", r["expiration"])
     console.print(table)
+    assignments = result.get("assignments")
+    if assignments:
+        assigned = Table(title="Assigned to")
+        for column in ("Asset", "Kind", "License", "Expiration", "Expired"):
+            assigned.add_column(column)
+        for a in assignments:
+            expired = {True: "[red]yes[/]", False: "no"}.get(a["expired"], "unknown")
+            assigned.add_row(
+                a["asset"], a["kind"], a["license_name"] or "", a["expiration"], expired
+            )
+        console.print(assigned)
+    for key in ("assignments_note", "assignments_expired_note"):
+        if result.get(key):
+            console.print(f"[yellow]{result[key]}[/]")
 
 
 @infra_app.command("ntp")

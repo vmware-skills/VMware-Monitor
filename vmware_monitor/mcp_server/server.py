@@ -1126,9 +1126,11 @@ def license_status(target: Optional[str] = None) -> dict:
     enumerated, so ``truncated`` is always False — this is the complete inventory.
 
     Use this to catch over-allocation or an approaching expiry, alongside
-    certificate_status and ntp_status for a platform-hygiene sweep. Which host
-    consumes which license is not reported — use list_esxi_hosts for the host
-    inventory. Assigning a license is a write; use vmware-aiops.
+    certificate_status and ntp_status for a platform-hygiene sweep. ``assignments``
+    says which license each asset (vCenter, hosts, clusters) is assigned, with
+    ``expired`` per asset — use it to tell whether an "expired license" alarm still
+    applies. It is null with ``assignments_note`` when the account cannot read
+    assignments. License keys are never returned. Assigning a license is a write.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).

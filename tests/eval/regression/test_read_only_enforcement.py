@@ -91,6 +91,10 @@ ALLOWED_VSPHERE_METHODS: dict[str, str] = {
         "Releases the transient ContainerView this code created moments earlier. "
         "Sees NON_READ_EXEMPTIONS -- it is a _Task method and needs the receiver pin."
     ),
+    "QueryAssignedLicenses": (
+        "Reads which license each asset is assigned (ops/infra_health). pyVmomi reports "
+        "System.View, a read privilege; the license keys it carries are not returned."
+    ),
     "CreateCollectorForEvents": (
         "Creates a server-side *event history collector* -- a scoped cursor over events "
         "that already happened -- for ops/health.read_events. Replaces QueryEvents, which "

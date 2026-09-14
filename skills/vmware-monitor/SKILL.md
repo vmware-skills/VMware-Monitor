@@ -181,7 +181,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `snapshot_aging` | Inventory-wide snapshot sweep with age + sprawl; flags snapshots older than N days |
 | `vm_backup_snapshot_history` | Backup windows for one VM from snapshot task history; a lower bound, not job duration |
 | `certificate_status` | Per-host ESXi management certificate expiry (days until expiry, expiring flag) |
-| `license_status` | vCenter/ESXi license inventory with used/total and expiration |
+| `license_status` | vCenter/ESXi license inventory with used/total and expiration, plus `assignments`: which license each asset (vCenter, hosts) is assigned and whether it has expired |
 | `ntp_status` | Per-host NTP config health (servers + ntpd state); live offset not in SOAP API |
 | `datastore_capacity` | Datastore over-commit (provisioned vs capacity); thin-provisioning risk |
 | `resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |

@@ -245,6 +245,7 @@ PROPERTY_CHAINS = [
     ("LicenseManager", "licenses.used"),
     ("LicenseManager", "licenses.properties.key"),
     ("LicenseManager", "licenses.properties.value"),
+    ("LicenseManager", "licenseAssignmentManager"),
     # Capacity — datastore over-commit + resource pools
     ("Datastore", "summary.type"),
     ("Datastore", "summary.uncommitted"),
@@ -283,6 +284,7 @@ METHODS = [
     ("view.ContainerView", "Destroy"),
     ("event.EventManager", "QueryEvents"),
     ("event.EventManager", "CreateCollectorForEvents"),
+    ("LicenseAssignmentManager", "QueryAssignedLicenses"),
     ("event.EventHistoryCollector", "ReadPreviousEvents"),
     ("HistoryCollector", "SetCollectorPageSize"),
     ("HistoryCollector", "ResetCollector"),

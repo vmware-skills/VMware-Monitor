@@ -1,5 +1,15 @@
 ## Unreleased
 
+**`license_status` says which license each asset is assigned.** The lab vCenter showed "Expired
+vCenter Server license" while the inventory listed only licenses valid until 2027-06-28, and the tool
+could not say whether an asset still ran on an expired key — it reported the inventory only.
+`assignments` now lists, from `LicenseAssignmentManager.QueryAssignedLicenses` (System.View), the
+asset, its kind (vcenter / host / cluster), license name, edition, expiration and `expired`;
+`assignments_expired_note` names assets on an expired license. On the lab the vCenter is on "vCenter
+Server 8 Standard" until 2027-06-28, so that alarm is historical. When assignments cannot be read,
+`assignments` is `null` with `assignments_note`, never an empty list. License keys are never returned.
+`infra licenses` prints an "Assigned to" table.
+
 **Sessions tell people from vCenter's own services, and name the client.** On the lab
 `activity sessions` listed 33 sessions; 24 were vCenter's SSO solution users
 (`vpxd-extension-<machine id>`, `vpxd-svcs-user-…`, `sps-…`, `vsphere-webclient-…`, `vmware-vsm-…`),

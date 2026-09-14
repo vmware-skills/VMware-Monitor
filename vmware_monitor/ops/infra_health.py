@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from pyVmomi import vim
+from pyVmomi import vim, vmodl
 from vmware_policy import paginated, sanitize
 
 from vmware_monitor.ops._collect import _collect, _collect_objects
@@ -102,6 +102,81 @@ def get_certificate_status(
     return paginated(results, limit=limit, total=total)
 
 
+def _expiry(props: dict) -> tuple[str, bool | None]:
+    """``(expiration text, expired)`` from a license's properties.
+
+    No expiration property is a perpetual license: ``("never", False)``. A date
+    that cannot be parsed is reported as text with ``expired`` None.
+    """
+    date = props.get("expirationDate")
+    if date is None:
+        return "never", False
+    if isinstance(date, str):
+        try:
+            date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+        except ValueError:
+            return sanitize(date), None
+    if not isinstance(date, datetime):
+        return sanitize(str(date)), None
+    if date.tzinfo is None:
+        date = date.replace(tzinfo=timezone.utc)
+    return sanitize(str(date)), date < datetime.now(tz=timezone.utc)
+
+
+def _asset_kind(entity_id: str, scope: object) -> str:
+    if entity_id.startswith("host-"):
+        return "host"
+    if entity_id.startswith("domain-c"):
+        return "cluster"
+    return "vcenter" if not scope else "other"
+
+
+def _license_assignments(content: object) -> tuple[list[dict] | None, str | None]:
+    """Which license each asset is assigned, or ``(None, why)`` when unreadable.
+
+    ``None`` is not ``[]``: an account without System.View, or an endpoint with no
+    assignment manager, has not shown that nothing is assigned. The license key
+    is never read into the result.
+    """
+    lam = getattr(content.licenseManager, "licenseAssignmentManager", None)
+    if lam is None:
+        return None, (
+            "This endpoint does not expose license assignments "
+            "(licenseManager.licenseAssignmentManager is unset), so which asset uses "
+            "which license cannot be read here."
+        )
+    try:
+        raw = lam.QueryAssignedLicenses()
+    except vim.fault.NoPermission:
+        return None, (
+            "Reading license assignments needs System.View on the vCenter root; this "
+            "account lacks it. The inventory above is still complete."
+        )
+    except (vmodl.fault.NotSupported, vmodl.fault.NotImplemented):
+        return None, "This endpoint does not support querying license assignments."
+    rows: list[dict] = []
+    for a in raw or []:
+        lic = getattr(a, "assignedLicense", None)
+        props = {p.key: p.value for p in (getattr(lic, "properties", None) or [])}
+        expiration, expired = _expiry(props)
+        entity_id = str(getattr(a, "entityId", "") or "")
+        rows.append(
+            {
+                "asset": sanitize(getattr(a, "entityDisplayName", None) or entity_id),
+                "asset_id": sanitize(entity_id),
+                "kind": _asset_kind(entity_id, getattr(a, "scope", None)),
+                "license_name": sanitize(lic.name) if lic is not None and lic.name else None,
+                "edition_key": sanitize(str(lic.editionKey))
+                if lic is not None and getattr(lic, "editionKey", None)
+                else None,
+                "expiration": expiration,
+                "expired": expired,
+            }
+        )
+    rows.sort(key=lambda r: (r["kind"], r["asset"]))
+    return rows, None
+
+
 def get_license_status(si: ServiceInstance) -> dict:
     """vCenter/ESXi license inventory with usage and expiry.
 
@@ -112,6 +187,13 @@ def get_license_status(si: ServiceInstance) -> dict:
     Each row: name, edition_key, total/used units, and any expiration property
     the server exposes. Row ``total = 0`` means an unlimited license (not to be
     confused with the envelope's own ``total``).
+
+    ``assignments`` lists which license each asset (vCenter, host, cluster) is
+    assigned — asset, asset_id, kind, license_name, edition_key, expiration,
+    expired — from ``LicenseAssignmentManager.QueryAssignedLicenses``. It is
+    ``None`` with ``assignments_note`` when that cannot be read, and
+    ``assignments_expired_note`` names any asset running on an expired license.
+    License keys are never returned.
     """
     content = si.RetrieveContent()
     lic_mgr = content.licenseManager
@@ -130,7 +212,16 @@ def get_license_status(si: ServiceInstance) -> dict:
             }
         )
     results.sort(key=lambda x: x["name"])
-    return paginated(results, total=len(results))
+    assignments, why = _license_assignments(content)
+    extra: dict = {"assignments": assignments}
+    if why:
+        extra["assignments_note"] = why
+    expired = [a["asset"] for a in assignments or [] if a["expired"]]
+    if expired:
+        extra["assignments_expired_note"] = (
+            f"{len(expired)} asset(s) run on an expired license: {', '.join(expired)}."
+        )
+    return paginated(results, total=len(results), **extra)
 
 
 def get_ntp_status(
