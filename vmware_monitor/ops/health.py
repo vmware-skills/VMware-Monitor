@@ -84,8 +84,11 @@ def parse_event_time(value: str, name: str) -> datetime:
     "yesterday" learns the format instead of getting a parser trace.
     """
     text = str(value).strip()
+    # Python 3.10 (still allowed by requires-python) cannot parse a trailing "Z";
+    # 3.11+ can, which is why a test run on 3.12 cannot tell this line is needed.
+    if text[-1:] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
     try:
-        # Python 3.11+ reads a trailing "Z" itself.
         parsed = datetime.fromisoformat(text)
     except ValueError:
         raise ValueError(
