@@ -493,6 +493,8 @@ def vm_snapshot_list(
 @_cli_errors
 def scan_now(target: TargetOption = None, config: ConfigOption = None) -> None:
     """Run a one-time scan of alarms and events."""
+    from rich.markup import escape
+
     from vmware_monitor.scanner.alarm_scanner import scan_alarms
     from vmware_monitor.scanner.log_scanner import scan_logs
 
@@ -508,7 +510,62 @@ def scan_now(target: TargetOption = None, config: ConfigOption = None) -> None:
         console.print(f"[yellow]Found {total} issue(s).[/]")
         for r in alarm_results + log_results:
             sev_style = {"critical": "red", "warning": "yellow"}.get(r["severity"], "white")
-            console.print(f"  [{sev_style}][{r['severity'].upper()}][/] {r['message']}")
+            # Messages carry [VSPHERE_*] boundary markers that Rich reads as markup;
+            # unescaped, the first event the scan ever found crashed this command.
+            console.print(f"  [{sev_style}][{r['severity'].upper()}][/] {escape(r['message'])}")
+
+
+@scan_app.command("logs")
+@_cli_errors
+def scan_logs_cmd(
+    host: Annotated[
+        str | None, typer.Option("--host", help="Exact ESXi host name (default: all)")
+    ] = None,
+    lines: Annotated[int, typer.Option("--lines", help="Recent lines per log to scan")] = 500,
+    raw: Annotated[
+        bool, typer.Option("--raw", help="One row per matching line, not grouped")
+    ] = False,
+    target: TargetOption = None,
+    config: ConfigOption = None,
+) -> None:
+    """Scan ESXi host logs (hostd/vmkernel/vpxa) for trouble, grouped by pattern."""
+    from rich.markup import escape
+
+    from vmware_monitor.scanner.log_scanner import scan_host_logs
+
+    si, _, tgt = _get_connection(target, config)
+    result = scan_host_logs(si, host_name=host, lines=lines, group=not raw)
+    _audit.log_query(target=tgt, resource="host_logs", query_type="host_log_scan")
+    sev_style = {"critical": "red", "warning": "yellow", "info": "dim"}
+    items = result["items"]
+    if raw:
+        for r in items:
+            style = sev_style.get(r["severity"], "white")
+            # Log text carries [VSPHERE_HOST_LOG] markers that Rich reads as markup.
+            console.print(f"[{style}]{r['severity']}[/] {escape(r['message'])}")
+    elif items:
+        title = f"Host log findings: {result['lines_matched']} lines in {len(items)} patterns"
+        table = Table(title=title)
+        for column in ("Count", "Severity", "Level", "Log", "Hosts", "Log time"):
+            table.add_column(column)
+        table.add_column("Sample", overflow="fold")
+        for g in items:
+            span = f"{g['first_seen'] or ''} → {g['last_seen'] or ''}" if g["first_seen"] else ""
+            table.add_row(
+                str(g["count"]),
+                f"[{sev_style.get(g['severity'], 'white')}]{g['severity']}[/]",
+                g["log_level"] or "",
+                g["source"].removeprefix("host_log:"),
+                ", ".join(g["hosts"]),
+                span,
+                escape(g["sample"]),
+            )
+        console.print(table)
+    if not items:
+        console.print(f"No matching lines in the last {lines} lines of each log.")
+    for u in result.get("logs_unavailable", []):
+        reason = escape(u["reason"])
+        console.print(f"[yellow]Not read: {escape(u['host'])} {u['log']} — {reason}[/]")
 
 
 # ─── Daemon ───────────────────────────────────────────────────────────────────

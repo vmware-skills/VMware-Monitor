@@ -775,14 +775,20 @@ def host_log_scan(
     host_name: Optional[str] = None,
     lines: int = 500,
     target: Optional[str] = None,
+    group: bool = True,
 ) -> dict:
     """[READ] Scan recent ESXi host syslog lines for error/warning patterns.
 
     Reads the last ``lines`` entries of the hostd/vmkernel/vpxa logs via the
     diagnostic system and returns only the lines matching known trouble patterns
-    (error, fail, critical, panic, lost access, timeout, …). Returns the list
-    envelope {items, returned, limit, total, truncated, hint}; each row has
-    severity, source (``host_log:<key>``), message, time and entity. ``total`` is
+    (error, fail, critical, panic, lost access, timeout, …). Severity follows the
+    level ESXi wrote on the line (Cr/Er/Wa/In…, raw token in ``log_level``); a
+    critical keyword still wins. By default findings are grouped by pattern —
+    each item has count, hosts, first_seen/last_seen (log time), severity,
+    source (``host_log:<key>``), pattern and one sample; ``lines_matched`` is the
+    ungrouped count. ``group=false`` returns one row per line (severity, source,
+    message, time, entity, log_level, log_time). Returns the list envelope {items,
+    returned, limit, total, truncated, hint}. ``total`` is
     null on purpose — this is "errors within the scanned window", not all errors
     ever. ``logs_unavailable`` lists every host/log that could NOT be read, with
     the reason (e.g. the account lacks Global.Diagnostics); empty ``items`` means
@@ -798,9 +804,11 @@ def host_log_scan(
         host_name: Filter to a single host by exact name (None = all hosts).
         lines: How many recent lines per log to scan (default 500, at least 1).
         target: vCenter/ESXi target from config (default if omitted).
+        group: Group repeated lines by pattern (default true). One call on a lab
+            returned 353 lines, 195 of them one statistics-provider message.
     """
     si = _get_connection(target)
-    return _ops_scan_host_logs(si, host_name=host_name, lines=lines)
+    return _ops_scan_host_logs(si, host_name=host_name, lines=lines, group=group)
 
 
 # ---------------------------------------------------------------------------

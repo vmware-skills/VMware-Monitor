@@ -187,7 +187,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
 | `active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
 | `active_sessions` | Currently authenticated vCenter/ESXi sessions (who is logged in) |
-| `host_log_scan` | Scan recent ESXi host syslog (hostd/vmkernel/vpxa) for error/warning patterns; returns only matching lines, optionally filtered to one host |
+| `host_log_scan` | Scan recent ESXi host syslog (hostd/vmkernel/vpxa) for trouble patterns — grouped by pattern (count, hosts, log time span), severity from the line's own ESXi level; `group=false` for raw lines (CLI: `scan logs`) |
 | `host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
 | `cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
 | `cluster_last_apply_result` | **vSphere 9.1** — result of the last vLCM remediation (apply) on one cluster (REST). Param: `cluster` (MoID). Reports outcome only; never runs a remediation |
@@ -230,7 +230,7 @@ vmware-monitor vm info <vm-name> [--target <t>]
 vmware-monitor memory tiering [--host <esxi>] [--target <t>]        # vSphere 9.1
 vmware-monitor patch compliance|last-apply <cluster-moid> [--target <t>]   # vSphere 9.1 (vLCM)
 vmware-monitor deployment-size [--target <t>]                      # vSphere 9.1
-vmware-monitor scan now | daemon start|stop|status | doctor [--skip-auth]
+vmware-monitor scan now | scan logs [--host <name>] | daemon start|stop|status | doctor [--skip-auth]
 ```
 
 > Full CLI reference (all flags + activity/tasks/sessions): see `references/cli-reference.md`

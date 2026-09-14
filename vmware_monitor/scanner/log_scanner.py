@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import http.client
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -40,6 +41,68 @@ _ERROR_PATTERNS = (
     "cannot", "timeout", "refused", "corrupt",
 )
 _CRITICAL_PATTERNS = ("critical", "panic", "corrupt")
+
+#: ESXi writes a level on every syslog line, e.g. ``Er(163)``. A finding's
+#: severity follows it: a lab scan (2026-09-14) reported 353 lines, all
+#: "warning", many of them ``In(166)`` informational lines that merely contain a
+#: trouble word. A keyword in _CRITICAL_PATTERNS still wins; a line with no level
+#: token keeps the keyword rule.
+_LEVEL_TOKEN = re.compile(r"\b(Em|Al|Cr|Er|Wa|No|In|Db)\(\d+\)")
+_LEVEL_SEVERITY = {
+    "Em": "critical", "Al": "critical", "Cr": "critical",
+    "Er": "warning", "Wa": "warning",
+    "No": "info", "In": "info", "Db": "info",
+}
+_LOG_TIME = re.compile(r"^(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*")
+_SEVERITY_RANK = {"critical": 0, "warning": 1, "info": 2}
+
+
+def _pattern(line: str) -> str:
+    """A line with what varies between repeats (times, ids, numbers) masked out."""
+    text = _LOG_TIME.sub("", line)
+    text = re.sub(r"\b(opID|sid|user)=\S+", r"\1=*", text)
+    text = re.sub(r"0x[0-9a-fA-F]+", "0x#", text)
+    text = re.sub(r"\([0-9a-fA-F]{6,}\)", "(#)", text)
+    text = re.sub(r"\d+", "#", text)
+    return re.sub(r"\s+", " ", text).strip()[:160]
+
+
+def group_findings(rows: list[dict]) -> list[dict]:
+    """Collapse findings that are the same line repeated into one row each.
+
+    A group is one pattern in one log: ``count``, the ``hosts`` it came from,
+    the earliest and latest log time seen, the worst severity, and one sample.
+    Ordered worst severity first, then most frequent.
+    """
+    groups: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        key = (row["source"], row.get("pattern") or row["message"])
+        group = groups.get(key)
+        if group is None:
+            group = groups[key] = {
+                "severity": row["severity"],
+                "log_level": row.get("log_level"),
+                "source": row["source"],
+                "pattern": key[1],
+                "count": 0,
+                "hosts": set(),
+                "first_seen": None,
+                "last_seen": None,
+                "sample": row["message"],
+            }
+        group["count"] += 1
+        group["hosts"].add(row["entity"])
+        # No severity merge: the level token and any critical keyword are part of
+        # the pattern, so every row in a group already has the same severity.
+        seen = row.get("log_time")
+        if seen:
+            group["first_seen"] = min(filter(None, (group["first_seen"], seen)))
+            group["last_seen"] = max(filter(None, (group["last_seen"], seen)))
+    ordered = sorted(
+        groups.values(),
+        key=lambda g: (_SEVERITY_RANK.get(g["severity"], 9), -g["count"], g["pattern"]),
+    )
+    return [{**g, "hosts": sorted(g["hosts"])} for g in ordered]
 
 # Asking for a line past the end returns no text and the log's last line
 # number in ``lineEnd`` — how the scan learns where the end is.
@@ -141,6 +204,7 @@ def scan_host_logs(
     host_name: str | None = None,
     log_keys: tuple[str, ...] = ("hostd", "vmkernel", "vpxa"),
     lines: int = 500,
+    group: bool = False,
 ) -> dict:
     """Scan the last ``lines`` lines of each ESXi host log for error patterns.
 
@@ -167,7 +231,14 @@ def scan_host_logs(
             f"Host not found. Run list_esxi_hosts to see available hosts and copy "
             f"an exact name. Requested: '{host_name}'"
         )
-    return paginated(list(result.items), logs_unavailable=list(result.logs_unavailable))
+    rows = list(result.items)
+    items = group_findings(rows) if group else rows
+    return paginated(
+        items,
+        logs_unavailable=list(result.logs_unavailable),
+        lines_matched=len(rows),
+        grouped=group,
+    )
 
 
 def scan_host_logs_since(
@@ -286,7 +357,15 @@ def _findings(text: tuple[str, ...], name: str, log_key: str) -> list[dict]:
         line_lower = line.lower()
         if not any(pattern in line_lower for pattern in _ERROR_PATTERNS):
             continue
-        severity = "critical" if any(p in line_lower for p in _CRITICAL_PATTERNS) else "warning"
+        level_match = _LEVEL_TOKEN.search(line)
+        level = level_match.group(1) if level_match else None
+        if any(p in line_lower for p in _CRITICAL_PATTERNS):
+            severity = "critical"
+        elif level:
+            severity = _LEVEL_SEVERITY[level]
+        else:
+            severity = "warning"
+        time_match = _LOG_TIME.match(line.strip())
         # Sanitize host log lines: truncate, strip ALL control characters,
         # and wrap in boundary markers to prevent prompt injection from
         # attacker-controlled content.
@@ -297,6 +376,9 @@ def _findings(text: tuple[str, ...], name: str, log_key: str) -> list[dict]:
             "message": f"[VSPHERE_HOST_LOG]{name}: {safe_line}[/VSPHERE_HOST_LOG]",
             "time": str(datetime.now(tz=timezone.utc)),
             "entity": name,
+            "log_level": level,
+            "log_time": time_match.group(1) if time_match else None,
+            "pattern": _pattern(sanitize(line.strip(), max_len=500)),
         })
     return rows
 

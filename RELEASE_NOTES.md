@@ -1,5 +1,18 @@
 ## Unreleased
 
+**`host_log_scan` groups its findings, ranks them by the log's own level, and has a CLI.** One call
+on the lab returned 353 rows (~150 KB), all `warning` — informational `In(166)` lines that merely
+contain "timeout" included — and 195 of them one statistics-provider line with a different process
+id. Findings now take their severity from the level ESXi wrote on the line (a critical keyword still
+wins) and carry `log_level` and `log_time`; the tool groups them by pattern per log by default
+(`count`, `hosts`, `first_seen` / `last_seen`, one `sample`, `lines_matched` overall), with
+`group=false` for raw rows. New `vmware-monitor scan logs [--host] [--lines] [--raw]`. The daemon keeps
+reading raw rows; an `In`-level line is now `info`, so it no longer counts as a warning there.
+
+**`scan now` no longer crashes on the first event it finds.** Scanner messages carry `[VSPHERE_EVENT]`
+markers that the terminal renderer read as markup and rejected. Unseen until now because the event scan
+never matched a real event.
+
 **Event ranking, suggestions and the daemon's event scan work on a real vCenter.** The sets that
 rank events (`CRITICAL_EVENTS`, `WARNING_EVENTS`, `INFO_EVENTS`), the routine set and the suggestion
 map are written as bare class names (`HostConnectionLostEvent`); a real pyVmomi event's class is named

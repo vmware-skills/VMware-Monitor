@@ -44,6 +44,13 @@ empty `items` with `truncated: false` means "checked, found none" only when
 `logs_unavailable` is empty as well. With unread logs, the honest answer is
 "nothing matched in the logs that could be read" — name the ones that could not.
 
+By default `host_log_scan` groups repeated lines by pattern, per log: each item has `count`,
+`hosts`, `first_seen` / `last_seen` (the log's own timestamps), `severity`, `log_level`, `pattern`
+and one `sample`; `lines_matched` is the ungrouped count and `group=false` returns one row per
+line. Severity follows the level ESXi wrote on the line (`Cr`/`Al`/`Em` critical, `Er`/`Wa`
+warning, `In`/`No`/`Db` info); a line containing "critical", "panic" or "corrupt" is critical
+whatever its level.
+
 The envelope adds ~30 tokens to a response. It exists because a bare list gave
 smaller models nothing to distinguish a complete answer from page one, and they
 sometimes resolved that ambiguity as "no data was returned"
