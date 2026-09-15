@@ -1,4 +1,4 @@
-## Unreleased — stale alarms re-checked, overlapping targets counted once, version gates without a traceback
+## v1.14.0 — stale alarms re-checked, overlapping targets counted once, version gates without a traceback
 
 Found in a live session against the lab vCenter 8.0.3 on 2026-09-15, then corrected after an independent review
 the same day.
