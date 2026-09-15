@@ -50,8 +50,8 @@ def _issue_row(rank: int, issue: dict) -> str:
         detail += ' <span style="color:var(--faint);font-weight:400">(alarm)</span>'
     obj = escape(str(issue.get("object", "")))
     cluster = escape(str(issue.get("cluster") or ""))
-    if issue.get("scope") == "host":
-        loc = f"host <b>{obj}</b>" + (f" · cluster {cluster}" if cluster else "")
+    if issue.get("scope") in ("host", "datastore"):
+        loc = f"{issue['scope']} <b>{obj}</b>" + (f" · cluster {cluster}" if cluster else "")
     else:
         loc = f"cluster <b>{obj}</b>"
     nxt = escape(str(issue.get("drilldown", "")))

@@ -784,14 +784,20 @@ def _cim_server_states(si: ServiceInstance, hosts: list[tuple[str, object]]) -> 
     gets ``None`` for both — unknown, not stopped.
     """
     refs = [ref for _name, ref in hosts if ref]
-    info_by_ref = (
-        {
-            ref: props.get("serviceInfo")
-            for ref, props in _collect_objects(si, refs, vim.HostServiceSystem, ["serviceInfo"])
-        }
-        if refs
-        else {}
-    )
+    try:
+        info_by_ref = (
+            {
+                ref: props.get("serviceInfo")
+                for ref, props in _collect_objects(si, refs, vim.HostServiceSystem, ["serviceInfo"])
+            }
+            if refs
+            else {}
+        )
+    except Exception:
+        # The sensor rows are already read. Losing them to a failed service
+        # read would trade an answer for none, so every CIM state is unknown
+        # instead — and the note says so for each host.
+        info_by_ref = {}
     rows = []
     for name, ref in hosts:
         services = getattr(info_by_ref.get(ref) if ref else None, "service", None) or []
@@ -800,33 +806,38 @@ def _cim_server_states(si: ServiceInstance, hosts: list[tuple[str, object]]) -> 
             {
                 "host": name,
                 "cim_server_running": None if cim is None else bool(cim.running),
-                "cim_server_policy": None if cim is None else str(cim.policy),
+                "cim_server_policy": None if cim is None or cim.policy is None else str(cim.policy),
             }
         )
     return rows
 
 
+#: Host names quoted per group in a note, and rows kept in ``hosts_without_sensors``.
+#: A fleet with the CIM Server stopped everywhere is one sentence, not one per host.
+_MAX_HOSTS_NAMED = 10
+_MAX_HOSTS_LISTED = 50
+
+
+def _named_hosts(hosts: list[str]) -> str:
+    more = len(hosts) - _MAX_HOSTS_NAMED
+    return ", ".join(hosts[:_MAX_HOSTS_NAMED]) + (f" and {more} more" if more > 0 else "")
+
+
 def _no_sensors_note(rows: list[dict]) -> str:
-    parts = []
-    for r in rows:
-        if r["cim_server_running"] is False:
-            parts.append(
-                f"{r['host']}: the CIM Server ({_CIM_SERVER_SERVICE}) is not running "
-                f"(policy {r['cim_server_policy']}); ESXi reads hardware sensors through "
-                f"it, so none are reported until it runs"
-            )
-        elif r["cim_server_running"] is True:
-            parts.append(
-                f"{r['host']}: the CIM Server is running, so nothing on the host supplies "
-                f"sensors — usually no BMC/IPMI device or vendor CIM provider "
-                f"(host_log_scan shows ipmi errors when the device is missing)"
-            )
-        else:
-            parts.append(
-                f"{r['host']}: the CIM Server's state could not be read, so why no "
-                f"sensors are reported is unknown"
-            )
-    return "No hardware sensors reported by " + "; ".join(parts) + "."
+    groups = (
+        (False, f"the CIM Server ({_CIM_SERVER_SERVICE}) is not running; ESXi reads hardware "
+                f"sensors through it, so none are reported until it runs"),
+        (True, "the CIM Server is running, so nothing on the host supplies sensors — usually "
+               "no BMC/IPMI device or vendor CIM provider (host_log_scan shows ipmi errors "
+               "when the device is missing)"),
+        (None, "the CIM Server's state could not be read, so why no sensors are reported is unknown"),
+    )
+    parts = [
+        f"{_named_hosts(hosts)}: {why}"
+        for state, why in groups
+        if (hosts := [r["host"] for r in rows if r["cim_server_running"] is state])
+    ]
+    return f"{len(rows)} connected host(s) report no hardware sensors. " + "; ".join(parts) + "."
 
 
 def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> dict:
@@ -883,7 +894,10 @@ def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> d
     if limit is not None:
         results = results[:limit]
     without = _cim_server_states(si, no_sensors)
-    extra: dict = {"hosts_without_sensors": without}
+    extra: dict = {
+        "hosts_without_sensors": without[:_MAX_HOSTS_LISTED],
+        "hosts_without_sensors_total": len(without),
+    }
     if without:
         extra["sensors_note"] = _no_sensors_note(without)
     return paginated(results, limit=limit, total=total, **extra)
