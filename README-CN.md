@@ -157,7 +157,7 @@ ESXi 独立主机 ──→ VM
 | 功能 | 说明 |
 |------|------|
 | **代码级隔离** | 独立仓库 — 代码中零破坏性函数，由一道 AST 白名单闸门逐个核验全部 vSphere 调用（[`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)）|
-| **审计日志** | MCP 工具调用记录到 `~/.vmware/audit.db`（SQLite，经 vmware-policy）；CLI 命令记录到 `~/.vmware-monitor/audit.log`（JSONL） |
+| **审计日志** | MCP 工具调用和每条访问 vCenter 的 CLI 命令记录到 `~/.vmware/audit.db`（SQLite，经 vmware-policy）；CLI 查询另写 `~/.vmware-monitor/audit.log`（JSONL） |
 | **密码保护** | 通过 `.env` 加载密码并检查文件权限（warn if not 600） |
 | **配置文件内容** | `config.yaml` 仅存储主机名、端口和 `.env` 引用路径，**不含密码或 Token** |
 | **SSL 自签名** | 仅用于 ESXi 自签名证书的隔离实验环境；生产环境应使用 CA 签名证书 |

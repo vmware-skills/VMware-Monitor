@@ -13,7 +13,7 @@ allowed-tools:
   - Bash
 metadata: {"openclaw":{"requires":{"anyBins":["vmware-monitor","uvx"]},"optional":{"env":["VMWARE_MONITOR_CONFIG","VMWARE_TARGET_PASSWORD","VMWARE_<TARGET>_USERNAME","SLACK_WEBHOOK_URL","DISCORD_WEBHOOK_URL","VMWARE_AUDIT_APPROVED_BY"],"bins":["vmware-policy"]},"homepage":"https://github.com/vmware-skills/VMware-Monitor","emoji":"📊","os":["macos","linux"]}}
 compatibility: >
-  vmware-policy auto-installed as Python dependency (provides @vmware_tool decorator and audit logging). MCP tool calls audited to ~/.vmware/audit.db, CLI commands to ~/.vmware-monitor/audit.log.
+  vmware-policy auto-installed as Python dependency (provides @vmware_tool decorator and audit logging). MCP tool calls and remote CLI commands audited to ~/.vmware/audit.db; CLI queries also to ~/.vmware-monitor/audit.log.
   Credentials: Each vCenter/ESXi target requires a per-target password env var in ~/.vmware-monitor/.env following the pattern VMWARE_<TARGET_NAME_UPPER>_PASSWORD (e.g., target "vcenter-prod" → VMWARE_VCENTER_PROD_PASSWORD). SLACK_WEBHOOK_URL and DISCORD_WEBHOOK_URL are optional — disabled by default, user-configured only, used solely by the opt-in daemon scanner. Daemon: the background scanner (vmware-monitor daemon start) is user-initiated only, never auto-started. Webhook payloads carry issue counts plus every critical issue and every alarm/event warning (host-log warnings and info rows are not sent): entity name and the sanitized, truncated alarm, vCenter event, or ESXi log text, or a connection error — which can include host names, IPs, and user names. No credentials from the skill's config are sent.
 ---
 
@@ -24,7 +24,7 @@ compatibility: >
 Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code.
 
 > **Read-only toward vSphere**: no code path changes vCenter/ESXi state — no power, create, delete, snapshot, or reconfigure call exists. On vCenter it opens only its login session and short-lived query handles it releases. Gate: [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) (source repo, not this bundle) requires every vSphere method called to be on a reviewed allowlist, checked against pyVmomi's type metadata. It checks source, not runtime, and no CI runs it. Independent of this code: use a dedicated account with vCenter's Read-Only role.
-> **Local writes** (this machine only): `init` writes `~/.vmware-monitor/config.yaml` and `.env` (0600; plaintext passwords are rewritten as `b64:` on load); audit logs `~/.vmware/audit.db` (MCP) and `~/.vmware-monitor/audit.log` (CLI); `--html` snapshots in `~/vmware-health/`; after `daemon start` only, `scan.log`, `daemon.pid` and opt-in webhook posts.
+> **Local writes** (this machine only): `init` writes `~/.vmware-monitor/config.yaml` and `.env` (0600; plaintext passwords are rewritten as `b64:` on load); audit logs `~/.vmware/audit.db` (MCP and CLI) and `~/.vmware-monitor/audit.log` (CLI); `--html` snapshots in `~/vmware-health/`; after `daemon start` only, `scan.log`, `daemon.pid` and opt-in webhook posts.
 > **Companion skills**: [vmware-aiops](https://github.com/vmware-skills/VMware-AIops) (VM lifecycle), [vmware-storage](https://github.com/vmware-skills/VMware-Storage) (iSCSI/vSAN), [vmware-vks](https://github.com/vmware-skills/VMware-VKS) (Tanzu Kubernetes), [vmware-nsx](https://github.com/vmware-skills/VMware-NSX) (NSX networking), [vmware-nsx-security](https://github.com/vmware-skills/VMware-NSX-Security) (DFW/firewall), [vmware-aria](https://github.com/vmware-skills/VMware-Aria) (metrics/alerts/capacity), [vmware-avi](https://github.com/vmware-skills/VMware-AVI) (AVI/ALB/AKO), [vmware-harden](https://github.com/vmware-skills/VMware-Harden) (compliance baselines).
 > | [vmware-pilot](../vmware-pilot/SKILL.md) (workflow orchestration) | [vmware-policy](../vmware-policy/SKILL.md) (audit/policy)
 
@@ -48,7 +48,7 @@ Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code
 ## Quick Install
 
 ```bash
-uv tool install vmware-monitor==1.13.0
+uv tool install vmware-monitor==1.13.1
 vmware-monitor doctor
 ```
 
@@ -267,7 +267,7 @@ simply not matched by such a rule. Config example: `references/setup-guide.md`.
 ## Setup
 
 ```bash
-uv tool install vmware-monitor==1.13.0
+uv tool install vmware-monitor==1.13.1
 vmware-monitor init      # guided: prompts for host/user/password, writes config + .env (chmod 600), then verifies
 ```
 
@@ -279,8 +279,8 @@ locks `.env` to 0600. Prefer it over hand-editing; manual steps:
 
 ## Audit & Safety
 
-MCP tool calls are audited via vmware-policy (`@vmware_tool`); CLI commands append to `~/.vmware-monitor/audit.log`:
-- Every MCP tool call logged to `~/.vmware/audit.db` (SQLite)
+MCP calls (`@vmware_tool`) and remote CLI commands (`@audited`) are audited via vmware-policy; CLI queries also append to `~/.vmware-monitor/audit.log`:
+- Every MCP call and remote CLI command logged to `~/.vmware/audit.db` (SQLite)
 - Policy rules enforced via `~/.vmware/rules.yaml` (deny rules, maintenance windows, risk levels)
 - Risk classification: each tool tagged as low/medium/high/critical
 - View recent operations: `vmware-audit log --last 20`

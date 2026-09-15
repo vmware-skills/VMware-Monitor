@@ -24,6 +24,7 @@ from vmware_monitor.cli_base import (
     console,
     get_connection,
 )
+from vmware_policy import audited
 
 memory_app = typer.Typer(help="Memory tiering (vSphere 9.1, read-only).")
 patch_app = typer.Typer(help="vLCM patch compliance / last-apply (read-only).")
@@ -37,6 +38,7 @@ ClusterArg = Annotated[str, typer.Argument(help="Cluster MoID, e.g. domain-c123"
 
 @memory_app.command("tiering")
 @cli_errors
+@audited("host_memory_tiering")
 def memory_tiering(
     host: Annotated[str | None, typer.Option("--host", help="Single host by exact name")] = None,
     target: TargetOption = None,
@@ -96,6 +98,7 @@ def _target_config(target: str | None, config):
 
 @patch_app.command("compliance")
 @cli_errors
+@audited("cluster_patch_compliance")
 def patch_compliance(
     cluster: ClusterArg,
     target: TargetOption = None,
@@ -120,6 +123,7 @@ def patch_compliance(
 
 @patch_app.command("last-apply")
 @cli_errors
+@audited("cluster_last_apply_result")
 def patch_last_apply(
     cluster: ClusterArg,
     target: TargetOption = None,
@@ -145,6 +149,7 @@ def patch_last_apply(
 
 
 @cli_errors
+@audited("vcenter_deployment_size")
 def deployment_size_cmd(
     target: TargetOption = None,
     config: ConfigOption = None,

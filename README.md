@@ -204,7 +204,7 @@ ESXi Standalone ──→ VMs
 | Feature | Details |
 |---------|---------|
 | **Code-Level Isolation** | Independent repository — zero destructive functions in codebase, checked by an AST allowlist gate over every vSphere call ([`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py)) |
-| **Audit Trail** | MCP tool calls logged to `~/.vmware/audit.db` (SQLite, via vmware-policy); CLI commands to `~/.vmware-monitor/audit.log` (JSONL) |
+| **Audit Trail** | MCP tool calls and every CLI command that reaches vCenter logged to `~/.vmware/audit.db` (SQLite, via vmware-policy); CLI queries also append to `~/.vmware-monitor/audit.log` (JSONL) |
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
 | **SSL Self-signed Support** | `verify_ssl: false` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |

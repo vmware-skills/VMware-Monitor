@@ -226,7 +226,7 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 | Feature | Details |
 |---------|---------|
 | Code-Level Isolation | Independent repository — zero destructive functions in codebase, gated by an AST allowlist over every vSphere call |
-| Audit Trail | MCP tool calls logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy); CLI commands to `~/.vmware-monitor/audit.log` (JSON Lines) |
+| Audit Trail | MCP tool calls and every CLI command that reaches vCenter logged to `~/.vmware/audit.db` (SQLite WAL, via vmware-policy); CLI queries also append to `~/.vmware-monitor/audit.log` (JSON Lines) |
 | Password Protection | `.env` file loading with permission check (warn if not 600) |
 | SSL Self-signed Support | `verify_ssl: false` — **only** for ESXi hosts with self-signed certificates in isolated lab/home environments. Production environments should use CA-signed certificates with full TLS verification enabled. |
 

@@ -34,6 +34,7 @@ from vmware_monitor.cli_base import (
 )
 from vmware_monitor.config import CONFIG_DIR
 import sys
+from vmware_policy import audited, cli_local
 
 
 def _harden_console_encoding() -> None:
@@ -90,6 +91,7 @@ cli_vsphere91.register(app)
 
 @inventory_app.command("vms")
 @_cli_errors
+@audited("list_virtual_machines")
 def inventory_vms(
     target: TargetOption = None,
     config: ConfigOption = None,
@@ -163,6 +165,7 @@ def inventory_vms(
 
 @inventory_app.command("hosts")
 @_cli_errors
+@audited("list_esxi_hosts")
 def inventory_hosts(target: TargetOption = None, config: ConfigOption = None) -> None:
     """List all ESXi hosts."""
     from vmware_monitor.ops.inventory import list_hosts
@@ -190,6 +193,7 @@ def inventory_hosts(target: TargetOption = None, config: ConfigOption = None) ->
 
 @inventory_app.command("datastores")
 @_cli_errors
+@audited("list_all_datastores")
 def inventory_datastores(target: TargetOption = None, config: ConfigOption = None) -> None:
     """List all datastores."""
     from vmware_monitor.ops.inventory import list_datastores
@@ -218,6 +222,7 @@ def inventory_datastores(target: TargetOption = None, config: ConfigOption = Non
 
 @inventory_app.command("clusters")
 @_cli_errors
+@audited("list_all_clusters")
 def inventory_clusters(target: TargetOption = None, config: ConfigOption = None) -> None:
     """List all clusters."""
     from vmware_monitor.ops.inventory import list_clusters
@@ -242,6 +247,7 @@ def inventory_clusters(target: TargetOption = None, config: ConfigOption = None)
 
 @inventory_app.command("networks")
 @_cli_errors
+@audited("list_all_networks")
 def inventory_networks(target: TargetOption = None, config: ConfigOption = None) -> None:
     """List all networks."""
     from vmware_monitor.ops.inventory import list_networks
@@ -267,6 +273,7 @@ def inventory_networks(target: TargetOption = None, config: ConfigOption = None)
 
 @health_app.command("alarms")
 @_cli_errors
+@audited("get_alarms")
 def health_alarms(target: TargetOption = None, config: ConfigOption = None) -> None:
     """Show active alarms."""
     from vmware_monitor.ops.health import get_active_alarms
@@ -314,6 +321,7 @@ def health_alarms(target: TargetOption = None, config: ConfigOption = None) -> N
 
 @health_app.command("events")
 @_cli_errors
+@audited("get_events")
 def health_events(
     hours: Annotated[int, typer.Option(help="Lookback hours")] = 24,
     severity: Annotated[str, typer.Option(help="Min severity: info/warning/error")] = "warning",
@@ -378,6 +386,7 @@ def health_events(
 
 @health_app.command("sensors")
 @_cli_errors
+@audited("get_host_sensors")
 def health_sensors(target: TargetOption = None, config: ConfigOption = None) -> None:
     """Show hardware sensor status for all hosts."""
     from vmware_monitor.ops.health import get_host_hardware_status
@@ -414,6 +423,7 @@ def health_sensors(target: TargetOption = None, config: ConfigOption = None) -> 
 
 @health_app.command("services")
 @_cli_errors
+@audited("get_host_services")
 def health_services(
     host: Annotated[
         str | None,
@@ -454,6 +464,7 @@ def health_services(
 
 @vm_app.command("info")
 @_cli_errors
+@audited("vm_info")
 def vm_info(
     name: str,
     target: TargetOption = None,
@@ -471,6 +482,7 @@ def vm_info(
 
 @vm_app.command("snapshot-list")
 @_cli_errors
+@audited("vm_list_snapshots")
 def vm_snapshot_list(
     vm_name: str,
     target: TargetOption = None,
@@ -495,6 +507,7 @@ def vm_snapshot_list(
 
 @scan_app.command("now")
 @_cli_errors
+@audited("scan_now")
 def scan_now(target: TargetOption = None, config: ConfigOption = None) -> None:
     """Run a one-time scan of alarms and events."""
     from rich.markup import escape
@@ -521,6 +534,7 @@ def scan_now(target: TargetOption = None, config: ConfigOption = None) -> None:
 
 @scan_app.command("logs")
 @_cli_errors
+@audited("host_log_scan")
 def scan_logs_cmd(
     host: Annotated[
         str | None, typer.Option("--host", help="Exact ESXi host name (default: all)")
@@ -577,6 +591,7 @@ def scan_logs_cmd(
 
 @daemon_app.command("start")
 @_cli_errors
+@cli_local("controls the local scanner daemon process")
 def daemon_start(config: ConfigOption = None) -> None:
     """Start the scanner daemon."""
     from vmware_monitor.scanner.scheduler import start_scheduler
@@ -586,6 +601,7 @@ def daemon_start(config: ConfigOption = None) -> None:
 
 
 @daemon_app.command("status")
+@cli_local("controls the local scanner daemon process")
 def daemon_status() -> None:
     """Check scanner daemon status."""
     import os as _os
@@ -613,6 +629,7 @@ def daemon_status() -> None:
 
 
 @daemon_app.command("stop")
+@cli_local("controls the local scanner daemon process")
 def daemon_stop() -> None:
     """Stop the scanner daemon."""
     import os as _os
@@ -641,6 +658,7 @@ def daemon_stop() -> None:
 
 
 @app.command("init")
+@audited("init")
 def init_cmd(
     force: Annotated[
         bool, typer.Option("--force", help="Overwrite an existing config without asking")
@@ -656,6 +674,7 @@ def init_cmd(
 
 
 @app.command("doctor")
+@audited("doctor")
 def doctor_cmd(
     skip_auth: Annotated[
         bool,
@@ -687,6 +706,7 @@ _TEMPLATES_DIR = Path(__file__).parent.parent / "examples" / "mcp-configs"
 
 
 @mcp_config_app.command("generate")
+@cli_local("writes or lists local MCP client config files")
 def mcp_config_generate(
     agent: Annotated[
         str,
@@ -738,6 +758,7 @@ def mcp_config_generate(
 
 
 @mcp_config_app.command("list")
+@cli_local("writes or lists local MCP client config files")
 def mcp_config_list() -> None:
     """List all supported agents."""
     table = Table(title="Supported Agents")
@@ -749,6 +770,7 @@ def mcp_config_list() -> None:
 
 
 @app.command("mcp")
+@cli_local("starts the MCP server; its tools audit themselves")
 def mcp_cmd() -> None:
     """Start the MCP server (stdio transport).
 

@@ -31,6 +31,7 @@ from vmware_monitor.cli_base import (
     get_all_connections,
     get_connection,
 )
+from vmware_policy import audited
 
 perf_app = typer.Typer(help="Real-time performance counters (read-only).")
 capacity_app = typer.Typer(help="Capacity analytics: over-commit, resource pools (read-only).")
@@ -51,6 +52,7 @@ def _pct_style(value: float, warn: float = 70, crit: float = 85) -> str:
 
 @perf_app.command("hosts")
 @cli_errors
+@audited("host_performance")
 def perf_hosts(
     host: Annotated[str | None, typer.Option("--host", help="Single host by exact name")] = None,
     target: TargetOption = None,
@@ -89,6 +91,7 @@ def perf_hosts(
 
 @perf_app.command("vms")
 @cli_errors
+@audited("vm_performance")
 def perf_vms(
     vm: Annotated[str | None, typer.Option("--vm", help="Single VM by exact name")] = None,
     target: TargetOption = None,
@@ -131,6 +134,7 @@ def perf_vms(
 
 @capacity_app.command("datastores")
 @cli_errors
+@audited("datastore_capacity")
 def capacity_datastores(
     target: TargetOption = None,
     config: ConfigOption = None,
@@ -165,6 +169,7 @@ def capacity_datastores(
 
 @capacity_app.command("pools")
 @cli_errors
+@audited("resource_pool_usage")
 def capacity_pools(
     target: TargetOption = None,
     config: ConfigOption = None,
@@ -197,6 +202,7 @@ def capacity_pools(
 
 @infra_app.command("certs")
 @cli_errors
+@audited("certificate_status")
 def infra_certs(
     warn_days: Annotated[int, typer.Option("--warn-days", help="Flag certs within N days")] = 30,
     target: TargetOption = None,
@@ -222,6 +228,7 @@ def infra_certs(
 
 @infra_app.command("licenses")
 @cli_errors
+@audited("license_status")
 def infra_licenses(target: TargetOption = None, config: ConfigOption = None) -> None:
     """vCenter/ESXi license inventory with usage and expiry."""
     from vmware_monitor.ops.infra_health import get_license_status
@@ -259,6 +266,7 @@ def infra_licenses(target: TargetOption = None, config: ConfigOption = None) -> 
 
 @infra_app.command("ntp")
 @cli_errors
+@audited("ntp_status")
 def infra_ntp(
     host: Annotated[str | None, typer.Option("--host", help="Single host by exact name")] = None,
     target: TargetOption = None,
@@ -309,6 +317,7 @@ def infra_ntp(
 
 @snapshots_app.command("aging")
 @cli_errors
+@audited("snapshot_aging")
 def snapshots_aging(
     threshold: Annotated[int, typer.Option("--threshold", help="Age (days) to flag as old")] = 30,
     only_old: Annotated[bool, typer.Option("--only-old", help="Show only old snapshots")] = False,
@@ -352,6 +361,7 @@ def snapshots_aging(
 
 @snapshots_app.command("backup-window")
 @cli_errors
+@audited("vm_backup_snapshot_history")
 def snapshots_backup_window(
     vm: Annotated[str, typer.Argument(help="Exact VM name")],
     days: Annotated[int, typer.Option("--days", help="How far back to look (1-365)")] = 30,
@@ -451,6 +461,7 @@ def snapshots_backup_window(
 
 @activity_app.command("tasks")
 @cli_errors
+@audited("active_tasks")
 def activity_tasks(
     all_recent: Annotated[
         bool, typer.Option("--all-recent/--active-only", help="Include completed")
@@ -488,6 +499,7 @@ def activity_tasks(
 
 @activity_app.command("sessions")
 @cli_errors
+@audited("active_sessions")
 def activity_sessions(
     target: TargetOption = None,
     config: ConfigOption = None,
@@ -592,6 +604,7 @@ def _render_top_issues(data: dict, top: int) -> None:
 
 
 @cli_errors
+@audited("cluster_health_summary")
 def cluster_summary_cmd(
     cluster: Annotated[
         str | None,
@@ -811,6 +824,7 @@ HtmlPathOption = Annotated[
 
 @investigate_app.command("vm")
 @cli_errors
+@audited("vm_investigation_bundle")
 def investigate_vm_cmd(
     vm_name: Annotated[str, typer.Argument(help="Exact VM name to investigate")],
     hours: HoursOption = 24,
@@ -840,6 +854,7 @@ def investigate_vm_cmd(
 
 @investigate_app.command("host")
 @cli_errors
+@audited("host_investigation_bundle")
 def investigate_host_cmd(
     host_name: Annotated[str, typer.Argument(help="Exact ESXi host name to investigate")],
     hours: HoursOption = 24,
@@ -869,6 +884,7 @@ def investigate_host_cmd(
 
 @investigate_app.command("datastore")
 @cli_errors
+@audited("datastore_investigation_bundle")
 def investigate_datastore_cmd(
     datastore_name: Annotated[str, typer.Argument(help="Exact datastore name to investigate")],
     hours: HoursOption = 24,
@@ -963,6 +979,7 @@ def write_attention_html_snapshot(data: dict, explicit_path: Path | None) -> Non
 
 
 @cli_errors
+@audited("cross_vcenter_attention")
 def attention_cmd(
     cluster: Annotated[
         str | None, typer.Option("--cluster", help="Show only clusters matching this substring")

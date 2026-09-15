@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==1.13.0
+uv tool install vmware-monitor==1.13.1
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v1.13.0
+npx skills add vmware-skills/VMware-Monitor#v1.13.1
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 1.13.0
+clawhub install @zw008/vmware-monitor --version 1.13.1
 ```
 
 ### Claude Code
@@ -48,7 +48,7 @@ It does write to the local machine — by default under your home directory:
 |---|---|---|
 | `~/.vmware-monitor/config.yaml`, `~/.vmware-monitor/.env` | `vmware-monitor init` | Once, when you run it (`.env` is set to 0600) |
 | `~/.vmware-monitor/.env` (rewritten in place) | Every run | Only if it holds a plaintext `*_PASSWORD`: the value is rewritten as `b64:` (see below) |
-| `~/.vmware/audit.db` (SQLite; `OPS_HOME` moves it) | vmware-policy | Every MCP tool call |
+| `~/.vmware/audit.db` (SQLite; `OPS_HOME` moves it) | vmware-policy | Every MCP tool call, and every CLI command that reaches vCenter |
 | `~/.vmware-monitor/audit.log` (JSON Lines) | CLI | Every CLI query command |
 | `~/vmware-health/*.html` | `summary` / `investigate` / `attention` | Only with `--html` (or `--html-path <file>`) |
 | `~/.vmware-monitor/daemon.pid`, `~/.vmware-monitor/scan.log` (`notify.log_file` moves the log) | Scanner daemon | Only after `daemon start` |
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==1.13.0
+uv tool install vmware-monitor==1.13.1
 
 # 2. Verify
 vmware-monitor --version
@@ -95,7 +95,7 @@ pointed at the same vCenter: an environment-scoped `deny` rule in
 ## Development Install
 
 ```bash
-git clone --branch v1.13.0 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v1.13.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
