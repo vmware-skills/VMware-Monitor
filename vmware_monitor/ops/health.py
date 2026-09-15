@@ -772,11 +772,75 @@ def get_recent_events(
     return paginated(results, **extra)
 
 
+#: ESXi's CIM Server. Hardware sensors (``numericSensorInfo``) come from the CIM
+#: providers it runs, so while it is stopped a host reports none.
+_CIM_SERVER_SERVICE = "sfcbd-watchdog"
+
+
+def _cim_server_states(si: ServiceInstance, hosts: list[tuple[str, object]]) -> list[dict]:
+    """The CIM Server's running state and policy for each ``(host, serviceSystem)``.
+
+    One batched read for all of them. A host whose service list could not be read
+    gets ``None`` for both — unknown, not stopped.
+    """
+    refs = [ref for _name, ref in hosts if ref]
+    info_by_ref = (
+        {
+            ref: props.get("serviceInfo")
+            for ref, props in _collect_objects(si, refs, vim.HostServiceSystem, ["serviceInfo"])
+        }
+        if refs
+        else {}
+    )
+    rows = []
+    for name, ref in hosts:
+        services = getattr(info_by_ref.get(ref) if ref else None, "service", None) or []
+        cim = next((s for s in services if s.key == _CIM_SERVER_SERVICE), None)
+        rows.append(
+            {
+                "host": name,
+                "cim_server_running": None if cim is None else bool(cim.running),
+                "cim_server_policy": None if cim is None else str(cim.policy),
+            }
+        )
+    return rows
+
+
+def _no_sensors_note(rows: list[dict]) -> str:
+    parts = []
+    for r in rows:
+        if r["cim_server_running"] is False:
+            parts.append(
+                f"{r['host']}: the CIM Server ({_CIM_SERVER_SERVICE}) is not running "
+                f"(policy {r['cim_server_policy']}); ESXi reads hardware sensors through "
+                f"it, so none are reported until it runs"
+            )
+        elif r["cim_server_running"] is True:
+            parts.append(
+                f"{r['host']}: the CIM Server is running, so nothing on the host supplies "
+                f"sensors — usually no BMC/IPMI device or vendor CIM provider "
+                f"(host_log_scan shows ipmi errors when the device is missing)"
+            )
+        else:
+            parts.append(
+                f"{r['host']}: the CIM Server's state could not be read, so why no "
+                f"sensors are reported is unknown"
+            )
+    return "No hardware sensors reported by " + "; ".join(parts) + "."
+
+
 def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> dict:
     """Get hardware sensor status for all hosts.
 
     Returns the family list envelope with a real ``total``: every host's sensor
     rows are collected before ``limit`` is applied.
+
+    A connected host that reports no sensors is listed in ``hosts_without_sensors``
+    with its CIM Server (``sfcbd-watchdog``) state, and ``sensors_note`` says what
+    that state means. On the lab vCenter 8.0.3 (2026-09-15) the only output was a
+    green "no data" line while the CIM Server — which supplies the sensors — was
+    set to start and not running. A host vCenter cannot reach is not listed: its
+    sensors were not read, which is not the same as having none.
 
     Args:
         si: vSphere ServiceInstance.
@@ -786,12 +850,23 @@ def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> d
     # call; the sensor list arrives inline instead of a lazy round-trip per host
     # (issue #31 class). healthSystemRuntime is a data object, not a managed ref.
     results = []
-    for _obj, p in _collect(si, [vim.HostSystem], ["name", "runtime.healthSystemRuntime"]):
-        runtime_health = p.get("runtime.healthSystemRuntime")
-        if not runtime_health or not runtime_health.systemHealthInfo:
-            continue
+    no_sensors: list[tuple[str, object]] = []
+    props = [
+        "name",
+        "runtime.connectionState",
+        "runtime.healthSystemRuntime",
+        "configManager.serviceSystem",
+    ]
+    for _obj, p in _collect(si, [vim.HostSystem], props):
         host_name = sanitize(p.get("name", ""))
-        for sensor in runtime_health.systemHealthInfo.numericSensorInfo:
+        runtime_health = p.get("runtime.healthSystemRuntime")
+        info = getattr(runtime_health, "systemHealthInfo", None) if runtime_health else None
+        sensors = list(getattr(info, "numericSensorInfo", None) or []) if info else []
+        if not sensors:
+            if str(p.get("runtime.connectionState")) == "connected":
+                no_sensors.append((host_name, p.get("configManager.serviceSystem")))
+            continue
+        for sensor in sensors:
             # Health (green/yellow/red) lives in healthState.key;
             # sensorType is the category (temperature/voltage/fan...).
             health = getattr(sensor, "healthState", None)
@@ -807,7 +882,11 @@ def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> d
     total = len(results)
     if limit is not None:
         results = results[:limit]
-    return paginated(results, limit=limit, total=total)
+    without = _cim_server_states(si, no_sensors)
+    extra: dict = {"hosts_without_sensors": without}
+    if without:
+        extra["sensors_note"] = _no_sensors_note(without)
+    return paginated(results, limit=limit, total=total, **extra)
 
 
 def get_host_services(si: ServiceInstance, host_name: str | None = None) -> dict:

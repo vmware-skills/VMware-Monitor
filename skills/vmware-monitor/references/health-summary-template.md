@@ -86,6 +86,7 @@ to retune:
 |----------------------|:-------:|--------|
 | `CPU_MEM_WARN_PCT`   | 85      | CPU or memory at/above → contributes `warn` |
 | `CPU_MEM_CRIT_PCT`   | 95      | CPU or memory at/above → `critical` |
+| `DATASTORE_OVERCOMMIT_WARN_PCT` (in `ops/capacity.py`) | 100 | Datastore provisioned above this % of capacity → a `warning` capacity issue in `top_issues` (`scope: datastore`); the same line `capacity datastores` colours red |
 
 Status is also forced to `critical` by **any disconnected host** or **any critical
 alarm**, and to at least `warn` by warning alarms or **HA disabled on a multi-host

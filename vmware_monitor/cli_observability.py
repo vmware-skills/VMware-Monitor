@@ -137,7 +137,7 @@ def capacity_datastores(
     limit: LimitOption = None,
 ) -> None:
     """Datastore capacity with thin-provisioning over-commit."""
-    from vmware_monitor.ops.capacity import get_datastore_capacity
+    from vmware_monitor.ops.capacity import DATASTORE_OVERCOMMIT_WARN_PCT, get_datastore_capacity
 
     si, _, tgt = get_connection(target, config)
     rows = get_datastore_capacity(si, limit=limit)["items"]
@@ -151,7 +151,7 @@ def capacity_datastores(
     table.add_column("Over-commit %", justify="right")
     for r in rows:
         oc = r["overcommit_pct"]
-        oc_style = "red" if oc > 100 else "yellow" if oc > 80 else "green"
+        oc_style = "red" if oc > DATASTORE_OVERCOMMIT_WARN_PCT else "yellow" if oc > 80 else "green"
         table.add_row(
             r["name"],
             r["type"],
@@ -300,6 +300,8 @@ def infra_ntp(
         # Under the table, where someone scanning the Healthy column for red
         # will still meet it. Without this the yellow rows are the only clue.
         console.print(f"[yellow]{note}[/]")
+    if result.get("ntp_sources_note"):
+        console.print(f"[yellow]{result['ntp_sources_note']}[/]")
 
 
 # ─── snapshots ─────────────────────────────────────────────────────────────

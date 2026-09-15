@@ -27,6 +27,23 @@ if TYPE_CHECKING:
 
 _GB = 1024**3
 
+#: Provisioned space above this share of a datastore's capacity is flagged: more
+#: is promised to VMs than exists, so a thin datastore can fill while it still
+#: shows free space. The capacity view colours it red and the health summary
+#: raises it as an issue — one number for both.
+DATASTORE_OVERCOMMIT_WARN_PCT = 100.0
+
+
+def overcommit_pct(capacity: float, free: float, uncommitted: float) -> float | None:
+    """Provisioned space (committed + uncommitted) as a percentage of capacity, 1 dp.
+
+    ``None`` when capacity is zero or unknown: there is nothing to divide by, and
+    0.0 would read as "nothing provisioned".
+    """
+    if not capacity:
+        return None
+    return round(((capacity - free) + uncommitted) / capacity * 100, 1)
+
 _DS_CAP_PROPS = [
     "name",
     "summary.type",
@@ -72,7 +89,9 @@ def get_datastore_capacity(
         committed = capacity - free
         provisioned = committed + uncommitted
         used_pct = round(committed / capacity * 100, 1) if capacity else 0.0
-        overcommit_pct = round(provisioned / capacity * 100, 1) if capacity else 0.0
+        # 0.0 for a datastore with no capacity reading, as before: the rows are
+        # sorted and coloured by this number.
+        pct = overcommit_pct(capacity, free, uncommitted)
         results.append(
             {
                 "name": sanitize(p.get("name", "")),
@@ -82,7 +101,7 @@ def get_datastore_capacity(
                 "committed_gb": round(committed / _GB, 1),
                 "provisioned_gb": round(provisioned / _GB, 1),
                 "used_pct": used_pct,
-                "overcommit_pct": overcommit_pct,
+                "overcommit_pct": pct if pct is not None else 0.0,
             }
         )
     results.sort(key=lambda x: x["overcommit_pct"], reverse=True)

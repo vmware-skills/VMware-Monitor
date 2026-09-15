@@ -1,3 +1,24 @@
+## Unreleased — why a host has no sensors, hosts on different time sources, over-committed datastores in the summary
+
+**`health sensors` says why a host reports none.** On the lab vCenter 8.0.3 it printed "No hardware sensor data
+available." in green. `health services` showed the reason: the CIM Server (`sfcbd-watchdog`) was set to start and not
+running, and ESXi reads hardware sensors through it. `get_host_sensors` now lists every connected host with no sensors
+in `hosts_without_sensors`, with `cim_server_running` and `cim_server_policy` (null when the service list could not be
+read), and `sensors_note` explains each: stopped CIM Server, or CIM running with nothing to supply sensors (usually no
+BMC/IPMI device). A host vCenter cannot reach is not listed — its sensors were not read. The CLI prints the note in
+yellow instead of a green "no data" line.
+
+**`infra ntp` notices hosts on different time sources.** Both lab hosts were healthy, one synchronising from
+192.168.60.74 and the other from pool.ntp.org. `ntp_status` now carries `ntp_sources_consistent` — false when hosts
+with servers configured use different ones (compared as sets, case-insensitively), with `ntp_sources_note` naming which
+host uses which servers; null when fewer than two hosts have servers to compare. The CLI prints the note.
+
+**The health summary names an over-committed datastore.** datastore1 was thin-provisioned to 216.5% of its 803.2 GB,
+red in `capacity datastores`, and `summary` listed six issues without it. The summary reads datastores in one more
+batched pass and raises a `capacity` issue (`scope: datastore`) above 100% — the same line the capacity view colours
+red, now one constant (`DATASTORE_OVERCOMMIT_WARN_PCT`) for both. The issue is attributed to the cluster of a host that
+mounts the datastore, or to the standalone row.
+
 ## v1.12.0 — alarms say whether they still hold; events newest-first, by window, ranked by their real names
 
 **`license_status` says which license each asset is assigned.** The lab vCenter showed "Expired
