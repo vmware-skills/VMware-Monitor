@@ -227,9 +227,10 @@ def get_cluster_health_summary(
 ) -> dict:
     """Aggregated per-cluster health for a fast "is anything on fire?" glance.
 
-    One batched pass each over clusters, hosts, and (optionally) VMs — three
-    server-side ``RetrievePropertiesEx`` calls total, not one per object (plus
-    one more batched call to resolve alarm names). Rolls host utilisation, VM
+    One batched pass each over clusters, hosts, (optionally) VMs, and datastores —
+    four server-side ``RetrievePropertiesEx`` calls, not one per object (plus one
+    batched call to resolve alarm names, and one for the mount lists of any
+    over-committed datastores). Rolls host utilisation, VM
     power state, and triggered alarms up to the owning cluster, assigns an
     opinionated ``status``, and flattens the individual anomalies into a ranked
     ``top_issues`` focus list — the headline for large fleets, where scanning
@@ -252,8 +253,9 @@ def get_cluster_health_summary(
           - ``totals``: cross-cluster rollup (clusters, hosts, vms, alarms,
             worst_status).
           - ``top_issues``: ranked list (worst first, capped at top_n) of the
-            individual anomalies — disconnected hosts, triggered alarms, and
-            capacity/HA problems — each with severity, object, cluster, detail,
+            individual anomalies — disconnected hosts, triggered alarms,
+            capacity/HA problems and over-committed datastores — each with
+            severity, object, cluster, detail,
             and a drill-down hint.
           - ``issues_total``: total anomalies found before the top_n cap.
           - ``clusters``: list of per-cluster rows sorted worst-status-first,
@@ -416,18 +418,69 @@ def get_cluster_health_summary(
     # Pass 4 — datastores: thin-provisioning over-commit. On the lab vCenter
     # (2026-09-15) datastore1 was promised 216.5% of its capacity, red in
     # `capacity datastores`, and this summary listed six issues without it.
-    for _obj, p in _collect(si, [vim.Datastore], _DATASTORE_PROPS):
-        issue = _datastore_issue(p, host_to_cluster, clusters)
-        if issue:
-            host_issues.append(issue)
+    host_issues.extend(_datastore_issues(si, host_to_cluster, clusters))
 
     return _finalize(si, list(clusters.values()), include_vms, raw_alarms, host_issues, top_n)
 
 
-_DATASTORE_PROPS = ["name", "summary.capacity", "summary.freeSpace", "summary.uncommitted", "host"]
+#: Capacity fields only. ``host`` carries a mount record per host — hundreds on a
+#: shared datastore — so it is read afterwards, for over-committed datastores alone.
+_DATASTORE_PROPS = ["name", "summary.capacity", "summary.freeSpace", "summary.uncommitted"]
+
+_DATASTORE_DRILLDOWN = "vmware-monitor capacity datastores (MCP: datastore_capacity)"
 
 
-def _datastore_issue(p: dict, host_to_cluster: dict, clusters: dict) -> dict | None:
+def _datastore_pct(p: dict) -> float | None:
+    """The datastore's over-commit %, when it is above the warning line; else None."""
+    pct = overcommit_pct(
+        float(p.get("summary.capacity") or 0),
+        float(p.get("summary.freeSpace") or 0),
+        float(p.get("summary.uncommitted") or 0),
+    )
+    return pct if pct is not None and pct > DATASTORE_OVERCOMMIT_WARN_PCT else None
+
+
+def _datastore_issues(si: ServiceInstance, host_to_cluster: dict, clusters: dict) -> list[dict]:
+    """Over-committed datastores as capacity issues; a failed read is one warning.
+
+    Degrades like ``_root_alarm_states``: a vCenter that will not answer for its
+    datastores must not take the hosts, alarms and clusters already read down
+    with it, and must not read as "no datastore is over-committed" either.
+    """
+    try:
+        over = [(obj, p) for obj, p in _collect(si, [vim.Datastore], _DATASTORE_PROPS) if _datastore_pct(p)]
+        refs = [obj for obj, _p in over]
+        mounts = (
+            {ref: props.get("host") for ref, props in _collect_objects(si, refs, vim.Datastore, ["host"])}
+            if refs
+            else {}
+        )
+    except Exception as exc:
+        return [
+            {
+                "severity": "warning",
+                "kind": "capacity",
+                "object": "datastores",
+                "scope": "vcenter",
+                "cluster": _VCENTER_SCOPE,
+                "detail": (
+                    f"datastore over-commit could not be read ({type(exc).__name__}: {exc}) — "
+                    f"this view is incomplete, not clear"
+                ),
+                "drilldown": _DATASTORE_DRILLDOWN,
+            }
+        ]
+    issues = []
+    for obj, p in over:
+        issue = _datastore_issue(p, mounts.get(obj), host_to_cluster, clusters)
+        if issue:
+            issues.append(issue)
+    return issues
+
+
+def _datastore_issue(
+    p: dict, mounts: list | None, host_to_cluster: dict, clusters: dict
+) -> dict | None:
     """A capacity issue for a datastore over-committed past the capacity view's line.
 
     Attributed to the cluster of a host that mounts it — the first one found, for
@@ -436,13 +489,19 @@ def _datastore_issue(p: dict, host_to_cluster: dict, clusters: dict) -> dict | N
     exist and ``host_to_cluster`` holds only matching clusters, so a datastore
     outside them is left out, like everything else in the summary.
     """
+    pct = _datastore_pct(p)
+    if pct is None:
+        return None
     capacity = float(p.get("summary.capacity") or 0)
     free = float(p.get("summary.freeSpace") or 0)
     uncommitted = float(p.get("summary.uncommitted") or 0)
-    pct = overcommit_pct(capacity, free, uncommitted)
-    if pct is None or pct <= DATASTORE_OVERCOMMIT_WARN_PCT:
-        return None
-    mounted = [getattr(m, "key", None) for m in p.get("host") or []]
+    # A mount record whose mountInfo says it is not mounted does not tie the
+    # datastore to that host's cluster.
+    mounted = [
+        getattr(m, "key", None)
+        for m in mounts or []
+        if getattr(getattr(m, "mountInfo", None), "mounted", True) is not False
+    ]
     cname = next((host_to_cluster[h] for h in mounted if h in host_to_cluster), None)
     if cname is None and mounted:
         cname = _STANDALONE
@@ -461,7 +520,7 @@ def _datastore_issue(p: dict, host_to_cluster: dict, clusters: dict) -> dict | N
             f"{capacity_gb} GB promised) — can fill while it shows free space"
         ),
         "_mag": pct,
-        "drilldown": "vmware-monitor capacity datastores (MCP: datastore_capacity)",
+        "drilldown": _DATASTORE_DRILLDOWN,
     }
 
 
@@ -576,6 +635,16 @@ def _finalize(
         mem_used_bytes = rec.pop("_mem_used_mb") * 1024 * 1024
         rec["mem_used_pct"] = _pct(mem_used_bytes, rec.pop("_mem_total_bytes"))
         status, attention = _rollup_status(rec)
+        # A datastore issue filed under this row moves the row's verdict too:
+        # a warning in top_issues beside a row reading OK is the contradiction
+        # this summary exists to avoid (and totals.worst_status follows it).
+        for issue in host_issues:
+            if issue.get("scope") == "datastore" and issue.get("cluster") == rec["name"]:
+                status = "warn" if status == "ok" else status
+                attention = [
+                    *attention,
+                    f"datastore {issue['object']} thin-provisioned to {issue['_mag']}%",
+                ]
         rec["status"] = status
         rec["attention"] = attention
         issues.extend(_capacity_issues(rec))

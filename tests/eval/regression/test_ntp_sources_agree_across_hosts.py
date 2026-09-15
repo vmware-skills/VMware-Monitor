@@ -108,3 +108,21 @@ def test_cli_prints_the_mismatch(monkeypatch):
     result = CliRunner().invoke(cli.app, ["infra", "ntp"])
     assert result.exit_code == 0, result.output
     assert "different NTP sources" in " ".join(result.output.split())
+
+
+# ── review, 2026-09-15 ─────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_whitespace_around_a_server_is_not_another_source(monkeypatch):
+    _install(monkeypatch, [("esx-01", "connected", [" NTP1.corp "]), ("esx-02", "connected", ["ntp1.corp", " "])])
+    assert ops.get_ntp_status(None)["ntp_sources_consistent"] is True
+
+
+@pytest.mark.unit
+def test_a_large_estate_names_at_most_ten_hosts_per_source(monkeypatch):
+    rows = [(f"esx-{i:03d}", "connected", ["a.ntp"] if i % 2 else ["b.ntp"]) for i in range(200)]
+    _install(monkeypatch, rows)
+    note = ops.get_ntp_status(None)["ntp_sources_note"]
+    assert note.count("esx-") == 20
+    assert note.count("and 90 more") == 2

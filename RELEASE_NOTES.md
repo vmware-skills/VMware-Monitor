@@ -17,7 +17,15 @@ host uses which servers; null when fewer than two hosts have servers to compare.
 red in `capacity datastores`, and `summary` listed six issues without it. The summary reads datastores in one more
 batched pass and raises a `capacity` issue (`scope: datastore`) above 100% — the same line the capacity view colours
 red, now one constant (`DATASTORE_OVERCOMMIT_WARN_PCT`) for both. The issue is attributed to the cluster of a host that
-mounts the datastore, or to the standalone row.
+mounts the datastore (a mount record marked not mounted does not count), or to the standalone row, and it moves that
+row's `status` to at least `warn` with the reason in `attention` — so the header, the row and the HTML card agree with
+the issue list. The mount list is read only for over-committed datastores; a shared datastore carries one record per
+host. If the datastore read fails, the summary still returns everything else with one warning issue saying datastore
+over-commit could not be read, instead of failing.
+
+`hosts_without_sensors` keeps at most 50 rows (`hosts_without_sensors_total` has the count), and both notes name at
+most ten hosts per group, so a fleet with the CIM Server stopped everywhere is one sentence. A failed service read no
+longer loses the sensor rows already read: every CIM state is reported unknown.
 
 ## v1.12.0 — alarms say whether they still hold; events newest-first, by window, ranked by their real names
 

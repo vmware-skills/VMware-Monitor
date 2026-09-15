@@ -382,16 +382,22 @@ def _ntp_source_agreement(rows: list[dict]) -> dict:
     """
     groups: dict[tuple[str, ...], list[str]] = {}
     for r in rows:
-        servers = r.get("ntp_servers")
+        servers = {s.strip().lower() for s in r.get("ntp_servers") or [] if s and s.strip()}
         if servers:
-            groups.setdefault(tuple(sorted({s.lower() for s in servers})), []).append(r["host"])
+            groups.setdefault(tuple(sorted(servers)), []).append(r["host"])
     if sum(len(hosts) for hosts in groups.values()) < 2:
         return {"ntp_sources_consistent": None}
     if len(groups) == 1:
         return {"ntp_sources_consistent": True}
+    # At most ten host names per group: a thousand-host estate on two sources
+    # is two clauses, not a thousand names.
+    def _hosts(hosts: list[str]) -> str:
+        more = len(hosts) - 10
+        return ", ".join(hosts[:10]) + (f" and {more} more" if more > 0 else "")
+
     described = "; ".join(
-        f"{', '.join(hosts)} → {', '.join(servers)}"
-        for servers, hosts in sorted(groups.items(), key=lambda kv: kv[1])
+        f"{_hosts(hosts)} → {', '.join(servers)}"
+        for servers, hosts in sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[1]))
     )
     return {
         "ntp_sources_consistent": False,
