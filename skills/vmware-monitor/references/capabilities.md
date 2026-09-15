@@ -88,8 +88,8 @@ Aria Operations replacement.
 
 | Aspect | Detail |
 |--------|--------|
-| Passes | 3 batched `RetrievePropertiesEx` calls (clusters, hosts, VMs) — never one per object (issue #31 class) |
-| Focus list | `top_issues`: individual anomalies (disconnected hosts, triggered alarms, capacity/HA) flattened + ranked worst-first, capped at `top_n`; `issues_total` reports pre-cap count. Alarm names resolved in one batched call (no N+1) |
+| Passes | 4 batched `RetrievePropertiesEx` calls (clusters, hosts, VMs, datastores) — never one per object (issue #31 class) |
+| Focus list | `top_issues`: individual anomalies (disconnected hosts, triggered alarms, capacity/HA, datastores thin-provisioned past `DATASTORE_OVERCOMMIT_WARN_PCT=100` — `scope: datastore`) flattened + ranked worst-first, capped at `top_n`; `issues_total` reports pre-cap count. Alarm names resolved in one batched call (no N+1) |
 | Rollup | Per cluster: hosts connected/total, VM power, live CPU/mem %, HA/DRS, alarm counts (cluster + host) |
 | Status | Opinionated `ok` / `warn` / `critical` + plain-language `attention` reasons; sorted worst-first |
 | Thresholds | `CPU_MEM_WARN_PCT=85`, `CPU_MEM_CRIT_PCT=95` (named constants in `ops/cluster_summary.py`); disconnected host or critical alarm forces `critical` |
@@ -162,7 +162,7 @@ Each VM dict in the `vms` array contains:
 |---------|:-------:|:----:|---------|
 | Active Alarms | Y | Y | Severity, alarm name, entity, timestamp, who acknowledged it and when, and `condition_now` (holds / cleared / unknown) |
 | Event/Log Query | Y | Y | Filter by time range, severity; 50+ event types |
-| Hardware Sensors | Y | Y | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red) — CLI `health sensors`, MCP `get_host_sensors` |
+| Hardware Sensors | Y | Y | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red); connected hosts with no sensors in `hosts_without_sensors` with their CIM Server (`sfcbd-watchdog`) state and a `sensors_note` — CLI `health sensors`, MCP `get_host_sensors` |
 | Host Services | Y | Y | hostd, vpxa running/stopped status — CLI `health services`, MCP `get_host_services` |
 
 ### Stale alarms — `condition_now`

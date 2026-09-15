@@ -395,7 +395,9 @@ def cluster_health_summary(
     Returns {totals, top_issues, issues_total, clusters, snapshot,
     customization_hint} — not the list envelope. Lead with ``top_issues`` (worst
     first), show ``clusters`` as context, always echo ``customization_hint`` last.
-    Point-in-time — no trending.
+    Point-in-time — no trending. ``top_issues`` includes datastores thin-provisioned
+    past 100% of capacity (kind capacity, scope datastore), attributed to the
+    cluster of a host that mounts them; datastore_capacity has the full table.
 
     Then drill into what ``top_issues`` names with vm_investigation_bundle,
     host_investigation_bundle or datastore_investigation_bundle; use
@@ -713,8 +715,11 @@ def get_host_sensors(
     """[READ] Get hardware sensor status (temperature, voltage, fan, ...) for all hosts.
 
     Returns the list envelope with a real ``total``; each row has host, sensor_name,
-    type, reading, unit and status (green/yellow/red). Empty ``items`` means no host
-    exposes sensor data (e.g. nested ESXi), not that the query failed.
+    type, reading, unit and status (green/yellow/red). No rows for a host is not
+    "hardware is fine": every connected host that reports no sensors is listed in
+    ``hosts_without_sensors`` with ``cim_server_running`` / ``cim_server_policy``
+    (the CIM Server, sfcbd-watchdog, supplies the sensors; null = not read), and
+    ``sensors_note`` says what that means — quote it.
 
     Use this for physical hardware only — for CPU/memory load use
     host_performance, and follow up on a red sensor with
@@ -1166,6 +1171,12 @@ def ntp_status(
     false means NTP is misconfigured. Filtering rows for `healthy == false` will
     not surface the unread ones, so check the envelope's `hosts_unreachable`
     count and `unreachable_note` before reporting the estate as healthy.
+
+    The envelope's ``ntp_sources_consistent`` compares hosts with each other:
+    false when hosts that have servers configured use different ones (each row
+    can still be healthy — this is how clocks drift apart), with
+    ``ntp_sources_note`` naming which host uses which servers; null when fewer
+    than two hosts have servers to compare.
 
     Prefer this over get_host_services for time problems: that tool reports
     whether ntpd runs but not which servers are configured. Fixing NTP is a

@@ -97,6 +97,7 @@ vmware-monitor health services [--host <esxi-name>] [--target <name>]
 - `--start` / `--end`: Query a specific window instead of the last `--hours` — ISO 8601, a time with no zone is UTC (e.g. `--start 2026-09-03T12:00Z --end 2026-09-03T16:00Z`). `--start` alone runs to now.
 - `--include-routine`: List routine login/logout events too. By default they are folded and counted, because one local agent's logins can outnumber everything else
 - `--host` (services only): Filter service status to a single host by exact name (default: all hosts)
+- `sensors`: a connected host that reports no sensors is named under the table with its CIM Server (`sfcbd-watchdog`) state — ESXi reads sensors through it, so a stopped CIM Server means none are reported; a running one usually means no BMC/IPMI device. MCP `get_host_sensors` returns the same as `hosts_without_sensors` and `sensors_note`
 
 ## VM Info (Read-Only)
 

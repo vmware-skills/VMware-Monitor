@@ -364,4 +364,40 @@ def get_ntp_status(
             f"not read; their healthy field is null, not false. Filtering for "
             f"healthy == false will not show them."
         )
+    extra.update(_ntp_source_agreement(results))
     return paginated(results, total=len(results), **extra)
+
+
+def _ntp_source_agreement(rows: list[dict]) -> dict:
+    """Whether the hosts that have NTP servers configured all use the same ones.
+
+    Per-host health cannot see this. On the lab vCenter (2026-09-14) both hosts
+    were healthy, one synchronising from 192.168.60.74 and the other from
+    pool.ntp.org — the way two clocks drift apart with no host looking wrong.
+
+    Server lists are compared as sets, case-insensitively: another order is not
+    another source. Hosts not read and hosts with no servers are left out; each is
+    already reported on its own row and is not a second source. Fewer than two
+    hosts to compare is not a comparison, so the answer is None, not True.
+    """
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for r in rows:
+        servers = r.get("ntp_servers")
+        if servers:
+            groups.setdefault(tuple(sorted({s.lower() for s in servers})), []).append(r["host"])
+    if sum(len(hosts) for hosts in groups.values()) < 2:
+        return {"ntp_sources_consistent": None}
+    if len(groups) == 1:
+        return {"ntp_sources_consistent": True}
+    described = "; ".join(
+        f"{', '.join(hosts)} → {', '.join(servers)}"
+        for servers, hosts in sorted(groups.items(), key=lambda kv: kv[1])
+    )
+    return {
+        "ntp_sources_consistent": False,
+        "ntp_sources_note": (
+            f"Hosts take time from different NTP sources: {described}. Each can be "
+            f"healthy on its own while their clocks drift apart; point every host "
+            f"at the same servers."
+        ),
+    }

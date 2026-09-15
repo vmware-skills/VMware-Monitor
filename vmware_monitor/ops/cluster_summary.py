@@ -27,6 +27,7 @@ from pyVmomi import vim
 from vmware_policy import sanitize
 
 from vmware_monitor.ops._collect import _collect, _collect_objects
+from vmware_monitor.ops.capacity import DATASTORE_OVERCOMMIT_WARN_PCT, overcommit_pct
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
@@ -412,7 +413,56 @@ def get_cluster_health_summary(
             if str(p.get("runtime.powerState")) == "poweredOn":
                 rec["vms_on"] += 1
 
+    # Pass 4 — datastores: thin-provisioning over-commit. On the lab vCenter
+    # (2026-09-15) datastore1 was promised 216.5% of its capacity, red in
+    # `capacity datastores`, and this summary listed six issues without it.
+    for _obj, p in _collect(si, [vim.Datastore], _DATASTORE_PROPS):
+        issue = _datastore_issue(p, host_to_cluster, clusters)
+        if issue:
+            host_issues.append(issue)
+
     return _finalize(si, list(clusters.values()), include_vms, raw_alarms, host_issues, top_n)
+
+
+_DATASTORE_PROPS = ["name", "summary.capacity", "summary.freeSpace", "summary.uncommitted", "host"]
+
+
+def _datastore_issue(p: dict, host_to_cluster: dict, clusters: dict) -> dict | None:
+    """A capacity issue for a datastore over-committed past the capacity view's line.
+
+    Attributed to the cluster of a host that mounts it — the first one found, for
+    a datastore shared across clusters — or to the standalone bucket when none of
+    its hosts is clustered. Under a cluster filter the standalone bucket does not
+    exist and ``host_to_cluster`` holds only matching clusters, so a datastore
+    outside them is left out, like everything else in the summary.
+    """
+    capacity = float(p.get("summary.capacity") or 0)
+    free = float(p.get("summary.freeSpace") or 0)
+    uncommitted = float(p.get("summary.uncommitted") or 0)
+    pct = overcommit_pct(capacity, free, uncommitted)
+    if pct is None or pct <= DATASTORE_OVERCOMMIT_WARN_PCT:
+        return None
+    mounted = [getattr(m, "key", None) for m in p.get("host") or []]
+    cname = next((host_to_cluster[h] for h in mounted if h in host_to_cluster), None)
+    if cname is None and mounted:
+        cname = _STANDALONE
+    if cname not in clusters:
+        return None
+    provisioned_gb = round(((capacity - free) + uncommitted) / 1024**3, 1)
+    capacity_gb = round(capacity / 1024**3, 1)
+    return {
+        "severity": "warning",
+        "kind": "capacity",
+        "object": sanitize(p.get("name", "")),
+        "scope": "datastore",
+        "cluster": cname,
+        "detail": (
+            f"thin-provisioned to {pct}% of capacity ({provisioned_gb} of "
+            f"{capacity_gb} GB promised) — can fill while it shows free space"
+        ),
+        "_mag": pct,
+        "drilldown": "vmware-monitor capacity datastores (MCP: datastore_capacity)",
+    }
 
 
 def _alarm_issues(si: ServiceInstance, raw_alarms: list) -> list[dict]:

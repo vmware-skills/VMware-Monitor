@@ -383,10 +383,14 @@ def health_sensors(target: TargetOption = None, config: ConfigOption = None) -> 
     from vmware_monitor.ops.health import get_host_hardware_status
 
     si, _, tgt = _get_connection(target, config)
-    sensors = get_host_hardware_status(si)["items"]
+    result = get_host_hardware_status(si)
+    sensors = result["items"]
     _audit.log_query(target=tgt, resource="hardware_sensors", query_type="get_host_hardware_status")
+    # Not green: "no sensor data" is not "hardware is fine", and the note says
+    # why each host has none.
+    note = result.get("sensors_note")
     if not sensors:
-        console.print("[green]No hardware sensor data available.[/]")
+        console.print(f"[yellow]{note or 'No hardware sensor data: no connected host was read.'}[/]")
         return
     table = Table(title="Hardware Sensors")
     table.add_column("Host", style="cyan")
