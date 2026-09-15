@@ -1,4 +1,4 @@
-## Unreleased — why a host has no sensors, hosts on different time sources, over-committed datastores in the summary
+## v1.13.0 — why a host has no sensors, hosts on different time sources, over-committed datastores in the summary
 
 **`health sensors` says why a host reports none.** On the lab vCenter 8.0.3 it printed "No hardware sensor data
 available." in green. `health services` showed the reason: the CIM Server (`sfcbd-watchdog`) was set to start and not

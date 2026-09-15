@@ -48,7 +48,7 @@ Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code
 ## Quick Install
 
 ```bash
-uv tool install vmware-monitor==1.12.0
+uv tool install vmware-monitor==1.13.0
 vmware-monitor doctor
 ```
 
@@ -267,7 +267,7 @@ simply not matched by such a rule. Config example: `references/setup-guide.md`.
 ## Setup
 
 ```bash
-uv tool install vmware-monitor==1.12.0
+uv tool install vmware-monitor==1.13.0
 vmware-monitor init      # guided: prompts for host/user/password, writes config + .env (chmod 600), then verifies
 ```
 

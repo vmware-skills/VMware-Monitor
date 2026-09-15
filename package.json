@@ -1,6 +1,6 @@
 {
   "name": "@zw008/vmware-monitor",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Read-only VMware vCenter/ESXi monitoring for OpenClaw: the vmware-monitor skill plus its MCP server (32 read-only tools). No code path writes to vSphere.",
   "private": true,
   "license": "MIT",
