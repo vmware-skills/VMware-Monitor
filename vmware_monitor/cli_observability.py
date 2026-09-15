@@ -498,13 +498,22 @@ def activity_tasks(
     limit: LimitOption = None,
 ) -> None:
     """In-flight (and recently completed) vCenter tasks."""
+    from rich.markup import escape
+
     from vmware_monitor.ops.activity import get_active_tasks
 
     si, _, tgt = get_connection(target, config)
-    rows = get_active_tasks(si, include_recent=all_recent, limit=limit)["items"]
+    result = get_active_tasks(si, include_recent=all_recent, limit=limit)
+    rows = result["items"]
     audit.log_query(target=tgt, resource="tasks", query_type="get_active_tasks")
+    # An unread task is not an idle one: printing a green "No tasks." over 11
+    # unreadable ones (lab ESXi, 2026-09-15) would say the opposite of the data.
+    note = result.get("unreadable_note")
     if not rows:
-        console.print("[green]No tasks.[/]")
+        if note:
+            console.print(f"[yellow]No readable tasks. {escape(note)}[/]")
+        else:
+            console.print("[green]No tasks.[/]")
         return
     table = Table(title="Tasks")
     table.add_column("Task", style="cyan")

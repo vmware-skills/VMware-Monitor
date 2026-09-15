@@ -6,6 +6,14 @@
 #   chmod 600 ~/.vmware-monitor/.env
 # See .env.example for naming convention details
 
+# Which target a tool uses when the request names none. Optional: without it the
+# first entry under 'targets:' is the default. A name that is not listed below
+# stops the skill with an error instead of silently answering from another host.
+# The MCP server tells the agent every configured target and asks it to pick the
+# one the question is about (and to ask when that is unclear), so this only
+# decides the fallback.
+default_target: prod-vcenter
+
 targets:
   # vCenter Server
   - name: prod-vcenter

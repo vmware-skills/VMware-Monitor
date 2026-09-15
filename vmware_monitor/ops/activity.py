@@ -46,8 +46,20 @@ def get_active_tasks(
     recent = getattr(task_mgr, "recentTask", None) or []
 
     results: list[dict] = []
+    unreadable: list[str] = []
     for task in recent:
-        info = getattr(task, "info", None)
+        try:
+            info = getattr(task, "info", None)
+        except KeyError as exc:
+            # Reading TaskInfo deserializes the task's result. On the lab ESXi
+            # 8.0.3 (2026-09-15) 11 recent tasks carried a result type this
+            # pyVmomi does not know, the read raised KeyError('vslmCatalogChangeResult'),
+            # and the whole tool failed — "are any tasks running?" had no answer.
+            # Only that failure is skipped: an expired session or a missing
+            # privilege raises for every task, and must stay an error rather
+            # than read as "no tasks, some unreadable".
+            unreadable.append(sanitize(f"{type(exc).__name__}: {exc}", max_len=120))
+            continue
         if info is None:
             continue
         state = str(info.state)
@@ -81,7 +93,17 @@ def get_active_tasks(
     total = len(results)
     if limit is not None:
         results = results[:limit]
-    return paginated(results, limit=limit, total=total)
+    envelope = paginated(results, limit=limit, total=total)
+    if unreadable:
+        envelope["unreadable_tasks"] = len(unreadable)
+        envelope["unreadable_note"] = (
+            f"{len(unreadable)} recent task(s) could not be read and are not in "
+            f"items or total ({'; '.join(sorted(set(unreadable)))}). Usually the "
+            f"task's result is a type this pyVmomi release does not know. An "
+            f"unread task is not an idle one — check Recent Tasks in the vSphere "
+            f"Client before answering that nothing is running."
+        )
+    return envelope
 
 
 #: vCenter's SSO solution users: a service name, a dash, then the machine UUID

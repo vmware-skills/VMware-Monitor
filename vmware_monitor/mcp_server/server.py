@@ -174,14 +174,94 @@ def _catch_tool_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-mcp = FastMCP(
-    "vmware-monitor",
-    instructions=(
-        "VMware vCenter/ESXi read-only monitoring. "
-        "Query inventory, check health/alarms, and view VM info. "
-        "No destructive operations — code-level enforced."
-    ),
+_BASE_INSTRUCTIONS = (
+    "VMware vCenter/ESXi read-only monitoring. "
+    "Query inventory, check health/alarms, and view VM info. "
+    "No destructive operations — code-level enforced."
 )
+
+_TARGET_RULE = (
+    " Choosing a target: every tool that reads vSphere takes `target`. Choose it "
+    "from what the user asked. A vCenter, the whole environment, clusters or "
+    "several hosts: a vcenter target. One ESXi host the user names: the vcenter "
+    "target that manages it, because vCenter holds that host's alarms, events and "
+    "tasks; use the host's own esxi target only when the user asks about the host "
+    "directly or no vCenter manages it. If the request does not say which, and "
+    "targets of different types could answer differently, ask the user which one "
+    "before querying. Every result names the `target` that answered; say it in "
+    "the answer."
+)
+
+
+def _target_instructions() -> str:
+    """Server instructions that name the configured targets and how to choose one.
+
+    Before this, the model was never told which targets exist. With a standalone
+    ESXi host listed first, every tool it called without ``target`` answered from
+    that host, and it reported "vCenter has 9 VMs" (vCenter has 11) and "no
+    vCenter is configured" (2026-09-15 conversation tests). Never raises: a
+    missing or broken config must not stop the server from starting — the tools
+    report that error themselves.
+    """
+    try:
+        cfg = load_config()
+        default_name = cfg.default_target.name
+    except Exception:  # noqa: BLE001 — instructions are advisory, startup is not
+        return _BASE_INSTRUCTIONS + _TARGET_RULE
+    listed = "; ".join(
+        f"{t.name} ({t.type}, {t.host}{', default' if t.name == default_name else ''})"
+        for t in cfg.targets
+    )
+    return f"{_BASE_INSTRUCTIONS} Configured targets: {listed}.{_TARGET_RULE}"
+
+
+mcp = FastMCP("vmware-monitor", instructions=_target_instructions())
+
+
+def _with_target(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Add ``target: {name, type}`` to the dict a target-taking tool returns.
+
+    A result that does not say where it came from cannot be told apart: an
+    answer read from a standalone ESXi host and one read from vCenter look the
+    same to the model. Tools without a ``target`` parameter (those that span
+    every target) are returned unchanged; so is a non-dict result, or one that
+    already names its target.
+    """
+    import inspect
+
+    signature = inspect.signature(fn)
+    if "target" not in signature.parameters:
+        return fn
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        result = fn(*args, **kwargs)
+        if not isinstance(result, dict) or "target" in result:
+            return result
+        try:
+            name = signature.bind_partial(*args, **kwargs).arguments.get("target")
+            cfg = _ensure_conn_mgr()._config
+            resolved = cfg.get_target(name) if name else cfg.default_target
+        except Exception:  # noqa: BLE001 — naming the target must never break the answer
+            return result
+        return {"target": {"name": resolved.name, "type": resolved.type}, **result}
+
+    wrapper._names_target = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+_register_tool = mcp.tool
+
+
+def _tool_naming_its_target(*args: Any, **kwargs: Any) -> Any:
+    """``mcp.tool`` that wraps every registered function with :func:`_with_target`."""
+    if args and callable(args[0]):
+        return _register_tool(**kwargs)(_with_target(args[0]))
+    decorator = _register_tool(*args, **kwargs)
+    return lambda fn: decorator(_with_target(fn))
+
+
+mcp.tool = _tool_naming_its_target  # type: ignore[method-assign]
 
 # FastMCP takes no version argument and leaves the lowlevel server's at
 # None, which makes `initialize` answer with the MCP SDK's version rather
@@ -1405,9 +1485,46 @@ set_environment_resolver(_environment_for, skill=skill_name(__name__))
 # ---------------------------------------------------------------------------
 
 
+def _exit_on_stop_signals() -> None:
+    """Turn the signals a client stops this server with into a normal exit.
+
+    Claude Code stops a stdio MCP server with SIGINT and then SIGTERM about a
+    millisecond later (measured 2026-09-15). Python's default SIGTERM ends the
+    process on the spot, before ``atexit`` runs, so the ``Disconnect`` the
+    connection layer registered never happened: every conversation left its
+    vCenter/ESXi session open (13 on one ESXi host and 11 on vCenter in about
+    eleven minutes). ``SystemExit`` is not enough: raised from the handler it unwinds the event
+    loop, but interpreter shutdown then waits for anyio's worker thread blocked
+    reading stdin, which the client keeps open, so ``atexit`` still never ran
+    (independent review, 2026-09-15; a test driving the real stdio loop hung in
+    all five skills). So the first stop signal ignores the rest, runs the
+    ``atexit`` callbacks here, and leaves with ``os._exit`` — nothing waits on
+    that thread, and a second signal cannot cut a logout short.
+    """
+    import atexit
+    import os
+    import signal
+
+    stop_signals = [
+        getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, name)
+    ]
+
+    def _stop(signum: int, _frame: object) -> None:
+        for sig in stop_signals:
+            signal.signal(sig, signal.SIG_IGN)
+        try:
+            atexit._run_exitfuncs()
+        finally:
+            os._exit(128 + signum)
+
+    for sig in stop_signals:
+        signal.signal(sig, _stop)
+
+
 def main() -> None:
     """Run the MCP server over stdio."""
     logging.basicConfig(level=logging.INFO)
+    _exit_on_stop_signals()
     mcp.run(transport="stdio")
 
 

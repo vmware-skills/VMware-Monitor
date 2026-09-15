@@ -1,3 +1,42 @@
+## v1.15.0 — results name the target that answered; unreadable tasks are counted; the server logs out when stopped
+
+Found in real Claude Code conversations against the lab vCenter 8.0.3 and ESXi 8.0.3 on 2026-09-15, then
+corrected after two independent reviews the same day.
+
+**Results name the target that answered, and a default can be chosen.** With a standalone ESXi host listed
+first in `config.yaml`, every tool called without `target` answered from that host, and nothing in the result
+said so: an agent reported "vCenter has 9 VMs" (vCenter has 12) and "no vCenter target is configured". Now:
+
+* `default_target:` in `config.yaml` names the target used when a call names none. Without it the first entry
+  is still the default. **A name that is not a configured target is a `ConfigError`**, not a silent fallback.
+* The MCP server's instructions list every configured target (name, type, host, which is the default) and ask
+  the agent to choose from the question: a vCenter for the environment, clusters or several hosts; the managing
+  vCenter for a named ESXi host; a standalone `esxi` target only when asked about that host directly; and to ask
+  when it is unclear and the targets would answer differently.
+* **Behaviour change:** every dict result from a tool that takes `target` now carries
+  `target: {name, type}`. Tool schemas are unchanged. A request for an unknown target name still returns the
+  error listing the configured names.
+
+**`active_tasks` counts tasks it cannot read instead of failing.** On the lab ESXi host 11 recent tasks carried a
+result type this pyVmomi does not know; reading their `info` raised `KeyError('vslmCatalogChangeResult')` and
+the whole tool failed, so "is anything running?" had no answer. Those tasks are now skipped, counted in
+`unreadable_tasks` and named in `unreadable_note`, which says an unread task is not an idle one. Only `KeyError`
+is skipped: an expired session or a missing privilege raises for every task and stays an error. `activity
+tasks` prints the note instead of a green "No tasks.".
+
+Measured in real Claude Code conversations against the lab vCenter 8.0.3 / ESXi 8.0.3 on 2026-09-15:
+Claude Code stops a stdio MCP server with SIGINT and then SIGTERM about a millisecond later, with stdin still
+open. Python's default SIGTERM ended the server before `atexit`, so the vSphere logout the connection layer
+registers never ran and every conversation left its session open — 13 root sessions on one ESXi host and 11
+Administrator sessions on vCenter in about eleven minutes.
+
+**The server now logs out when it is stopped.** The first stop signal ignores the rest, runs the `atexit`
+callbacks (the `Disconnect`), and exits with status 128 + signal. Raising `SystemExit` from the handler was tried
+first and is not enough: the interpreter then waits on the thread reading stdin and hangs without logging out.
+The new test starts the real server with stdin held open, completes the MCP handshake and sends the same two
+signals; it failed on the `SystemExit` version. After the change, conversations against the lab left no session
+behind.
+
 ## v1.14.0 — stale alarms re-checked, overlapping targets counted once, version gates without a traceback
 
 Found in a live session against the lab vCenter 8.0.3 on 2026-09-15, then corrected after an independent review

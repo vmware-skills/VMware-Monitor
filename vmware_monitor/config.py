@@ -213,6 +213,11 @@ class AppConfig:
     targets: tuple[TargetConfig, ...] = ()
     scanner: ScannerConfig = field(default_factory=ScannerConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
+    default_target_name: str = ""
+    """``default_target:`` from config.yaml — the target a tool uses when the
+    caller names none. Empty means the first entry under ``targets:``, which is
+    what every release before this one did; ``load_config`` refuses a name that
+    is not a configured target rather than falling back to the first one."""
 
     def get_target(self, name: str) -> TargetConfig:
         for t in self.targets:
@@ -245,6 +250,8 @@ class AppConfig:
                 "No targets configured. Expected at least one entry under 'targets:' "
                 "in config.yaml — run 'vmware-monitor init' to create one."
             )
+        if self.default_target_name:
+            return self.get_target(self.default_target_name)
         return self.targets[0]
 
 
@@ -303,6 +310,15 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         for t in raw.get("targets", [])
     )
 
+    default_name = str(raw.get("default_target", "") or "").strip()
+    if default_name and default_name not in {t.name for t in targets}:
+        available = ", ".join(t.name for t in targets) or "(none)"
+        raise ConfigError(
+            f"default_target '{default_name}' in {path} is not one of the configured "
+            f"targets ({available}). Fix the name or remove the key — without it the "
+            f"first target is the default."
+        )
+
     scanner_raw = raw.get("scanner", {})
     scanner = ScannerConfig(
         enabled=scanner_raw.get("enabled", True),
@@ -323,4 +339,5 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         targets=targets,
         scanner=scanner,
         notify=notify,
+        default_target_name=default_name,
     )

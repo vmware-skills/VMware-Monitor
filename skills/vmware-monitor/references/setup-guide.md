@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==1.14.0
+uv tool install vmware-monitor==1.15.0
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v1.14.0
+npx skills add vmware-skills/VMware-Monitor#v1.15.0
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 1.14.0
+clawhub install @zw008/vmware-monitor --version 1.15.0
 ```
 
 ### Claude Code
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==1.14.0
+uv tool install vmware-monitor==1.15.0
 
 # 2. Verify
 vmware-monitor --version
@@ -92,10 +92,30 @@ pointed at the same vCenter: an environment-scoped `deny` rule in
 `~/.vmware/rules.yaml` can match on the label to block their writes (e.g. freeze
 `production`). A target with no label is simply not matched by such a rule.
 
+### Choose the default target
+
+```yaml
+default_target: prod-vcenter   # optional; without it the first entry under targets: is used
+```
+
+A tool uses the default only when the request names no target. The MCP server
+lists every configured target (name, type, host) in its instructions and asks the
+agent to pick the one the question is about: a vCenter for the environment,
+clusters or several hosts; the managing vCenter for a named ESXi host, since
+vCenter holds that host's alarms, events and tasks; a standalone `esxi` target
+only when asked about that host directly. When the request does not say which and
+the answers would differ, the agent is told to ask. A result from a tool that takes
+`target` carries `target: {name, type}` naming the target that answered, so the
+answer can say where it came from; a request for a target name that is not
+configured returns an error listing the configured names instead. A
+`default_target` that names no configured target is an error, not a fallback —
+falling back to the first entry is how a standalone ESXi host once answered a
+question about vCenter.
+
 ## Development Install
 
 ```bash
-git clone --branch v1.14.0 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v1.15.0 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
