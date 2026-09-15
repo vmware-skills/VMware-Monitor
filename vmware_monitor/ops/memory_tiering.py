@@ -37,6 +37,15 @@ _ACTIVE_TIERING = frozenset({"hardwareTiering", "softwareTiering"})
 _BYTES_PER_GB = 1024**3
 
 
+class MemoryTieringUnsupportedError(ValueError):
+    """The target predates memory tiering (pre-8.0U3). Authored, leak-free text.
+
+    A ``ValueError`` so the MCP ``_safe_error`` allowlist passes the sentence
+    through; its own class so the CLI can print it as one line without catching
+    every ``ValueError`` (which would turn real bugs into calm sentences).
+    """
+
+
 def _to_gb(num_bytes: int | None) -> float | None:
     """Bytes → GB rounded to 2 dp; ``None`` (absent property) stays ``None``."""
     if not num_bytes:
@@ -114,7 +123,7 @@ def get_memory_tiering(
         # (NB: the real class is vmodl.query.InvalidProperty, NOT vmodl.fault.* —
         # the latter does not exist and would itself crash on lookup, 踩坑 #40.)
         bad = getattr(exc, "name", None) or "hardware.memoryTieringType"
-        raise ValueError(
+        raise MemoryTieringUnsupportedError(
             f"Memory tiering requires vCenter/ESXi 8.0U3+ — this target does not "
             f"expose the property '{bad}'. Upgrade the host/vCenter, or omit this "
             f"read on older versions."

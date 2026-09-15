@@ -42,7 +42,9 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         from pyVmomi import vmodl
 
+        from vmware_monitor.ops.memory_tiering import MemoryTieringUnsupportedError
         from vmware_monitor.ops.vm_info import VMNotFoundError
+        from vmware_monitor.rest import RestAuthError, RestNotFoundError
 
         try:
             return fn(*args, **kwargs)
@@ -50,6 +52,13 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
             raise
         except VMNotFoundError as e:
             fail(f"{e}. Run 'vmware-monitor inventory vms' to see available VMs.")
+        except (RestAuthError, RestNotFoundError, MemoryTieringUnsupportedError) as e:
+            # Authored, leak-free sentences that already name the fix (a bad
+            # cluster MoID, a version floor, a refused REST login). Without this
+            # clause they walked past every handler below and printed as a
+            # traceback — `deployment-size` on a live 8.0.3, 2026-09-15. Listed
+            # by class, not as ValueError, so a genuine bug still raises.
+            fail(str(e))
         except FileNotFoundError as e:
             fail(
                 f"Config file missing: {e}. Run: vmware-monitor init "

@@ -110,8 +110,10 @@ def perf_vms(
     table = Table(title="VM Performance (real-time, ~20s interval)")
     table.add_column("VM", style="cyan")
     table.add_column("CPU %", justify="right")
-    table.add_column("Mem %", justify="right")
-    table.add_column("Mem (MB)", justify="right")
+    table.add_column("Active mem %", justify="right")
+    table.add_column("Consumed MB", justify="right")
+    table.add_column("Balloon MB", justify="right")
+    table.add_column("Swap MB", justify="right")
     table.add_column("Disk R/W KB/s", justify="right")
     table.add_column("Net KB/s", justify="right")
     for r in rows:
@@ -123,10 +125,24 @@ def perf_vms(
             f"[{_pct_style(cpu)}]{cpu}[/]",
             f"[{_pct_style(mem)}]{mem}[/]",
             str(r.get("mem_consumed_mb", "-")),
+            _pressure_cell(r.get("mem_ballooned_mb")),
+            _pressure_cell(r.get("mem_swapped_mb")),
             rw,
             str(r.get("net_kbps", "-")),
         )
     console.print(table)
+    console.print(
+        "[dim]Active mem % = mem.usage.average (active guest memory / configured — "
+        "not consumed). Balloon = mem.vmmemctl.average, Swap = mem.swapped.average; "
+        "above 0 means the host is reclaiming this VM's memory.[/]"
+    )
+
+
+def _pressure_cell(value: float | None) -> str:
+    """Balloon/swap cell: '-' when unreported, yellow when the host reclaimed memory."""
+    if value is None:
+        return "-"
+    return f"[yellow]{value}[/]" if value > 0 else str(value)
 
 
 # ─── capacity ──────────────────────────────────────────────────────────────
@@ -144,14 +160,16 @@ def capacity_datastores(
     from vmware_monitor.ops.capacity import DATASTORE_OVERCOMMIT_WARN_PCT, get_datastore_capacity
 
     si, _, tgt = get_connection(target, config)
-    rows = get_datastore_capacity(si, limit=limit)["items"]
+    result = get_datastore_capacity(si, limit=limit)
+    rows = result["items"]
     audit.log_query(target=tgt, resource="datastore_capacity", query_type="get_datastore_capacity")
-    table = Table(title="Datastore Capacity & Over-commit")
+    table = Table(title=f"Datastore Capacity & Over-commit ({result.get('view', 'unknown')} view)")
     table.add_column("Name", style="cyan")
     table.add_column("Type")
     table.add_column("Capacity GB", justify="right")
     table.add_column("Used %", justify="right")
     table.add_column("Provisioned GB", justify="right")
+    table.add_column("VMs", justify="right")
     table.add_column("Over-commit %", justify="right")
     for r in rows:
         oc = r["overcommit_pct"]
@@ -162,9 +180,18 @@ def capacity_datastores(
             f"{r['capacity_gb']}",
             f"[{_pct_style(r['used_pct'])}]{r['used_pct']}[/]",
             f"{r['provisioned_gb']}",
+            str(r.get("vm_count", "-")),
             f"[{oc_style}]{oc}[/]",
         )
     console.print(table)
+    for r in rows:
+        if r.get("vms_not_connected"):
+            console.print(
+                f"[yellow]{r['name']}: provisioned space includes VM(s) not reported as "
+                f"connected — {', '.join(r['vms_not_connected'])}[/]"
+            )
+    if result.get("view_note"):
+        console.print(f"[dim]{result['view_note']}[/]")
 
 
 @capacity_app.command("pools")
@@ -581,24 +608,37 @@ def _render_top_issues(data: dict, top: int) -> None:
     if not issues:
         console.print("[green]No issues detected — every cluster is OK.[/]\n")
         return
+    from rich.markup import escape
+
+    from vmware_monitor.ops.cluster_summary import cli_drilldown
+
     shown = len(issues)
     title = f"Top {shown} issues" + (f" (of {total})" if total > shown else "")
     tbl = Table(title=title)
     tbl.add_column("#", justify="right", style="dim")
     tbl.add_column("Severity")
-    tbl.add_column("Object", style="cyan")
-    tbl.add_column("Cluster")
-    tbl.add_column("Problem")
-    tbl.add_column("Next step", style="dim")
+    # Four columns, not six: at an 80-column terminal six squeezed Problem and
+    # Next step until words were cut ("thin-provi…"). The cluster rides under
+    # the object and the next step under the problem, so the text that matters
+    # gets the width. The next step names CLI commands — ``drilldown`` in the
+    # data names MCP tools, which a terminal user cannot run.
+    tbl.add_column("Object", max_width=28)
+    tbl.add_column("Problem · next step")
     for n, i in enumerate(issues, 1):
         sev = i["severity"]
+        hint = cli_drilldown(i)
+        # The same datastore reached through another target: its own figure can
+        # differ legitimately (see `capacity datastores`), so it is shown, not dropped.
+        also = "".join(
+            f"\n[dim]also via {escape(str(a['vcenter']))}: "
+            f"{escape(str(a['detail']).split(' — ')[0])}[/]"
+            for a in i.get("also_seen_via", [])
+        )
         tbl.add_row(
             str(n),
             f"[{_SEV_STYLE.get(sev, 'white')}]{sev.upper()}[/]",
-            i["object"],
-            i.get("cluster") or "—",
-            i["detail"],
-            i.get("drilldown", ""),
+            f"[cyan]{escape(str(i['object']))}[/]\n[dim]{escape(str(i.get('cluster') or '—'))}[/]",
+            escape(str(i["detail"])) + also + (f"\n[dim]→ {escape(hint)}[/]" if hint else ""),
         )
     console.print(tbl)
 
@@ -923,7 +963,7 @@ def render_attention_console(data: dict) -> None:
     """
     t = data["totals"]
     console.print(
-        f"[bold]What needs attention[/] — {t['vcenters']} vCenters, "
+        f"[bold]What needs attention[/] — {_target_counts(t)}, "
         f"{t['clusters']} clusters, {t['hosts_connected']}/{t['hosts_total']} hosts connected"
         f"  ·  overall: [{_STATUS_STYLE[t['worst_status']]}]{t['worst_status'].upper()}[/]"
     )
@@ -932,23 +972,43 @@ def render_attention_console(data: dict) -> None:
 
     _render_top_issues(_with_vcenter_cluster(data), data.get("issues_total", 0))
 
-    table = Table(title="vCenters (worst status first)")
+    table = Table(title="Targets (worst status first)")
     table.add_column("Status")
-    table.add_column("vCenter", style="cyan")
+    table.add_column("Target", style="cyan")
+    table.add_column("Type")
     table.add_column("Clusters", justify="right")
     table.add_column("Hosts", justify="right")
     table.add_column("Alarms C/W", justify="right")
     for tg in data["targets"]:
         style = _STATUS_STYLE.get(tg["worst_status"], "white")
+        shared = tg.get("shared_hosts", 0)
         table.add_row(
             f"[{style}]{tg['worst_status'].upper()}[/]",
             tg["vcenter"],
+            tg.get("endpoint", "unknown"),
             str(tg["clusters"]),
-            f"{tg['hosts_connected']}/{tg['hosts_total']}",
+            f"{tg['hosts_connected']}/{tg['hosts_total']}"
+            + (f" [dim]({shared} counted via another target)[/]" if shared else ""),
             f"{tg['alarms']['critical']}/{tg['alarms']['warning']}",
         )
     console.print(table)
     console.print(f"[dim]{data.get('customization_hint', '')}[/]")
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def _target_counts(totals: dict) -> str:
+    """"1 vCenter, 1 ESXi target" — an ESXi host reached directly is not a vCenter."""
+    parts = [
+        _plural(totals.get("vcenters", 0), "vCenter"),
+        _plural(totals.get("esxi_targets", 0), "ESXi target") if totals.get("esxi_targets") else "",
+        _plural(totals.get("unidentified_targets", 0), "unidentified target")
+        if totals.get("unidentified_targets")
+        else "",
+    ]
+    return ", ".join(p for p in parts if p)
 
 
 def _with_vcenter_cluster(data: dict) -> dict:
@@ -957,7 +1017,7 @@ def _with_vcenter_cluster(data: dict) -> dict:
     issues = []
     for i in data.get("top_issues", []):
         j = dict(i)
-        j["cluster"] = f"{i.get('vcenter', '')}/{i.get('cluster') or '—'}"
+        j["cluster"] = f"{i.get('vcenter', '')} · {i.get('cluster') or '—'}"
         issues.append(j)
     return {"top_issues": issues, "issues_total": data.get("issues_total", 0)}
 

@@ -12,6 +12,7 @@ from vmware_policy import paginated, sanitize
 
 from vmware_monitor.ops import alarm_condition
 from vmware_monitor.ops._collect import _collect, _collect_objects
+from vmware_monitor.ops.alarm_triage import license_evidence
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
@@ -502,6 +503,7 @@ def _append_alarm(
     results: list[dict],
     definition: tuple | None = None,
     values: dict | None = None,
+    licenses: alarm_condition.LicenseEvidence | None = None,
 ) -> None:
     """Turn one triggered AlarmState into a result row, appending to ``results``."""
     severity = str(alarm_state.overallStatus)
@@ -531,7 +533,19 @@ def _append_alarm(
     acked_by = getattr(alarm_state, "acknowledgedByUser", None)
     acked_at = getattr(alarm_state, "acknowledgedTime", None)
     verdict = alarm_condition.evaluate(
-        expression, severity, entity_ref, (values or {}).get(_ref_key(entity_ref), {})
+        expression,
+        severity,
+        entity_ref,
+        (values or {}).get(_ref_key(entity_ref), {}),
+        licenses=licenses,
+    )
+    # An alarm vCenter raises about its own appliance sits on the inventory root,
+    # whose name ("Datacenters") says nothing about what is wrong. entity_name
+    # stays as-is: vmware-aiops resolves it to acknowledge or reset the alarm.
+    object_label = (
+        alarm_condition.appliance_label(expression)
+        if isinstance(entity_ref, (vim.Folder, vim.Datacenter))
+        else None
     )
 
     reset = (
@@ -555,6 +569,7 @@ def _append_alarm(
         "alarm_name": alarm_name,
         "entity_name": entity_name,
         "entity_type": type(entity_ref).__name__,
+        "object_label": object_label,
         "time": str(alarm_state.time),
         "acknowledged": acknowledged,
         "acknowledged_by": sanitize(acked_by) if acked_by else None,
@@ -606,9 +621,16 @@ def get_active_alarms(si: ServiceInstance, limit: int | None = None) -> dict:
     # properties their state conditions compare (one call per entity type).
     definitions = _alarm_definitions(si, [s.alarm for s in states])
     values = _entity_state_values(si, states, definitions)
+    # Read only when a license alarm is present (one QueryAssignedLicenses call).
+    licenses = license_evidence(content, [d[1] for d in definitions.values()])
     for alarm_state in states:
         _append_alarm(
-            alarm_state, name_map, results, definitions.get(_ref_key(alarm_state.alarm)), values
+            alarm_state,
+            name_map,
+            results,
+            definitions.get(_ref_key(alarm_state.alarm)),
+            values,
+            licenses,
         )
 
     # Deduplicate by alarm + entity

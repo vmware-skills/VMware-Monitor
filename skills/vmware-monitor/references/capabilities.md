@@ -89,7 +89,9 @@ Aria Operations replacement.
 | Aspect | Detail |
 |--------|--------|
 | Passes | 4 batched `RetrievePropertiesEx` calls (clusters, hosts, VMs, datastores) — never one per object (issue #31 class) |
-| Focus list | `top_issues`: individual anomalies (disconnected hosts, triggered alarms, capacity/HA, datastores thin-provisioned past `DATASTORE_OVERCOMMIT_WARN_PCT=100` — `scope: datastore`) flattened + ranked worst-first, capped at `top_n`; `issues_total` reports pre-cap count. Alarm names resolved in one batched call (no N+1) |
+| Focus list | `top_issues`: individual anomalies (disconnected hosts, triggered alarms, capacity/HA, datastores thin-provisioned past `DATASTORE_OVERCOMMIT_WARN_PCT=100` — `scope: datastore`) flattened + ranked worst-first, capped at `top_n`; `issues_total` reports pre-cap count. Alarm names and definitions resolved in one batched call (no N+1) |
+| Alarm issues | Carry `condition_now` (`holds` / `cleared` / `unknown`, as `get_alarms`) and `acknowledged_days` (null when not acknowledged). Only `cleared` ranks after the other issues; `unknown` keeps its severity rank — not re-checked, possibly still live. `object` is `vCenter appliance <address>` for alarms vCenter raises about itself |
+| Next step | `drilldown` names MCP tools; the CLI table and HTML snapshot name CLI commands |
 | Rollup | Per cluster: hosts connected/total, VM power, live CPU/mem %, HA/DRS, alarm counts (cluster + host) |
 | Status | Opinionated `ok` / `warn` / `critical` + plain-language `attention` reasons; sorted worst-first |
 | Thresholds | `CPU_MEM_WARN_PCT=85`, `CPU_MEM_CRIT_PCT=95` (named constants in `ops/cluster_summary.py`); disconnected host or critical alarm forces `critical` |
@@ -116,6 +118,25 @@ the standalone row, so a filtered `clusters: 0` means the filter matched nothing
 **Typical response tokens**: ~120–400 (one compact row per cluster + totals);
 scales with cluster count, not VM count. This is the aggregation-in-the-tool
 pattern — the model never sees raw inventory.
+
+### `cross_vcenter_attention` — overlapping targets
+
+CLI `attention`. Targets can overlap: an ESXi host configured as its own target
+may also be managed by a configured vCenter. Identity is read, never taken from
+names:
+
+| Field | Meaning |
+|-------|---------|
+| `totals.vcenters` / `esxi_targets` / `unidentified_targets` | Targets by endpoint type (`about.apiType`); a type that cannot be read is `unidentified`, never counted as a vCenter |
+| `totals.hosts_total` / `hosts_connected` | A host reached through a vCenter and as its own ESXi target counts once (`summary.hardware.uuid`). Not applied under `cluster_filter` |
+| `targets[].endpoint` / `shared_hosts` | `vCenter` / `ESXi host` / `unknown`, and how many of the target's hosts another target already counted |
+| `top_issues[].also_seen_via` | On a datastore issue: the same volume (`summary.url`) seen through an ESXi target that the vCenter manages — `[{vcenter, detail}]`, that view's own figure |
+
+Only a real overlap is merged: an ESXi target whose host a single vCenter target
+reports. A hardware UUID seen on two hosts of one target, on hosts of two vCenter
+targets, or a known SMBIOS placeholder (`03000200-0400-0500-0006-000700080009`,
+all zeros, all f) is not an identity. Two vCenters sharing an NFS datastore keep
+both issues, each with its own figure.
 
 ## 1. Inventory
 
@@ -174,6 +195,32 @@ confirming), or `unknown` (event- or metric-based, or a property could not be re
 guessed). `stale_alarms` counts the cleared ones and `stale_note` explains. On a lab vCenter
 8.0.3, "Host connection and power state" was red for eleven days on a connected host and now
 reads `cleared` with the note `runtime.connectionState is connected, not notResponding`.
+
+One event-raised alarm is decided anyway, because the skill reads the evidence: an
+expired-vCenter-license alarm (`com.vmware.license.VcLicenseExpiredEvent`) is checked
+against the license this vCenter itself is assigned (matched by `about.instanceUuid`, one
+`QueryAssignedLicenses` call, only when such an alarm is present). A readable, unexpired
+expiry gives `cleared`; an expired one gives `holds`; unreadable assignments, no row for
+this vCenter, or evaluation mode stay `unknown`.
+
+`object_label` names alarms about the vCenter appliance itself that sit on the inventory
+root ("Datacenters") — e.g. `vCenter appliance 192.168.60.16` — recognised from the
+definition's event type (`vim.event.ResourceExhaustionStatusChangedEvent`,
+`com.vmware.vc.system.RootPasswordExpiredEvent`) and its `_sourcehost_` comparison. It is
+null otherwise. `entity_name` is unchanged, because vmware-aiops resolves it.
+
+## 2a. Performance, capacity and vSphere 9.1 reads — result fields
+
+| Tool (CLI) | Field | Meaning |
+|------------|-------|---------|
+| `vm_performance` (`perf vms`) | `mem_ballooned_mb` | `mem.vmmemctl.average` — memory reclaimed by the balloon driver; above 0 means host memory pressure or a limit |
+| `vm_performance` | `mem_swapped_mb` | `mem.swapped.average` — guest memory the host swapped to disk |
+| `vm_performance` | `mem_usage_pct` | `mem.usage.average` — *active* guest memory over configured, not consumed; can read low on a VM under pressure (CLI column "Active mem %") |
+| `vm_performance` | `counters` (envelope) | The vSphere counter and meaning behind every row field |
+| `datastore_capacity` (`capacity datastores`) | `view` / `view_note` (envelope) | `vCenter` / `ESXi host` / `unknown`: whose figure this is. Each endpoint sums provisioned space over the VMs *it* has registered, so a vCenter and a directly-reached ESXi host can differ for one datastore |
+| `datastore_capacity` | `vm_count` | VMs the endpoint has registered on the datastore — the ones `provisioned_gb` covers |
+| `datastore_capacity` | `vms_not_connected` | Those VMs the endpoint reports as orphaned / inaccessible / disconnected, as `name (state)`; null when the state could not be read |
+| `vcenter_deployment_size` (`deployment-size`) | `available: false`, `reason`, `requires` | The appliance reported a version below 9.1 — an answer, not a failure (audited `ok`). If the version cannot be read, the call still returns an error that explains the 9.1 floor without claiming a build. An ESXi target gets an error saying these REST reads need a vCenter target |
 
 ### Alarm/Event `suggested_actions` example
 

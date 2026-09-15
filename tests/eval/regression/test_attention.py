@@ -50,6 +50,14 @@ def _install(monkeypatch, by_target):
         return result
 
     monkeypatch.setattr(attention, "get_cluster_health_summary", fake_summary)
+    # These fakes stand in for vCenters. Since 2026-09-15 the endpoint kind is read
+    # (about.apiType) rather than assumed, so say what the fake is; host and
+    # datastore identity stay unreadable, which disables de-duplication here.
+    monkeypatch.setattr(
+        attention,
+        "target_identity",
+        lambda si: {"endpoint": "vcenter", "hosts": None, "datastore_urls": None},
+    )
 
 
 def test_merges_and_globally_ranks(monkeypatch):

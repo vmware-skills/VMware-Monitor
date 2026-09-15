@@ -398,6 +398,10 @@ def cluster_health_summary(
     Point-in-time — no trending. ``top_issues`` includes datastores thin-provisioned
     past 100% of capacity (kind capacity, scope datastore), attributed to the
     cluster of a host that mounts them; datastore_capacity has the full table.
+    Alarm issues carry ``condition_now`` and ``acknowledged_days``. Only a
+    ``cleared`` alarm (its condition is read to be false now) ranks after live
+    issues; an ``unknown`` one is not re-checked and keeps its severity rank,
+    however long ago it was acknowledged — report it as possibly still live.
 
     Then drill into what ``top_issues`` names with vm_investigation_bundle,
     host_investigation_bundle or datastore_investigation_bundle; use
@@ -556,6 +560,11 @@ def cross_vcenter_attention(
 
     Degrades gracefully: an unreachable target is listed under ``unreachable``
     with a reason and the rest still aggregate. Point-in-time — no trending.
+    Overlap is removed by identity: a host reached through a vCenter and as its
+    own ESXi target counts once (hardware UUID), a datastore seen through both is
+    one issue with the other view's figure under ``also_seen_via`` (datastore
+    URL), and ``totals`` separates ``vcenters``, ``esxi_targets`` and
+    ``unidentified_targets``.
     Then drill in with vm_investigation_bundle, host_investigation_bundle or
     datastore_investigation_bundle against the ``vcenter`` the issue names.
 
@@ -626,7 +635,11 @@ def get_alarms(
     ``condition_now``: ``holds`` (live), ``cleared`` (vCenter still shows it but
     its state condition is false now — a stale alarm; see ``condition_note``), or
     ``unknown`` (event/metric-based or unreadable — never guessed). The envelope's
-    ``stale_alarms`` counts the cleared ones. Do not report a ``cleared`` alarm as
+    ``stale_alarms`` counts the cleared ones. An expired-vCenter-license alarm is
+    re-checked against this vCenter's own license assignment. ``object_label``
+    names alarms about the vCenter appliance itself (e.g. "vCenter appliance
+    192.168.60.16") that sit on the inventory root; ``entity_name`` stays the
+    object vmware-aiops resolves. Do not report a ``cleared`` alarm as
     a live problem; do not report an ``unknown`` one as resolved. Empty
     ``items`` with ``truncated`` False means there genuinely are no active alarms —
     never report "no data" otherwise.
@@ -941,8 +954,13 @@ def vm_performance(
     Returns the list envelope with a real ``total`` (VMs that reported metrics) —
     with the default limit of 25, ``truncated`` tells you whether more VMs sit
     behind it. LIVE data (cpu_usage_pct, mem_usage_pct, mem_consumed_mb,
-    disk_read_kbps, disk_write_kbps, net_kbps), busiest first. Only powered-on VMs
-    have a real-time provider; powered-off VMs are skipped. Point-in-time only.
+    mem_ballooned_mb, mem_swapped_mb, disk_read_kbps, disk_write_kbps, net_kbps),
+    busiest first. mem_usage_pct is mem.usage.average — ACTIVE guest memory over
+    configured, not consumed, so it can read low on a VM under pressure; non-zero
+    mem_ballooned_mb (mem.vmmemctl.average) or mem_swapped_mb (mem.swapped.average)
+    is the pressure signal. ``counters`` names the counter behind every field.
+    Only powered-on VMs have a real-time provider; powered-off VMs are skipped.
+    Point-in-time only.
 
     Use this to rank load across VMs; for one VM's configuration use vm_info, and
     to see the same VM correlated with its host, alarms and events use
@@ -1216,6 +1234,13 @@ def datastore_capacity(
     risk signal list_all_datastores lacks — overcommit_pct over 100% means more
     space is promised to VMs than physically exists, so a thin datastore can fill up
     while still showing free space. Point-in-time.
+
+    Whose figure: ``view`` (vCenter / ESXi host / unknown) and ``view_note``.
+    Provisioned space is summed by the endpoint over the VMs it has registered on
+    the datastore, so a vCenter and a directly-reached ESXi host can report
+    different provisioned_gb for one datastore — each row's ``vm_count`` says how
+    many VMs the figure covers, and ``vms_not_connected`` names those reported as
+    orphaned/inaccessible/disconnected (None = could not be read).
 
     Use this for the capacity view, then datastore_investigation_bundle to drill
     into a specific datastore's hosts, VMs and alarms. Reclaiming space (delete

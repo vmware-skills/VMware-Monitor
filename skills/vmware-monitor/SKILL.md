@@ -177,7 +177,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `vm_info` | Detailed VM info (CPU, memory, disks, NICs, snapshots) |
 | `vm_list_snapshots` | Snapshot list for one VM with nesting hierarchy (read-only) |
 | `host_performance` | **Real-time** host CPU/mem/disk/net utilisation (PerfManager); busiest first |
-| `vm_performance` | **Real-time** VM CPU/mem/disk/net utilisation (top 25 by default); powered-on only |
+| `vm_performance` | **Real-time** VM CPU/mem/balloon/swap/disk/net utilisation (top 25 by default); powered-on only |
 | `snapshot_aging` | Inventory-wide snapshot sweep with age + sprawl; flags snapshots older than N days |
 | `vm_backup_snapshot_history` | Backup windows for one VM from snapshot task history; a lower bound, not job duration |
 | `certificate_status` | Per-host ESXi management certificate expiry (days until expiry, expiring flag) |

@@ -29,6 +29,7 @@ from vmware_monitor.ops._html_base import (
     clamp,
     meter_class,
 )
+from vmware_monitor.ops.cluster_summary import cli_drilldown
 
 # Local aliases keep the render body below unchanged after the palette moved to
 # the shared base module.
@@ -54,7 +55,8 @@ def _issue_row(rank: int, issue: dict) -> str:
         loc = f"{issue['scope']} <b>{obj}</b>" + (f" · cluster {cluster}" if cluster else "")
     else:
         loc = f"cluster <b>{obj}</b>"
-    nxt = escape(str(issue.get("drilldown", "")))
+    # Written by the CLI, read by a person: name CLI commands, not MCP tools.
+    nxt = escape(cli_drilldown(issue))
     return (
         f'<div class="issue {cls}"><div class="rank">{rank}</div>'
         f'<div class="chip {cls}">{label}</div>'

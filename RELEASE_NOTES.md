@@ -1,3 +1,78 @@
+## Unreleased — stale alarms re-checked, overlapping targets counted once, version gates without a traceback
+
+Found in a live session against the lab vCenter 8.0.3 on 2026-09-15, then corrected after an independent review
+the same day.
+
+**`deployment-size` on a vCenter older than 9.1 is an answer, not a traceback.** On 8.0.3 it printed forty lines of
+Rich traceback around an already-written sentence ("requires vCenter 9.1 or newer; this appliance reports
+8.0.3.00000"). **Behaviour change:** `vcenter_deployment_size` now returns `available: false` with that `reason` and
+`requires: "vCenter 9.1+"`, audited `ok` — the appliance gave a definitive answer. This happens only when a version was
+actually read below 9.1. When the version cannot be read the call still raises, with an error that explains the 9.1
+floor and makes no claim about the build; a 404 on a 9.1 appliance still raises too. `patch compliance` /
+`patch last-apply` with a bad cluster MoID, and `memory tiering` on a pre-8.0U3 target, now print their existing
+teaching sentence as one line (exit 1) instead of a traceback. The REST commands against an ESXi target used to print
+only "vCenter REST call to /api/session failed (400)."; the message now says these commands need a vCenter target.
+
+**An expired-vCenter-license alarm is checked against the license.** "Expired vCenter Server license" had been red since
+2026-06-01 while `infra licenses` showed the vCenter on "vCenter Server 8 Standard" until 2027-06-28, and `health alarms`
+said `unknown`: only state-based alarms were re-evaluated. The alarm is event-raised
+(`com.vmware.license.VcLicenseExpiredEvent`), and the skill reads the evidence that decides it — the license assigned to
+this vCenter, matched by `about.instanceUuid`. A readable, unexpired expiry gives `condition_now: cleared`; an expired
+one `holds`; unreadable assignments, no row for this vCenter, or evaluation mode stay `unknown`. License assignments are
+read once, and only when such an alarm is present.
+
+**Summary and attention rank cleared alarms last; unknown ones keep their severity.** Alarm issues in `top_issues` now
+carry `condition_now` and `acknowledged_days`. A `cleared` alarm is ranked after every other issue and its `detail` says
+the condition no longer holds. An `unknown` alarm keeps its severity rank however long ago it was acknowledged — the
+first version of this change demoted those, which put a CRITICAL "Host TPM attestation alarm" (acknowledged 196 days
+ago) below a warning and, behind ten warnings with `top_n=10`, out of `top_issues`. Its `detail` only notes
+"acknowledged N days ago; condition not re-checked". Alarm counts and the overall status still count every alarm
+vCenter reports.
+
+**Alarms about the vCenter appliance say so.** "Memory Exhaustion on 192" showed on "Datacenters" — the alarm is vCenter's
+own, named after the appliance's short hostname, and it sits on the inventory root. Alarms raised by
+`vim.event.ResourceExhaustionStatusChangedEvent` or `com.vmware.vc.system.RootPasswordExpiredEvent` are recognised
+from the definition, never the name. `get_alarms` rows gain `object_label` (e.g. `vCenter appliance 192.168.60.16`,
+from the definition's `_sourcehost_`; null otherwise) and `health alarms` shows it. **Behaviour change:** in
+`cluster_health_summary` / `cross_vcenter_attention` `top_issues`, `object` is that label instead of "Datacenters".
+`entity_name` in `get_alarms` is unchanged, since vmware-aiops resolves it.
+
+**`attention` counts an overlapping host once and an ESXi target as an ESXi target.** With `home-vcenter` and
+`home-esxi` (a host that vCenter manages) configured, the header said "2 vCenters · 3/3 hosts" and datastore1 was
+listed twice. Endpoint type is read from `about.apiType`: `totals` gains `esxi_targets` and `unidentified_targets`, and
+`vcenters` counts vCenters only. Each `targets` row gains `endpoint` and `shared_hosts`. A host is identified by
+`summary.hardware.uuid` and counted once when it is an ESXi target that a single vCenter target also reports (not
+applied under `cluster_filter`). A UUID seen on two hosts of one target, on hosts of two vCenter targets, or a known
+SMBIOS placeholder (`03000200-0400-0500-0006-000700080009`, all zeros, all f) is not an identity, so distinct white-box
+hosts are not folded together. A datastore issue is merged only across that same real overlap, matched by
+`summary.url` (vCenter and the host spell it `ds:///vmfs/volumes/<id>/` and `/vmfs/volumes/<id>`): the vCenter's issue is
+kept and the ESXi view's own figure appears under `also_seen_via`. Two vCenters sharing an NFS datastore keep both
+issues. The CLI header reads "1 vCenter, 1 ESXi target" and the table is titled "Targets", with a Type column.
+
+**`capacity datastores` says whose figure it is.** datastore1 read 1734.0 GB provisioned through vCenter and 1094.9 GB
+through the ESXi host that mounts it. Investigated through the skill: vCenter lists 11 VMs on that host and datastore,
+the host 9. The two extra are powered-off VMs vCenter still holds and the host does not have registered — "VMware
+vCenter Server" (orphaned, 17 thin disks, ~587 GB) and "linux-hermers" (25 GB). Each endpoint sums provisioned space over
+the VMs it has registered; both figures are right, so the formula is unchanged. `datastore_capacity` gains `view` and
+`view_note` in the envelope and `vm_count` and `vms_not_connected` (null when unreadable) per row; the CLI shows the
+view, a VMs column and any VM not reported as connected.
+
+**`perf vms` shows ballooned and swapped memory and names its memory counter.** Broadcom KB 430034's first check for
+vCenter appliance memory exhaustion is ballooning, and the table had no column for it. `vm_performance` rows gain
+`mem_ballooned_mb` (`mem.vmmemctl.average`) and `mem_swapped_mb` (`mem.swapped.average`), and the envelope gains
+`counters`, naming the counter behind every field. "Mem %" is `mem.usage.average` — active guest memory, not consumed;
+the CLI column is now "Active mem %", with Balloon MB and Swap MB columns. On the lab every VM, the vCSA included, read 0.
+
+**Each surface names its own next step.** `attention` / `summary` told the operator `vmware-monitor get_alarms`, which
+is not a command. **Behaviour change:** `drilldown` in `top_issues` now names only MCP tools (e.g. `get_alarms for
+detail`, `host_performance, then datastore_capacity`); the terminal and the HTML snapshots name CLI commands
+(`vmware-monitor health alarms`). Both are checked against the live tool registry and the command tree. The top-issues
+table is four columns (object over cluster, problem over next step), so nothing is cut at 80 columns.
+
+Investigated, not changed: "Root user password expired." shows triggered 2026-06-28 and acknowledged 2026-06-04. The
+raw `triggeredAlarmState` carries exactly those values; vCenter re-triggered the alarm and kept the older
+acknowledgement.
+
 ## v1.13.1 — CLI reads are audited
 
 No CLI read wrote `~/.vmware/audit.db` — only MCP calls and CLI writes (`@guarded`) did. A live

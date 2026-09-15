@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 from vmware_policy import sanitize
 from vmware_policy.compat import Requires
 
-from vmware_monitor.rest import RestNotReadyError, VsphereRest
+from vmware_monitor.rest import RestNotReadyError, RestVersionGateError, VsphereRest
 
 if TYPE_CHECKING:
     from vmware_monitor.config import TargetConfig
@@ -94,13 +94,31 @@ def get_deployment_size(target: TargetConfig) -> dict:
 
     Returns ``{available, note, fields}`` — ``fields`` is a defensive passthrough
     of the endpoint's top-level scalar values (e.g. current/target size class).
-    ``available: False`` means vCenter answered 5xx (mid-patch); nothing crashed.
+    ``available: False`` means vCenter answered 5xx (mid-patch), or that this
+    appliance reported a version older than 9.1 — ``reason`` says which.
+    Nothing crashed either way.
+
+    A version gate is returned, not raised: the appliance gave a definitive answer
+    ("this build does not have it"), so the call is audited ``ok`` and the CLI
+    prints one line. A 404 still raises when the appliance meets the floor (that
+    one is unexplained) or when its version could not be read — then the error
+    explains the 9.1 floor but makes no claim about the build.
     """
     rest = VsphereRest(target)
     try:
         data = rest.get_json(DEPLOYMENT_SIZE_PATH, requires=REQUIRES_DEPLOYMENT_SIZE)
     except RestNotReadyError as exc:
         return _not_ready(exc, "deployment_size")
+    except RestVersionGateError as exc:
+        return {
+            "available": False,
+            "resource": "deployment_size",
+            "reason": sanitize(str(exc)),
+            "requires": (
+                f"{REQUIRES_DEPLOYMENT_SIZE.product} {REQUIRES_DEPLOYMENT_SIZE.minimum_str}+"
+            ),
+            "note": "Not a failure: this endpoint does not exist on this appliance version.",
+        }
     return {"available": True, "note": _VERIFIED, "fields": _scalar_fields(data)}
 
 

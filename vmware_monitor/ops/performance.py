@@ -43,9 +43,38 @@ _VM_COUNTERS: dict[str, tuple[str, float, str]] = {
     "cpu.usage.average": ("cpu_usage_pct", 100.0, "%"),
     "mem.usage.average": ("mem_usage_pct", 100.0, "%"),
     "mem.consumed.average": ("mem_consumed_mb", 1024.0, "MB"),
+    # Ballooning and host swapping: Broadcom KB 430034's first check for vCenter
+    # appliance memory exhaustion. mem.usage is *active* memory, so a VM being
+    # ballooned can read a low Mem % — these two are what show the pressure.
+    "mem.vmmemctl.average": ("mem_ballooned_mb", 1024.0, "MB"),
+    "mem.swapped.average": ("mem_swapped_mb", 1024.0, "MB"),
     "virtualDisk.read.average": ("disk_read_kbps", 1.0, "KB/s"),
     "virtualDisk.write.average": ("disk_write_kbps", 1.0, "KB/s"),
     "net.usage.average": ("net_kbps", 1.0, "KB/s"),
+}
+
+#: What each VM counter measures, keyed by counter so the envelope's ``counters``
+#: map is derived from ``_VM_COUNTERS`` and cannot name a field the rows lack.
+_VM_COUNTER_MEANING: dict[str, str] = {
+    "cpu.usage.average": "CPU used as a percentage of the VM's configured vCPU capacity",
+    "mem.usage.average": (
+        "active guest memory as a percentage of configured memory — not consumed "
+        "memory, so it can read low while the VM is ballooned or swapped"
+    ),
+    "mem.consumed.average": "host memory currently backing the VM",
+    "mem.vmmemctl.average": (
+        "memory reclaimed by the balloon driver; above 0 means the host took memory "
+        "back (host memory pressure or a memory limit)"
+    ),
+    "mem.swapped.average": "guest memory the host has swapped out to disk",
+    "virtualDisk.read.average": "virtual disk read rate",
+    "virtualDisk.write.average": "virtual disk write rate",
+    "net.usage.average": "network send + receive rate",
+}
+
+VM_COUNTER_SOURCES: dict[str, str] = {
+    out_key: f"{wire} ({unit}) — {_VM_COUNTER_MEANING[wire]}"
+    for wire, (out_key, _divisor, unit) in _VM_COUNTERS.items()
 }
 
 
@@ -164,7 +193,10 @@ def get_vm_performance(
     """Real-time CPU/memory/disk/network utilisation per virtual machine.
 
     Returns the family list envelope with a real ``total`` — every sampled VM
-    is collected before ``limit`` is applied.
+    is collected before ``limit`` is applied. Rows carry cpu_usage_pct,
+    mem_usage_pct, mem_consumed_mb, mem_ballooned_mb, mem_swapped_mb,
+    disk_read_kbps, disk_write_kbps and net_kbps when vSphere reports them; the
+    envelope's ``counters`` names the vSphere counter behind each field.
     Only powered-on VMs have a real-time provider; powered-off VMs are skipped.
     Sorted by CPU usage descending so the busiest VMs surface first.
 
@@ -199,4 +231,4 @@ def get_vm_performance(
     total = len(results)
     if limit is not None:
         results = results[:limit]
-    return paginated(results, limit=limit, total=total)
+    return paginated(results, limit=limit, total=total, counters=VM_COUNTER_SOURCES)

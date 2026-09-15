@@ -27,20 +27,37 @@ For a large fleet, scanning every cluster row is too slow, so the individual
 anomalies are flattened into one ranked list — the top N things wrong right now,
 worst first. This is the headline; lead with it.
 
-| Column   | Field       | Meaning |
-|----------|-------------|---------|
-| #        | (position)  | Rank, 1 = most urgent |
-| Severity | `severity`  | `CRITICAL` / `WARNING` |
-| Object   | `object`    | The host or cluster the problem is on |
-| Cluster  | `cluster`   | Which cluster it rolls up to |
-| Problem  | `detail`    | Plain-language description (alarm name, "memory at 96%", "host notResponding") |
-| Next step| `drilldown` | The tool to run next for this issue |
+The terminal shows four columns so the text that matters stays readable at 80
+columns:
+
+| Column               | Field(s)                  | Meaning |
+|----------------------|---------------------------|---------|
+| #                    | (position)                | Rank, 1 = most urgent |
+| Severity             | `severity`                | `CRITICAL` / `WARNING` |
+| Object               | `object`, then `cluster`  | The host, cluster, datastore or vCenter appliance the problem is on, with the cluster it rolls up to on the line below |
+| Problem · next step  | `detail`, then a CLI hint | Plain-language description (alarm name, "memory at 96%", "host notResponding"), with the CLI command to run next on the line below |
+
+`object` names the vCenter appliance (e.g. `vCenter appliance 192.168.60.16`)
+for alarms vCenter raises about itself — memory exhaustion, root password
+expiry — recognised from the alarm definition's event type, not its name.
+
+Alarm issues also carry `condition_now` (`holds` / `cleared` / `unknown`) and
+`acknowledged_days` (null when not acknowledged). The `detail` says when a
+condition no longer holds, or when an alarm acknowledged 7+ days ago has a
+condition that is not re-checked.
+
+`drilldown` in the data names MCP tools (it is read by a model); the terminal
+and the HTML snapshot name CLI commands instead.
 
 `top_n` (CLI `--top`, default 10) caps the list; `issues_total` reports the
 pre-cap count so truncation is visible (e.g. "Top 5 issues (of 8)"). `--top 0`
-hides the list and shows only the table. Ranking: by severity, then kind
-(`host_down` → `alarm` → `capacity` → `config`), then hottest capacity first.
-Tune the order in `_KIND_RANK` / `_rank_issues` in `ops/cluster_summary.py`.
+hides the list and shows only the table. Ranking: `cleared` alarms (the
+condition is read to be false now) after every other issue; then by severity,
+then kind (`host_down` → `alarm` → `capacity` → `config`), then hottest capacity
+first. An `unknown` alarm keeps its severity rank however long ago it was
+acknowledged — an acknowledgement is not evidence the condition went away.
+Tune the order in `staleness_rank` (`ops/alarm_triage.py`) and `_KIND_RANK` /
+`_rank_issues` (`ops/cluster_summary.py`).
 
 ### Part 2 — Per-cluster table
 

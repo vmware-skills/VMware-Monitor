@@ -27,6 +27,7 @@ from pyVmomi import vim
 from vmware_policy import sanitize
 
 from vmware_monitor.ops._collect import _collect, _collect_objects
+from vmware_monitor.ops.alarm_triage import build_alarm_issues, staleness_rank
 from vmware_monitor.ops.capacity import DATASTORE_OVERCOMMIT_WARN_PCT, overcommit_pct
 
 if TYPE_CHECKING:
@@ -57,12 +58,33 @@ DEFAULT_TOP_N = 10
 _KIND_RANK = {"host_down": 0, "alarm": 1, "capacity": 2, "config": 3}
 _SEV_RANK = {"critical": 0, "warning": 1}
 
-# Per-kind drill-down hint so each top issue points at the next tool to run.
+# Per-kind drill-down hint so each top issue points at the next step to take.
+#
+# Two maps, one per surface. The issue's ``drilldown`` field is read by a model
+# through MCP, so it names MCP tools; a terminal or an HTML snapshot written by
+# the CLI names CLI commands (``cli_drilldown``). One mixed string served both
+# until 2026-09-15 and was wrong on each: the CLI printed
+# "vmware-monitor get_alarms" (no such command) and the MCP payload told a model
+# to run "vmware-monitor perf hosts". Both maps are checked against the live MCP
+# registry and the Typer command tree by
+# test_next_step_names_the_surface_it_is_read_on.py.
 _DRILLDOWN = {
-    "host_down": "vmware-monitor inventory hosts / health alarms; reconnect via vmware-aiops",
-    "alarm": "vmware-monitor get_alarms for detail; remediate via vmware-aiops",
-    "capacity": "vmware-monitor perf hosts / capacity datastores on this cluster",
+    "host_down": "host_investigation_bundle, then get_alarms; reconnect via vmware-aiops",
+    "alarm": "get_alarms for detail; remediate via vmware-aiops",
+    "capacity": "host_performance, then datastore_capacity",
     "config": "enable vSphere HA on this cluster (vSphere admin)",
+}
+_CLI_DRILLDOWN = {
+    "host_down": (
+        "vmware-monitor investigate host, then vmware-monitor health alarms; "
+        "reconnect via vmware-aiops"
+    ),
+    "alarm": "vmware-monitor health alarms; remediate via vmware-aiops",
+    "capacity": "vmware-monitor perf hosts, then vmware-monitor capacity datastores",
+    "config": "enable vSphere HA on this cluster (vSphere admin)",
+    "datastore": (
+        "vmware-monitor capacity datastores, then vmware-monitor investigate datastore"
+    ),
 }
 
 # One friendly line rendered under every summary so the operator always knows
@@ -162,16 +184,18 @@ def _scan_alarms(
     """Count a triggeredAlarmState list into a cluster AND stash each alarm.
 
     Counts feed the per-cluster column; the stashed ``(alarm_ref, severity,
-    scope_type, scope_name, cluster_name)`` tuples feed the top-issues list.
-    Alarm *names* are resolved later in one batched call (never a lazy read per
-    alarm — issue #31 class).
+    scope_type, scope_name, cluster_name, state)`` tuples feed the top-issues list.
+    Alarm *names* and definitions are resolved later in one batched call (never a
+    lazy read per alarm — issue #31 class).
     """
     for state in triggered or []:
         sev = _severity(state)
         if sev is None:
             continue
         bucket["alarms"]["critical" if sev == "critical" else "warning"] += 1
-        raw.append((getattr(state, "alarm", None), sev, scope_type, scope_name, cluster_name))
+        raw.append(
+            (getattr(state, "alarm", None), sev, scope_type, scope_name, cluster_name, state)
+        )
 
 
 def _rollup_status(rec: dict) -> tuple[str, list[str]]:
@@ -427,7 +451,31 @@ def get_cluster_health_summary(
 #: shared datastore — so it is read afterwards, for over-committed datastores alone.
 _DATASTORE_PROPS = ["name", "summary.capacity", "summary.freeSpace", "summary.uncommitted"]
 
-_DATASTORE_DRILLDOWN = "vmware-monitor capacity datastores (MCP: datastore_capacity)"
+_DATASTORE_DRILLDOWN = "datastore_capacity, then datastore_investigation_bundle"
+
+
+def _drilldown_key(issue: dict) -> str:
+    """Which hint an issue gets: its kind, except storage capacity issues.
+
+    A capacity issue scoped to a cluster is CPU/memory pressure; any other
+    capacity scope (a datastore, or the vCenter-wide "datastores could not be
+    read" warning) is about storage.
+    """
+    kind = str(issue.get("kind", ""))
+    if kind == "capacity" and issue.get("scope") != "cluster":
+        return "datastore"
+    return kind
+
+
+def mcp_drilldown(issue: dict) -> str:
+    """The next step for ``issue``, naming MCP tools (the ``drilldown`` field)."""
+    key = _drilldown_key(issue)
+    return _DATASTORE_DRILLDOWN if key == "datastore" else _DRILLDOWN.get(key, "")
+
+
+def cli_drilldown(issue: dict) -> str:
+    """The next step for ``issue``, naming CLI commands — for terminal and HTML."""
+    return _CLI_DRILLDOWN.get(_drilldown_key(issue), "")
 
 
 def _datastore_pct(p: dict) -> float | None:
@@ -525,32 +573,14 @@ def _datastore_issue(
 
 
 def _alarm_issues(si: ServiceInstance, raw_alarms: list) -> list[dict]:
-    """Resolve stashed alarm refs to named issues in ONE batched call.
+    """Resolve stashed alarms to named, verdict-carrying issues (batched reads).
 
     ``raw_alarms`` holds (alarm_ref, severity, scope_type, scope_name,
-    cluster_name). The alarm's display name lives on the referenced Alarm managed
-    object; reading it per alarm would be a lazy round-trip each (issue #31
-    class), so all refs are fetched together via ``_collect_objects``.
+    cluster_name, state). Names and definitions are fetched together via
+    ``_collect_objects`` (issue #31 class); see ``alarm_triage.build_alarm_issues``
+    for the condition verdict, the vCenter-appliance label and acknowledgement age.
     """
-    refs = [r[0] for r in raw_alarms if r[0] is not None]
-    name_by_ref = {
-        ref: (props.get("info.name") or "alarm")
-        for ref, props in _collect_objects(si, refs, vim.alarm.Alarm, ["info.name"])
-    }
-    issues: list[dict] = []
-    for ref, sev, scope_type, scope_name, cluster_name in raw_alarms:
-        issues.append(
-            {
-                "severity": sev,
-                "kind": "alarm",
-                "object": scope_name,
-                "scope": scope_type,
-                "cluster": cluster_name,
-                "detail": sanitize(str(name_by_ref.get(ref, "alarm"))),
-                "drilldown": _DRILLDOWN["alarm"],
-            }
-        )
-    return issues
+    return build_alarm_issues(si, raw_alarms, _collect_objects, _DRILLDOWN["alarm"])
 
 
 def _capacity_issues(rec: dict) -> list[dict]:
@@ -589,8 +619,10 @@ def _rank_issues(issues: list[dict], top_n: int) -> tuple[list[dict], int]:
     """Sort anomalies worst-first and cap to top_n. Returns (list, total)."""
 
     def key(i: dict):
-        # Hotter capacity first within its kind; other kinds share magnitude 0.
+        # Stale alarms after every live problem (cleared last), then severity;
+        # hotter capacity first within its kind; other kinds share magnitude 0.
         return (
+            staleness_rank(i),
             _SEV_RANK.get(i["severity"], 9),
             _KIND_RANK.get(i["kind"], 9),
             -i.get("_mag", 0),

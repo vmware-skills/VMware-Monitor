@@ -301,10 +301,11 @@ def health_alarms(target: TargetOption = None, config: ConfigOption = None) -> N
         else:
             ack = "no"
         now = a.get("condition_now", "unknown")
+        label = a.get("object_label")
         table.add_row(
             f"[{sev_style}]{a['severity']}[/]",
             a["alarm_name"],
-            a["entity_name"],
+            f"{label} (on {a['entity_name']})" if label else a["entity_name"],
             a["time"],
             ack,
             f"[{now_style.get(now, 'white')}]{now}[/]",

@@ -138,9 +138,10 @@ def vcenter_deployment_size(
 
     What it returns: {available, note, fields} where ``fields`` is a defensive
     passthrough of the endpoint's top-level scalar values. ``available: False`` means
-    vCenter answered 503 (busy/restarting); nothing crashed.
+    vCenter answered 503 (busy/restarting) or is older than 9.1 — ``reason`` says
+    which; nothing crashed, and neither is a failure.
 
-    Gotchas: 9.1-only endpoint — older vCenters will 404 (authored teaching error).
+    Gotchas: 9.1-only endpoint — an older vCenter returns ``available: False``, not data.
     Endpoint and field parse verified against a live VCF 9.1 vCenter. Read-only.
 
     Args:

@@ -22,6 +22,7 @@ from vmware_monitor.ops._html_base import (
     STATUS_CLASS,
     STATUS_LABEL,
 )
+from vmware_monitor.ops.cluster_summary import cli_drilldown
 
 
 def _issue_row(rank: int, issue: dict) -> str:
@@ -36,7 +37,8 @@ def _issue_row(rank: int, issue: dict) -> str:
     loc = f"{escape(scope)} <b>{obj}</b>"
     if cluster and scope != "cluster":
         loc += f" · cluster {cluster}"
-    nxt = escape(str(issue.get("drilldown", "")))
+    # Written by the CLI, read by a person: name CLI commands, not MCP tools.
+    nxt = escape(cli_drilldown(issue))
     return (
         f'<div class="issue {cls}"><div class="rank">{rank}</div>'
         f'<div class="chip {cls}">{label}</div>'
@@ -79,6 +81,15 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
     al = totals.get("alarms", {})
     cells = [
         f'<div class="cell"><div class="k">vCenters</div><div class="v">{totals.get("vcenters", 0)}</div></div>',
+        # A directly-reached ESXi host is not a vCenter; show it as its own count.
+        *(
+            [
+                f'<div class="cell"><div class="k">ESXi targets</div>'
+                f'<div class="v">{totals["esxi_targets"]}</div></div>'
+            ]
+            if totals.get("esxi_targets")
+            else []
+        ),
         f'<div class="cell"><div class="k">Clusters</div><div class="v">{totals.get("clusters", 0)}</div></div>',
         f'<div class="cell"><div class="k">Hosts connected</div><div class="v">'
         f"{totals.get('hosts_connected', 0)}<small>/{totals.get('hosts_total', 0)}</small></div></div>",

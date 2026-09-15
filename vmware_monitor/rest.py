@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from vmware_policy import sanitize
-from vmware_policy.compat import Requires, version_remedy
+from vmware_policy.compat import Requires, parse_version, version_remedy
 
 if TYPE_CHECKING:
     from vmware_monitor.config import TargetConfig
@@ -65,6 +65,17 @@ _VERSION_PATH = "/api/appliance/system/version"
 
 class RestNotFoundError(ValueError):
     """A templated id (e.g. cluster MoID) did not resolve — names how to get one."""
+
+
+class RestVersionGateError(RestNotFoundError):
+    """A 404 explained by the call site's version floor, not by a bad id.
+
+    Raised only when the appliance's version was read and is below the floor. A
+    404 on an appliance that meets the floor, or whose version could not be read,
+    stays a plain :class:`RestNotFoundError` (the latter still carries the
+    floor explanation), so a caller that turns this into "unavailable on this
+    version" never does so without a version to back it.
+    """
 
 
 def _base_url(target: TargetConfig) -> str:
@@ -142,7 +153,13 @@ def _translate_status(
         if requires is not None:
             explained = version_remedy(requires, detected)
             if explained:
-                return RestNotFoundError(f"{explained} Failing call: {path}")
+                # A gate only when a version was actually read below the floor.
+                # With the version unreadable the text says so and makes no claim
+                # about the build — so it must not become "unavailable on this
+                # version" downstream (review 2026-09-15, M1).
+                gated = parse_version(detected) is not None
+                cls = RestVersionGateError if gated else RestNotFoundError
+                return cls(f"{explained} Failing call: {path}")
         # vCenter often explains its own 404 better than any guess we can make
         # ("...are unavailable" means never remediated, not a bad id). Its
         # sentence goes first; the id advice stays as the fallback for the case
@@ -165,6 +182,16 @@ def _translate_status(
             f"vCenter has no resource at {path} (404). If this used a cluster id, "
             "confirm it with 'vmware-monitor inventory clusters' — the REST API "
             "wants the cluster MoID (e.g. domain-c123), not its display name."
+        )
+    if path == _SESSION_PATH and code in (400, 404, 405):
+        # A standalone ESXi host has no vSphere Automation REST API: its session
+        # endpoint answered 400 on the lab (2026-09-15) and the bare "failed (400)"
+        # gave no next step.
+        return RestAuthError(
+            f"vCenter REST call to {path} failed ({code}). This endpoint does not "
+            "offer the vSphere Automation REST API — an ESXi host does not. These "
+            "commands need a vCenter target: pass --target <a vCenter from "
+            "~/.vmware-monitor/config.yaml>."
         )
     return RestAuthError(f"vCenter REST call to {path} failed ({code}).")
 
