@@ -75,7 +75,7 @@ vmware-monitor inventory clusters [--target <name>]
 vmware-monitor inventory networks [--target <name>]
 ```
 
-- `--target`: Named target from `config.yaml` (default: first target)
+- `--target`: Named target from `config.yaml` (default: `default_target` in `config.yaml`, else the first target)
 - `--limit`: Max VMs to return (default: unlimited)
 - `--sort-by`: Sort field for VM listing — `name` | `cpu` | `memory_mb` | `power_state` | `folder_path`
 - `--power-state`: Filter VMs by power state

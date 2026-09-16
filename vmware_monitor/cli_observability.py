@@ -531,6 +531,10 @@ def activity_tasks(
             r["user"],
         )
     console.print(table)
+    # A table of the readable tasks alone reads as "these are all of them"
+    # (independent review, 2026-09-15), so the unread ones are said here too.
+    if note:
+        console.print(f"[yellow]{escape(note)}[/]")
 
 
 @activity_app.command("sessions")

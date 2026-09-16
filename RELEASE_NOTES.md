@@ -1,3 +1,28 @@
+## v1.15.1 — a stopped server exits even if its logout hangs; `activity tasks` mentions unreadable tasks beside readable ones
+
+Corrections to 1.15.0, from an independent review on 2026-09-15.
+
+**A stopped server exits within five seconds, even if its logout hangs.** 1.15.0 made the server log out when
+Claude Code stops it: the first stop signal ignored further stop signals and ran the `atexit` logout. The logout
+had no time limit. pyVmomi connects with `httpConnectionTimeout=None`, so a logout to a vCenter that stopped
+answering, or one waiting on the SOAP connection lock a tool call held when the signal arrived, kept the server
+running and deaf to every further stop signal until something sent SIGKILL. Before 1.15.0, SIGTERM at least
+ended it.
+
+* The logout now runs on a worker thread and gets 5 seconds. If it has not finished, the server writes one line
+  to stderr without blocking (a full pipe cannot hold the exit) and exits with 128 + signal anyway; vCenter or
+  ESXi ends that session when it idles out.
+* New test: the real server with stdin held open, an `atexit` callback that blocks for ten minutes, then SIGINT
+  and SIGTERM. The server must exit within 15 seconds and say it gave up on the logout. It failed on 1.15.0.
+* Lab, on this code: eight conversations against vCenter 8.0.3 and ESXi 8.0.3, including `active_tasks` on both,
+  left no session behind; afterwards both session lists held only the counting call's own session.
+
+**`activity tasks` mentions unreadable tasks beside readable ones.** 1.15.0 printed `unreadable_note` only when
+no task could be read. With some tasks readable it printed their table and nothing else, which reads as "these
+are all the tasks". The note is now printed under the table too. The MCP result was already right.
+
+* `references/cli-reference.md` said `--target` defaults to the first target; it now names `default_target`.
+
 ## v1.15.0 — results name the target that answered; unreadable tasks are counted; the server logs out when stopped
 
 Found in real Claude Code conversations against the lab vCenter 8.0.3 and ESXi 8.0.3 on 2026-09-15, then
