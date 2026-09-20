@@ -202,17 +202,31 @@ def _target_instructions() -> str:
     vCenter is configured" (2026-09-15 conversation tests). Never raises: a
     missing or broken config must not stop the server from starting — the tools
     report that error themselves.
+
+    A config it could not read is still said out loud, under the same heading.
+    Dropping the line was this function's own version of the bug it exists to
+    prevent: on a machine that has not run ``init`` yet — every customer, on day
+    one — the client saw no listing at all, and "this skill has no targets worth
+    naming" reads exactly like "this skill could not read them" (2026-09-20).
     """
     try:
         cfg = load_config()
-        default_name = cfg.default_target.name
-    except Exception:  # noqa: BLE001 — instructions are advisory, startup is not
-        return _BASE_INSTRUCTIONS + _TARGET_RULE
-    listed = "; ".join(
-        f"{t.name} ({t.type}, {t.host}{', default' if t.name == default_name else ''})"
-        for t in cfg.targets
-    )
-    return f"{_BASE_INSTRUCTIONS} Configured targets: {listed}.{_TARGET_RULE}"
+        # Asked only when there is something to be the default: an empty
+        # targets list makes `default_target` raise, and "could not be read"
+        # is a different fact from "you have not added one yet".
+        default_name = cfg.default_target.name if cfg.targets else None
+    except Exception as exc:  # noqa: BLE001 — instructions are advisory, startup is not
+        # Only the exception's type: its text quotes the config path.
+        detail = f"could not be read ({type(exc).__name__}) — run `vmware-monitor doctor`"
+    else:
+        listed = "; ".join(
+            f"{t.name} ({t.type}, {t.host}{', default' if t.name == default_name else ''})"
+            for t in cfg.targets
+        )
+        detail = listed or (
+            "none yet — add one under `targets:` in ~/.vmware-monitor/config.yaml"
+        )
+    return f"{_BASE_INSTRUCTIONS} Configured targets: {detail}.{_TARGET_RULE}"
 
 
 mcp = FastMCP("vmware-monitor", instructions=_target_instructions())
