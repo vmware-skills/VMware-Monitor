@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==1.15.1
+uv tool install vmware-monitor==1.16.0
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v1.15.1
+npx skills add vmware-skills/VMware-Monitor#v1.16.0
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 1.15.1
+clawhub install @zw008/vmware-monitor --version 1.16.0
 ```
 
 ### Claude Code
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==1.15.1
+uv tool install vmware-monitor==1.16.0
 
 # 2. Verify
 vmware-monitor --version
@@ -115,7 +115,7 @@ question about vCenter.
 ## Development Install
 
 ```bash
-git clone --branch v1.15.1 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v1.16.0 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
