@@ -306,7 +306,7 @@ def test_credits_a_named_env_var():
 
 import ast  # noqa: E402 — grouped with the tests that use it
 
-from ..capability.test_error_actionability import _messages_in_tree
+from ..capability.test_error_actionability import _messages_in_tree  # noqa: E402
 
 
 def _messages(src: str):
@@ -344,7 +344,7 @@ def test_folds_in_the_strings_a_hint_helper_can_return():
 # on fabricated messages because a repo with nothing over budget would pass this
 # check without exercising a line of it.
 
-from ..capability.test_error_actionability import _truncation_findings
+from ..capability.test_error_actionability import _truncation_findings  # noqa: E402
 
 _TAUGHT = {"names_input": True, "states_remedy": True, "names_artifact": True}
 _BARE = {"names_input": True, "states_remedy": False, "names_artifact": False}

@@ -12,7 +12,6 @@ from vmware_policy.fsperms import assert_owner_only
 
 import importlib
 import os
-import stat
 
 from dotenv import dotenv_values
 
