@@ -214,7 +214,7 @@ ESXi 独立主机 ──→ VM
 
 1. 运行 `vmware-monitor doctor` 进行诊断
 2. 检查 `config.yaml` 中的目标主机名/IP 和端口（443）
-3. 自签名证书场景：设置 `verify_ssl: false`
+3. 自签名证书场景：信任签发它的 CA；只有隔离的实验主机才设置 `verify_ssl: false`
 
 ### 事件返回过多
 

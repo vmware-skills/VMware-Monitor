@@ -264,7 +264,7 @@ The `get_alarms` tool queries triggered alarms at the root folder level. Some al
 
 1. Run `vmware-monitor doctor` to diagnose
 2. Verify target hostname/IP and port (443) in `config.yaml`
-3. For self-signed certs: set `verify_ssl: false`
+3. For self-signed certs: trust the CA; set `verify_ssl: false` only for an isolated lab host
 
 ### Events returns too many results
 
