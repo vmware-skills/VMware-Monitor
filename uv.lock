@@ -1238,14 +1238,14 @@ dev = [
 
 [[package]]
 name = "vmware-policy"
-version = "1.18.0"
+version = "1.18.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/53/9d/97621bc26497ef19302a42224bbe4ad20abf4dfab482f48ab0d57ff5c441/vmware_policy-1.18.0.tar.gz", hash = "sha256:67df82f2c7970a68fe6c5b9f916bd729f67779d87d8a71c91d393bbd34dbaf75", size = 207277, upload-time = "2026-10-14T01:36:13.941Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/36/76a6d0c64597cf8a95d41174c0d59e091ef1b0de5967a104686ce232e803/vmware_policy-1.18.1.tar.gz", hash = "sha256:682ca2892cab75f512e832c21b2e54c52e814bd75d7e31ba8b81b4e696918605", size = 207457, upload-time = "2026-10-14T05:28:30.927Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/16/1d36d2c87f8188cc4a7cda6562a996d7168ab9c140e8826d550a6f8c8941/vmware_policy-1.18.0-py3-none-any.whl", hash = "sha256:06354573c5e6d40a940ef0739a866a92108a0f9cbac302db78d08d377a8834ed", size = 80422, upload-time = "2026-10-14T01:36:12.238Z" },
+    { url = "https://files.pythonhosted.org/packages/23/da/db889ae2637ca61dce55bb7a08e956386103925341780305dddf9794158b/vmware_policy-1.18.1-py3-none-any.whl", hash = "sha256:241a3bb41faa81b1ff7ac8dbf59899178cdc88d83ed77c62436a1fb2fcd5cf98", size = 80425, upload-time = "2026-10-14T05:28:29.16Z" },
 ]
