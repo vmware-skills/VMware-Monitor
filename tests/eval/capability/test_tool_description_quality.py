@@ -11,7 +11,7 @@ percentage.
 Why it matters for a small model
 --------------------------------
 A large model compensates for a thin description: it has seen vSphere, it infers
-that ``get_alarms`` probably needs no arguments and that ``get_cluster_health_summary``
+that ``get_alarms`` probably needs no arguments and that ``cluster_health_summary``
 supersedes hand-stitching three list calls. A small model cannot infer any of
 that. For it the description *is* the API — an unstated routing rule is a
 routing rule that does not exist, and an undocumented parameter is a parameter it
