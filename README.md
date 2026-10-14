@@ -56,7 +56,7 @@ vmware-monitor investigate vm web-01 --hours 72  # everything around a VM, 72h e
 vmware-monitor investigate vm web-01 --html      # → offline snapshot in ~/vmware-health/
 ```
 
-Unknown object names return a **teaching error** naming exactly how to list objects. Via MCP these are the tools `cluster_health_summary`, `cross_vcenter_attention`, `vm_investigation_bundle`, `host_investigation_bundle`, `datastore_investigation_bundle` — the model calls them and explains the aggregated result in operational language. Full flags: [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md).
+Unknown object names return a **teaching error** naming exactly how to list objects. Via MCP these are the tools `get_cluster_health_summary`, `get_cross_vcenter_attention`, `investigate_vm`, `investigate_host`, `investigate_datastore` — the model calls them and explains the aggregated result in operational language. Full flags: [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md).
 
 ### Quick Install (Recommended)
 
@@ -182,8 +182,8 @@ ESXi Standalone ──→ VMs
 | Feature | Details |
 |---------|---------|
 | VM Info | Name, power state, guest OS, CPU, memory, IP, VMware Tools, disks, NICs, `folder_path` |
-| Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `vm_list_snapshots` |
-| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
+| Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `list_vm_snapshots` |
+| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `get_vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
 
 ### 4. Scheduled Scanning & Notifications
 
@@ -736,7 +736,7 @@ VMware-Monitor/
 │   ├── ops/
 │   │   ├── inventory.py           # VMs, hosts, datastores, clusters
 │   │   ├── health.py              # Alarms, events, sensors
-│   │   └── vm_info.py             # VM info, snapshot list (read-only)
+│   │   └── vm_info.py                 # VM info, snapshot list (read-only)
 │   ├── scanner/                   # Log scanning daemon
 │   ├── notify/                    # Notifications (JSONL + webhook)
 │   └── mcp_server/                # MCP server (read-only tools only)

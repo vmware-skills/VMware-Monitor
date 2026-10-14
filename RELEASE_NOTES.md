@@ -1,3 +1,47 @@
+## v2.0.0 — MCP tools renamed verb-first
+
+**Breaking for MCP clients.** 23 of the 32 MCP tools have new names. The family now follows one naming
+convention: the verb comes first (`get_`, `list_`, `find_`, `scan_`, `investigate_`), with a domain word
+wherever a bare noun would collide with another skill's tool. The server exposes only the new names — there
+are no aliases — so update any prompt, workflow or client config that calls a tool by its old name.
+
+| Old name | New name |
+|---|---|
+| `active_sessions` | `list_active_sessions` |
+| `active_tasks` | `list_active_tasks` |
+| `certificate_status` | `get_certificate_status` |
+| `cluster_health_summary` | `get_cluster_health_summary` |
+| `cluster_last_apply_result` | `get_cluster_last_apply_result` |
+| `cluster_patch_compliance` | `get_cluster_patch_compliance` |
+| `cross_vcenter_attention` | `get_cross_vcenter_attention` |
+| `datastore_capacity` | `get_datastore_capacity` |
+| `datastore_investigation_bundle` | `investigate_datastore` |
+| `host_investigation_bundle` | `investigate_host` |
+| `host_log_scan` | `scan_host_logs` |
+| `host_memory_tiering` | `get_host_memory_tiering` |
+| `host_performance` | `get_host_performance` |
+| `license_status` | `get_license_status` |
+| `ntp_status` | `get_ntp_status` |
+| `resource_pool_usage` | `get_resource_pool_usage` |
+| `snapshot_aging` | `find_aging_snapshots` |
+| `vcenter_deployment_size` | `get_vcenter_deployment_size` |
+| `vm_backup_snapshot_history` | `get_vm_backup_snapshot_history` |
+| `vm_info` | `get_vm_info` |
+| `vm_investigation_bundle` | `investigate_vm` |
+| `vm_list_snapshots` | `list_vm_snapshots` |
+| `vm_performance` | `get_vm_performance` |
+
+Unchanged: `list_virtual_machines`, `list_esxi_hosts`, `list_all_datastores`, `list_all_clusters`,
+`list_all_networks`, `get_alarms`, `get_events`, `get_host_sensors`, `get_host_services`.
+
+* **CLI commands are unchanged.** Only the tool name each CLI read records in `~/.vmware/audit.db` (its MCP
+  twin's name) moves to the new name, so CLI and MCP rows for the same read still match.
+* Parameters, result shapes and annotations are unchanged; the server is still read-only by code.
+* Hints that point at vmware-aiops tools now use its 2.0 names (`power_on_vm`, `power_off_vm`,
+  `delete_vm_snapshot`).
+* Deny rules in `~/.vmware/rules.yaml` written with old names keep working with vmware-policy ≥ 1.18.0 (it
+  matches both names); `vmware-audit policy` lists any rule that now matches more.
+
 ## v1.16.0 — the MCP instructions name the configured targets
 
 `initialize` hands the client this server's `instructions`, and for a skill whose every tool takes a target that

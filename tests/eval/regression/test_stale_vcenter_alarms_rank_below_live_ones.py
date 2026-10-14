@@ -379,6 +379,6 @@ def test_an_old_acknowledged_unknown_critical_survives_the_top_n_cap():
 def test_tool_text_never_calls_an_unknown_alarm_not_a_live_problem():
     from vmware_monitor.mcp_server import server
 
-    doc = " ".join((server.cluster_health_summary.__doc__ or "").split())
+    doc = " ".join((server.get_cluster_health_summary.__doc__ or "").split())
     assert "not a live problem" not in doc
     assert "not re-checked" in doc

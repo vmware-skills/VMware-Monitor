@@ -9,26 +9,26 @@
           "list_esxi_hosts",
           "list_all_datastores",
           "list_all_clusters",
-          "cluster_health_summary",
-          "cross_vcenter_attention",
+          "get_cluster_health_summary",
+          "get_cross_vcenter_attention",
           "list_all_networks",
           "get_alarms",
           "get_events",
           "get_host_sensors",
           "get_host_services",
-          "host_log_scan",
-          "host_performance",
-          "vm_performance",
-          "snapshot_aging",
-          "certificate_status",
-          "license_status",
-          "ntp_status",
-          "datastore_capacity",
-          "resource_pool_usage",
-          "active_tasks",
-          "active_sessions",
-          "host_memory_tiering",
-          "vcenter_deployment_size"
+          "scan_host_logs",
+          "get_host_performance",
+          "get_vm_performance",
+          "find_aging_snapshots",
+          "get_certificate_status",
+          "get_license_status",
+          "get_ntp_status",
+          "get_datastore_capacity",
+          "get_resource_pool_usage",
+          "list_active_tasks",
+          "list_active_sessions",
+          "get_host_memory_tiering",
+          "get_vcenter_deployment_size"
         ],
         "reachable_on_surface": 8,
         "reachable_only_via_description": 0,
@@ -49,24 +49,24 @@
           "list_esxi_hosts",
           "list_all_datastores",
           "list_all_clusters",
-          "cluster_health_summary",
-          "cross_vcenter_attention",
+          "get_cluster_health_summary",
+          "get_cross_vcenter_attention",
           "list_all_networks",
           "get_alarms",
           "get_events",
           "get_host_sensors",
           "get_host_services",
-          "host_log_scan",
-          "host_performance",
-          "vm_performance",
-          "snapshot_aging",
-          "certificate_status",
-          "license_status",
-          "ntp_status",
-          "datastore_capacity",
-          "resource_pool_usage",
-          "active_tasks",
-          "active_sessions"
+          "scan_host_logs",
+          "get_host_performance",
+          "get_vm_performance",
+          "find_aging_snapshots",
+          "get_certificate_status",
+          "get_license_status",
+          "get_ntp_status",
+          "get_datastore_capacity",
+          "get_resource_pool_usage",
+          "list_active_tasks",
+          "list_active_sessions"
         ],
         "reachable_on_surface": 5,
         "reachable_only_via_description": 0,
@@ -134,11 +134,11 @@
     "manifest_context_headroom": {
       "detail": {
         "heaviest_tools": {
-          "cluster_health_summary": 344,
+          "get_cluster_health_summary": 344,
           "get_events": 326,
-          "host_memory_tiering": 317,
+          "get_host_memory_tiering": 317,
           "list_virtual_machines": 429,
-          "vm_backup_snapshot_history": 447
+          "get_vm_backup_snapshot_history": 447
         },
         "manifest_tokens": 7808,
         "mean_tokens_per_tool": 244.0,
@@ -165,7 +165,7 @@
         "ceiling": 350,
         "over_ceiling": {
           "list_virtual_machines": 429,
-          "vm_backup_snapshot_history": 447
+          "get_vm_backup_snapshot_history": 447
         }
       },
       "maximum": 32,
@@ -230,16 +230,16 @@
         },
         "tools_graded": 32,
         "weakest_tools": {
-          "active_sessions": [],
-          "active_tasks": [],
-          "certificate_status": [],
-          "cluster_health_summary": [],
-          "cluster_last_apply_result": [],
-          "cluster_patch_compliance": [],
-          "host_memory_tiering": [
+          "list_active_sessions": [],
+          "list_active_tasks": [],
+          "get_certificate_status": [],
+          "get_cluster_health_summary": [],
+          "get_cluster_last_apply_result": [],
+          "get_cluster_patch_compliance": [],
+          "get_host_memory_tiering": [
             "next_hop"
           ],
-          "vcenter_deployment_size": [
+          "get_vcenter_deployment_size": [
             "next_hop",
             "when"
           ]

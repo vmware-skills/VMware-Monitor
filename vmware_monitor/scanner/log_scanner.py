@@ -208,7 +208,7 @@ def scan_host_logs(
 ) -> dict:
     """Scan the last ``lines`` lines of each ESXi host log for error patterns.
 
-    This is the interactive read (the ``host_log_scan`` tool): every call
+    This is the interactive read (the ``scan_host_logs`` tool): every call
     reads the tail of each log, remembering nothing between calls. The daemon
     uses :func:`scan_host_logs_since`, which reads only what is new.
 

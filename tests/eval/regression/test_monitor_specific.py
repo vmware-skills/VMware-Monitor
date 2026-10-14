@@ -73,35 +73,35 @@ def test_mcp_exposes_snapshot_listing() -> None:
     from vmware_monitor.mcp_server.server import mcp
 
     tools = {t.name for t in asyncio.run(mcp.list_tools())}
-    assert "vm_list_snapshots" in tools
+    assert "list_vm_snapshots" in tools
     # Observability expansion (perf/snapshot-aging/infra/capacity/activity)
     # took the surface from 11 → 21. Keep CLI↔MCP parity locked so a future
     # accidental drop is caught (same guard rationale as 踩坑 #34).
     expected_new = {
-        "host_performance", "vm_performance", "snapshot_aging",
-        "certificate_status", "license_status", "ntp_status",
-        "datastore_capacity", "resource_pool_usage",
-        "active_tasks", "active_sessions",
+        "get_host_performance", "get_vm_performance", "find_aging_snapshots",
+        "get_certificate_status", "get_license_status", "get_ntp_status",
+        "get_datastore_capacity", "get_resource_pool_usage",
+        "list_active_tasks", "list_active_sessions",
         # v1.7.3: host syslog error scan surfaced as an MCP tool (was
         # scanner/CLI-only); requested by juanpf-ha on issue #31.
-        "host_log_scan",
+        "scan_host_logs",
         # issue #31 follow-up: opinionated cross-cluster triage rollup — the
         # "is anything on fire?" glance juanpf-ha asked for (aggregation in the
         # tool, model just renders; not an Aria replacement).
-        "cluster_health_summary",
+        "get_cluster_health_summary",
         # issue #31 follow-up: object-centered drill-down — "what is happening
         # around this <object>?" correlating related infra + event timeline.
-        "vm_investigation_bundle",
-        "host_investigation_bundle",
-        "datastore_investigation_bundle",
+        "investigate_vm",
+        "investigate_host",
+        "investigate_datastore",
         # issue #31 follow-up: cross-vCenter "what needs attention now?" roll-up.
-        "cross_vcenter_attention",
+        "get_cross_vcenter_attention",
         # vSphere 9.1 read tools: host memory tiering (pyVmomi) + vLCM/deployment
         # over vSphere Automation REST. All read-only.
-        "host_memory_tiering",
-        "cluster_patch_compliance",
-        "cluster_last_apply_result",
-        "vcenter_deployment_size",
+        "get_host_memory_tiering",
+        "get_cluster_patch_compliance",
+        "get_cluster_last_apply_result",
+        "get_vcenter_deployment_size",
     }
     missing = expected_new - tools
     assert not missing, f"observability tools missing from MCP: {sorted(missing)}"

@@ -182,7 +182,7 @@ def _producers(tools) -> dict[str, list[str]]:
     """Entity token -> tools that enumerate it and are themselves reachable.
 
     Computed to a fixpoint rather than restricted to entry points, because a
-    producer may legitimately need an input of its own: ``vm_list_snapshots``
+    producer may legitimately need an input of its own: ``list_vm_snapshots``
     requires a ``vm_name``, but once some tool supplies VM names it becomes a
     perfectly good source of snapshot names. Requiring producers to be entry
     points would report those second-hop chains as broken when a model can in

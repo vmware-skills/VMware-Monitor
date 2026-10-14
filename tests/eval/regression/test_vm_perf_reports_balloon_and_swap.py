@@ -112,6 +112,6 @@ def test_cli_perf_vms_shows_balloon_swap_and_labels_mem(monkeypatch, one_vm):
 
 @pytest.mark.unit
 def test_the_mcp_tool_documents_the_new_fields():
-    doc = server.vm_performance.__doc__ or ""
+    doc = server.get_vm_performance.__doc__ or ""
     for field in ("mem_ballooned_mb", "mem_swapped_mb", "mem.usage.average"):
-        assert field in doc, f"vm_performance docstring does not mention {field}"
+        assert field in doc, f"get_vm_performance docstring does not mention {field}"

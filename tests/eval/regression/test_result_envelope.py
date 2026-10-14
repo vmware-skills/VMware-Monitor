@@ -413,7 +413,7 @@ def _f_scan_host_logs(mp, n):
     )
     # The method lives on content.diagnosticManager. This fixture used to put it
     # on the host's diagnosticSystem — the one shape pyVmomi never produces,
-    # which is how host_log_scan returned nothing for years with this test green.
+    # which is how scan_host_logs returned nothing for years with this test green.
     diag = SimpleNamespace(BrowseDiagnosticLog=lambda key, start, **scope: log)
     content = SimpleNamespace(
         diagnosticManager=diag, about=SimpleNamespace(apiType="VirtualCenter")
@@ -437,17 +437,17 @@ TOOLS: dict[str, tuple] = {
     "get_events": (_f_get_recent_events, False, False),
     "get_host_sensors": (_f_get_host_hardware_status, True, True),
     "get_host_services": (_f_get_host_services, False, True),
-    "host_log_scan": (_f_scan_host_logs, False, False),
-    "active_tasks": (_f_get_active_tasks, True, True),
-    "active_sessions": (_f_get_active_sessions, True, True),
-    "datastore_capacity": (_f_get_datastore_capacity, True, True),
-    "resource_pool_usage": (_f_get_resource_pool_usage, True, True),
-    "certificate_status": (_f_get_certificate_status, True, True),
-    "license_status": (_f_get_license_status, False, True),
-    "ntp_status": (_f_get_ntp_status, False, True),
-    "host_performance": (_f_get_host_performance, True, True),
-    "vm_performance": (_f_get_vm_performance, True, True),
-    "vm_list_snapshots": (_f_list_snapshots, False, True),
+    "scan_host_logs": (_f_scan_host_logs, False, False),
+    "list_active_tasks": (_f_get_active_tasks, True, True),
+    "list_active_sessions": (_f_get_active_sessions, True, True),
+    "get_datastore_capacity": (_f_get_datastore_capacity, True, True),
+    "get_resource_pool_usage": (_f_get_resource_pool_usage, True, True),
+    "get_certificate_status": (_f_get_certificate_status, True, True),
+    "get_license_status": (_f_get_license_status, False, True),
+    "get_ntp_status": (_f_get_ntp_status, False, True),
+    "get_host_performance": (_f_get_host_performance, True, True),
+    "get_vm_performance": (_f_get_vm_performance, True, True),
+    "list_vm_snapshots": (_f_list_snapshots, False, True),
 }
 
 ALL = sorted(TOOLS)
@@ -547,7 +547,7 @@ def test_real_total_is_reported_when_known(monkeypatch, tool):
 
 @pytest.mark.parametrize("tool", WITHOUT_REAL_TOTAL)
 def test_unknowable_total_stays_null_rather_than_guessed(monkeypatch, tool):
-    """get_events and host_log_scan read a *window*, not a collection.
+    """get_events and scan_host_logs read a *window*, not a collection.
 
     vCenter's event collector applies its own bounds, and the log scan only
     reads the last N lines per log. Reporting ``total = len(rows)`` there would

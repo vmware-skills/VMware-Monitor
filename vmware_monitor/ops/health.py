@@ -113,9 +113,9 @@ _VC_CATEGORY_RANK = {
 
 # Maps event type → suggested remediation skill/tool hint
 _EVENT_SUGGESTIONS: dict[str, str] = {
-    "VmFailedToPowerOnEvent": "vmware-aiops: vm_power_on(vm_name='{entity}')",
-    "VmFailoverFailed": "vmware-aiops: vm_power_on(vm_name='{entity}')",
-    "VmFailedToRebootGuestEvent": "vmware-aiops: vm_power_off then vm_power_on(vm_name='{entity}')",
+    "VmFailedToPowerOnEvent": "vmware-aiops: power_on_vm(vm_name='{entity}')",
+    "VmFailoverFailed": "vmware-aiops: power_on_vm(vm_name='{entity}')",
+    "VmFailedToRebootGuestEvent": "vmware-aiops: power_off_vm then power_on_vm(vm_name='{entity}')",
     "HostConnectionLostEvent": "vmware-monitor: list_esxi_hosts — verify host is reachable",
     "HostShutdownEvent": "vmware-monitor: list_esxi_hosts — check if shutdown was intentional",
     "VmDiskFailedEvent": "vmware-storage: check datastore health; vmware-monitor: list_all_datastores",
@@ -850,7 +850,7 @@ def _no_sensors_note(rows: list[dict]) -> str:
         (False, f"the CIM Server ({_CIM_SERVER_SERVICE}) is not running; ESXi reads hardware "
                 f"sensors through it, so none are reported until it runs"),
         (True, "the CIM Server is running, so nothing on the host supplies sensors — usually "
-               "no BMC/IPMI device or vendor CIM provider (host_log_scan shows ipmi errors "
+               "no BMC/IPMI device or vendor CIM provider (scan_host_logs shows ipmi errors "
                "when the device is missing)"),
         (None, "the CIM Server's state could not be read, so why no sensors are reported is unknown"),
     )

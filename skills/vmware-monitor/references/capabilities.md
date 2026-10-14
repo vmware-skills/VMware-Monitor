@@ -7,10 +7,10 @@ Detailed feature tables for `vmware-monitor`.
 The 20 list-returning MCP tools — `list_virtual_machines`, `list_esxi_hosts`,
 `list_all_datastores`,
 `list_all_clusters`, `list_all_networks`, `get_alarms`, `get_events`,
-`get_host_sensors`, `get_host_services`, `host_log_scan`, `active_tasks`,
-`active_sessions`, `datastore_capacity`, `resource_pool_usage`,
-`certificate_status`, `license_status`, `ntp_status`, `host_performance`,
-`vm_performance`, `vm_list_snapshots` — return the family list envelope rather
+`get_host_sensors`, `get_host_services`, `scan_host_logs`, `list_active_tasks`,
+`list_active_sessions`, `get_datastore_capacity`, `get_resource_pool_usage`,
+`get_certificate_status`, `get_license_status`, `get_ntp_status`, `get_host_performance`,
+`get_vm_performance`, `list_vm_snapshots` — return the family list envelope rather
 than a bare array:
 
 ```json
@@ -29,14 +29,14 @@ than a bare array:
 
 Two tools report `total: null` on purpose: `get_events` (events are read newest
 first and the read stops at 5000 — `read_truncated: true` and `read_note` say
-when it did and how far back it got) and `host_log_scan` (only the last N lines
+when it did and how far back it got) and `scan_host_logs` (only the last N lines
 per log are read). The investigation bundles add `timeline_note` when their
 timeline is not every event in the window: how many of how many are shown, and
 which scopes' reads stopped at 5000. Everywhere else the total is a real count taken before the
 limit was applied, which is what lets a full page be recognised as complete
 instead of flagged as possibly-truncated.
 
-`host_log_scan` adds one field to the envelope: `logs_unavailable`, one row per
+`scan_host_logs` adds one field to the envelope: `logs_unavailable`, one row per
 host/log it could **not** read, with the reason (for example, the account lacks
 `Global.Diagnostics`, which `BrowseDiagnosticLog` requires). Its `items` holds
 only the lines that matched a trouble pattern in the logs it *did* read, so an
@@ -44,7 +44,7 @@ empty `items` with `truncated: false` means "checked, found none" only when
 `logs_unavailable` is empty as well. With unread logs, the honest answer is
 "nothing matched in the logs that could be read" — name the ones that could not.
 
-By default `host_log_scan` groups repeated lines by pattern, per log: each item has `count`,
+By default `scan_host_logs` groups repeated lines by pattern, per log: each item has `count`,
 `hosts`, `first_seen` / `last_seen` (the log's own timestamps), `severity`, `log_level`, `pattern`
 and one `sample`; `lines_matched` is the ungrouped count and `group=false` returns one row per
 line. Severity follows the level ESXi wrote on the line (`Cr`/`Al`/`Em` critical, `Er`/`Wa`
@@ -60,9 +60,9 @@ sometimes resolved that ambiguity as "no data was returned"
 `"compact"`), and reuses `hint` for the compact-mode note; its `total` is the
 count after `power_state` / `folder_filter` are applied and before `limit`.
 
-Tools with purpose-built return objects — `vm_info`, `snapshot_aging`,
-`cluster_health_summary`, `cross_vcenter_attention`, and the three
-`*_investigation_bundle` tools — are unaffected.
+Tools with purpose-built return objects — `get_vm_info`, `find_aging_snapshots`,
+`get_cluster_health_summary`, `get_cross_vcenter_attention`, and the three
+`investigate_*` tools — are unaffected.
 
 ## Automation Level Reference
 
@@ -70,8 +70,8 @@ Each operation is classified by autonomy level per the Enterprise Harness Engine
 
 | Level | Meaning | Agent autonomy | Examples in this skill |
 |:-:|---|---|---|
-| **L1** | Read-only, raw data | Always auto-run | `list_virtual_machines`, `list_esxi_hosts`, `get_alarms`, `get_events`, `list_all_datastores`, `list_all_clusters`, `host_performance` |
-| **L2** | Read + analysis / recommendation | Always auto-run | `cluster_health_summary`, `cross_vcenter_attention`, `snapshot_aging`, the three `*_investigation_bundle` tools, scheduled scan reports, log pattern matching (error/fail/critical/panic/timeout), alarm correlation, daemon-driven webhook digests |
+| **L1** | Read-only, raw data | Always auto-run | `list_virtual_machines`, `list_esxi_hosts`, `get_alarms`, `get_events`, `list_all_datastores`, `list_all_clusters`, `get_host_performance` |
+| **L2** | Read + analysis / recommendation | Always auto-run | `get_cluster_health_summary`, `get_cross_vcenter_attention`, `find_aging_snapshots`, the three `investigate_*` tools, scheduled scan reports, log pattern matching (error/fail/critical/panic/timeout), alarm correlation, daemon-driven webhook digests |
 | **L3** | Single write — user must approve | *N/A* | — *(use [vmware-aiops](https://github.com/vmware-skills/VMware-AIops) for write operations)* |
 | **L4** | Multi-step plan / apply workflow | *N/A* | — *(use [vmware-pilot](https://github.com/vmware-skills/VMware-Pilot) for orchestration)* |
 | **L5** | Auto-remediation from learned pattern | *N/A* | — *(remediation is out of scope by design)* |
@@ -82,7 +82,7 @@ Each operation is classified by autonomy level per the Enterprise Harness Engine
 
 ## 0. Cluster Health Summary (triage)
 
-CLI `summary`, MCP `cluster_health_summary`. One aggregated read for a fast
+CLI `summary`, MCP `get_cluster_health_summary`. One aggregated read for a fast
 cross-cluster "is anything on fire?" glance — the operator's first look, not an
 Aria Operations replacement.
 
@@ -97,7 +97,7 @@ Aria Operations replacement.
 | Thresholds | `CPU_MEM_WARN_PCT=85`, `CPU_MEM_CRIT_PCT=95` (named constants in `ops/cluster_summary.py`); disconnected host or critical alarm forces `critical` |
 | Customizable | Columns/thresholds/layout in [`health-summary-template.md`](health-summary-template.md); response carries a `customization_hint` |
 
-### `cluster_health_summary` — input parameters
+### `get_cluster_health_summary` — input parameters
 
 | Parameter | Type | Default | Behavior |
 |-----------|------|---------|----------|
@@ -119,7 +119,7 @@ the standalone row, so a filtered `clusters: 0` means the filter matched nothing
 scales with cluster count, not VM count. This is the aggregation-in-the-tool
 pattern — the model never sees raw inventory.
 
-### `cross_vcenter_attention` — overlapping targets
+### `get_cross_vcenter_attention` — overlapping targets
 
 CLI `attention`. Targets can overlap: an ESXi host configured as its own target
 may also be managed by a configured vCenter. Identity is read, never taken from
@@ -142,7 +142,7 @@ both issues, each with its own figure.
 
 | Feature | vCenter | ESXi | Details |
 |---------|:-------:|:----:|---------|
-| Cluster health summary | Y | N | Cross-cluster triage rollup with opinionated status — CLI `summary`, MCP `cluster_health_summary` |
+| Cluster health summary | Y | N | Cross-cluster triage rollup with opinionated status — CLI `summary`, MCP `get_cluster_health_summary` |
 | List VMs | Y | Y | Name, power state, CPU, memory, guest OS, IP, `folder_path` (vCenter inventory folder, e.g. `/Datacenters/Production/Web Tier`) |
 | List Hosts | Y | Self only | CPU cores, memory, ESXi version, VM count, uptime |
 | List Datastores | Y | Y | Capacity, free/used, type (VMFS/NFS), usage % |
@@ -213,14 +213,14 @@ null otherwise. `entity_name` is unchanged, because vmware-aiops resolves it.
 
 | Tool (CLI) | Field | Meaning |
 |------------|-------|---------|
-| `vm_performance` (`perf vms`) | `mem_ballooned_mb` | `mem.vmmemctl.average` — memory reclaimed by the balloon driver; above 0 means host memory pressure or a limit |
-| `vm_performance` | `mem_swapped_mb` | `mem.swapped.average` — guest memory the host swapped to disk |
-| `vm_performance` | `mem_usage_pct` | `mem.usage.average` — *active* guest memory over configured, not consumed; can read low on a VM under pressure (CLI column "Active mem %") |
-| `vm_performance` | `counters` (envelope) | The vSphere counter and meaning behind every row field |
-| `datastore_capacity` (`capacity datastores`) | `view` / `view_note` (envelope) | `vCenter` / `ESXi host` / `unknown`: whose figure this is. Each endpoint sums provisioned space over the VMs *it* has registered, so a vCenter and a directly-reached ESXi host can differ for one datastore |
-| `datastore_capacity` | `vm_count` | VMs the endpoint has registered on the datastore — the ones `provisioned_gb` covers |
-| `datastore_capacity` | `vms_not_connected` | Those VMs the endpoint reports as orphaned / inaccessible / disconnected, as `name (state)`; null when the state could not be read |
-| `vcenter_deployment_size` (`deployment-size`) | `available: false`, `reason`, `requires` | The appliance reported a version below 9.1 — an answer, not a failure (audited `ok`). If the version cannot be read, the call still returns an error that explains the 9.1 floor without claiming a build. An ESXi target gets an error saying these REST reads need a vCenter target |
+| `get_vm_performance` (`perf vms`) | `mem_ballooned_mb` | `mem.vmmemctl.average` — memory reclaimed by the balloon driver; above 0 means host memory pressure or a limit |
+| `get_vm_performance` | `mem_swapped_mb` | `mem.swapped.average` — guest memory the host swapped to disk |
+| `get_vm_performance` | `mem_usage_pct` | `mem.usage.average` — *active* guest memory over configured, not consumed; can read low on a VM under pressure (CLI column "Active mem %") |
+| `get_vm_performance` | `counters` (envelope) | The vSphere counter and meaning behind every row field |
+| `get_datastore_capacity` (`capacity datastores`) | `view` / `view_note` (envelope) | `vCenter` / `ESXi host` / `unknown`: whose figure this is. Each endpoint sums provisioned space over the VMs *it* has registered, so a vCenter and a directly-reached ESXi host can differ for one datastore |
+| `get_datastore_capacity` | `vm_count` | VMs the endpoint has registered on the datastore — the ones `provisioned_gb` covers |
+| `get_datastore_capacity` | `vms_not_connected` | Those VMs the endpoint reports as orphaned / inaccessible / disconnected, as `name (state)`; null when the state could not be read |
+| `get_vcenter_deployment_size` (`deployment-size`) | `available: false`, `reason`, `requires` | The appliance reported a version below 9.1 — an answer, not a failure (audited `ok`). If the version cannot be read, the call still returns an error that explains the 9.1 floor without claiming a build. An ESXi target gets an error saying these REST reads need a vCenter target |
 
 ### Alarm/Event `suggested_actions` example
 
@@ -253,8 +253,8 @@ item is a ready-to-use hint pointing to the correct companion skill and tool:
 | Feature | Details |
 |---------|---------|
 | VM Info | Name, power state, guest OS, CPU, memory, IP, VMware Tools, disks, NICs, `folder_path` |
-| Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `vm_list_snapshots` |
-| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
+| Snapshot List | List existing snapshots with name and creation time (no create/revert/delete) — CLI `vm snapshot-list`, MCP tool `list_vm_snapshots` |
+| Backup Window | How long backups held a snapshot open on a VM, from vCenter task history — CLI `snapshots backup-window`, MCP tool `get_vm_backup_snapshot_history`. A lower bound on the backup job, never its official duration |
 
 ## 4. Scheduled Scanning & Notifications
 

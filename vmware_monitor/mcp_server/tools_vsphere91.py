@@ -33,7 +33,7 @@ _READ_ONLY = {
 @mcp.tool(annotations=_READ_ONLY)
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def host_memory_tiering(
+def get_host_memory_tiering(
     target: Optional[str] = None,
     host_name: Optional[str] = None,
     limit: Optional[int] = None,
@@ -67,14 +67,14 @@ def host_memory_tiering(
 @mcp.tool(annotations=_READ_ONLY)
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def cluster_patch_compliance(
+def get_cluster_patch_compliance(
     cluster: str,
     target: Optional[str] = None,
 ) -> dict:
     """[READ] vLCM software (patch) compliance for one cluster (vSphere Automation REST).
 
     When to use: to check whether a cluster's hosts match their assigned software
-    image/baseline before or after a patch cycle. Complements host_memory_tiering
+    image/baseline before or after a patch cycle. Complements get_host_memory_tiering
     (that is per-host hardware; this is per-cluster lifecycle state).
 
     What it returns: {available, cluster, status, hosts_total, non_compliant_hosts,
@@ -98,14 +98,14 @@ def cluster_patch_compliance(
 @mcp.tool(annotations=_READ_ONLY)
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def cluster_last_apply_result(
+def get_cluster_last_apply_result(
     cluster: str,
     target: Optional[str] = None,
 ) -> dict:
     """[READ] Result of the last vLCM remediation (apply) on one cluster (REST).
 
     When to use: after a patch/remediation, to confirm the last apply succeeded and
-    when it finished. Use cluster_patch_compliance for current drift; use this for
+    when it finished. Use get_cluster_patch_compliance for current drift; use this for
     the outcome of the most recent apply.
 
     What it returns: {available, cluster, status, end_time, note, fields}, read
@@ -127,7 +127,7 @@ def cluster_last_apply_result(
 @mcp.tool(annotations=_READ_ONLY)
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vcenter_deployment_size(
+def get_vcenter_deployment_size(
     target: Optional[str] = None,
 ) -> dict:
     """[READ] vCenter appliance deployment size (NEW in vSphere 9.1, REST).

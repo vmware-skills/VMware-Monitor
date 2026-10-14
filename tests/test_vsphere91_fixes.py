@@ -166,10 +166,10 @@ def test_skill_md_tool_count_and_names_match_registry():
     names = {t.name for t in tools}
 
     new_tools = {
-        "host_memory_tiering",
-        "cluster_patch_compliance",
-        "cluster_last_apply_result",
-        "vcenter_deployment_size",
+        "get_host_memory_tiering",
+        "get_cluster_patch_compliance",
+        "get_cluster_last_apply_result",
+        "get_vcenter_deployment_size",
     }
     assert new_tools <= names, f"registry missing {new_tools - names}"
 

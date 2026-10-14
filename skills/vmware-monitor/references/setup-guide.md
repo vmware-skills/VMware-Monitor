@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==1.16.0
+uv tool install vmware-monitor==2.0.0
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v1.16.0
+npx skills add vmware-skills/VMware-Monitor#v2.0.0
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 1.16.0
+clawhub install @zw008/vmware-monitor --version 2.0.0
 ```
 
 ### Claude Code
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==1.16.0
+uv tool install vmware-monitor==2.0.0
 
 # 2. Verify
 vmware-monitor --version
@@ -115,7 +115,7 @@ question about vCenter.
 ## Development Install
 
 ```bash
-git clone --branch v1.16.0 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.0.0 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
@@ -165,16 +165,16 @@ MCP exposes 32 read-only tools:
 
 | Group | Tools |
 |---|---|
-| Inventory | `list_virtual_machines`, `list_esxi_hosts`, `list_all_datastores`, `list_all_clusters`, `list_all_networks`, `resource_pool_usage` |
-| Health & triage | `get_alarms`, `get_events`, `cluster_health_summary`, `cross_vcenter_attention` |
-| VM detail | `vm_info`, `vm_list_snapshots`, `vm_performance`, `snapshot_aging` |
-| Host detail | `host_performance`, `host_log_scan`, `get_host_sensors`, `get_host_services`, `ntp_status` |
-| Platform state | `certificate_status`, `license_status`, `active_sessions`, `active_tasks`, `datastore_capacity` |
-| Investigation bundles | `vm_investigation_bundle`, `host_investigation_bundle`, `datastore_investigation_bundle` |
-| Patching & vSphere 9 | `cluster_patch_compliance`, `cluster_last_apply_result`, `host_memory_tiering`, `vcenter_deployment_size` |
-| Backups | `vm_backup_snapshot_history` |
+| Inventory | `list_virtual_machines`, `list_esxi_hosts`, `list_all_datastores`, `list_all_clusters`, `list_all_networks`, `get_resource_pool_usage` |
+| Health & triage | `get_alarms`, `get_events`, `get_cluster_health_summary`, `get_cross_vcenter_attention` |
+| VM detail | `get_vm_info`, `list_vm_snapshots`, `get_vm_performance`, `find_aging_snapshots` |
+| Host detail | `get_host_performance`, `scan_host_logs`, `get_host_sensors`, `get_host_services`, `get_ntp_status` |
+| Platform state | `get_certificate_status`, `get_license_status`, `list_active_sessions`, `list_active_tasks`, `get_datastore_capacity` |
+| Investigation bundles | `investigate_vm`, `investigate_host`, `investigate_datastore` |
+| Patching & vSphere 9 | `get_cluster_patch_compliance`, `get_cluster_last_apply_result`, `get_host_memory_tiering`, `get_vcenter_deployment_size` |
+| Backups | `get_vm_backup_snapshot_history` |
 
-All accept an optional `target` parameter except `cross_vcenter_attention`, which
+All accept an optional `target` parameter except `get_cross_vcenter_attention`, which
 sweeps every configured target by design.
 
 List-style tools take `limit` (default 50) to keep large inventories from flooding
@@ -201,7 +201,7 @@ whitespace are handled correctly).
 > **Disclaimer**: This is a community-maintained open-source project and is **not affiliated with, endorsed by, or sponsored by VMware, Inc. or Broadcom Inc.** "VMware" and "vSphere" are trademarks of Broadcom.
 
 - **Read-Only toward vSphere**: This is an independent repository with zero destructive code paths. No power off, delete, create, reconfigure, or migrate functions exist in the codebase. Enforced by [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) — in the source repository, not in this skill bundle — which allowlists every vSphere method the package calls against pyVmomi's own type metadata. It is a gate on source code, not a runtime block, and this repo has no CI — for defence that does not depend on it, use a least-privilege account (next item). Local files the skill writes are listed under [What "read-only" covers](#what-read-only-covers-and-what-it-writes-locally).
-- **Least Privilege**: Give the skill a dedicated vCenter service account holding the built-in **Read-Only** role (propagated from the inventory root), not an administrator. That role has no privilege to change anything, so the read-only claim no longer rests on this code. Two reads need more than it grants: `active_sessions` reads the session list, which vCenter gates on `Sessions.TerminateSession` (a privilege that also allows ending sessions — without it the tool returns a one-row explanation instead); and ESXi host-log reads (`host_log_scan` and the daemon's host-log pass) call `BrowseDiagnosticLog`, gated on `Global.Diagnostics`. Grant those only if you need those reads.
+- **Least Privilege**: Give the skill a dedicated vCenter service account holding the built-in **Read-Only** role (propagated from the inventory root), not an administrator. That role has no privilege to change anything, so the read-only claim no longer rests on this code. Two reads need more than it grants: `list_active_sessions` reads the session list, which vCenter gates on `Sessions.TerminateSession` (a privilege that also allows ending sessions — without it the tool returns a one-row explanation instead); and ESXi host-log reads (`scan_host_logs` and the daemon's host-log pass) call `BrowseDiagnosticLog`, gated on `Global.Diagnostics`. Grant those only if you need those reads.
 - **Source Code**: Fully open source at [github.com/vmware-skills/VMware-Monitor](https://github.com/vmware-skills/VMware-Monitor) (MIT). The `uv` installer fetches the `vmware-monitor` package from PyPI, which is built from this GitHub repository. We recommend reviewing the source code and commit history before deploying in production.
 - **TLS Verification**: Enabled by default. Setting `verify_ssl: false` is solely for ESXi hosts using self-signed certificates in isolated lab/home environments. In production, always use CA-signed certificates with full TLS verification.
 - **Credentials & Config**: This skill requires the following secrets, all stored in `~/.vmware-monitor/.env` (`chmod 600`, loaded via `python-dotenv`):

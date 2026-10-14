@@ -30,7 +30,7 @@ These are structural, so it cannot.
 | "First resolve the affected resource_id through vmware-aria before querying vmware-monitor" | **`investigate_alert`** does the whole alert → resource → confirmed-name sequence in one call. |
 | "Do not confuse the alert ID with the affected resource ID" | `investigate_alert` returns a `correlation` block with both UUIDs explicitly labelled. |
 | "Only correlate Aria and vCenter data after the resource name and type have been confirmed" | `investigate_alert` returns `correlation.confirmed`, and withholds its `next_step` handoff until name and kind are known. |
-| "Use explicit limits for queries that may return large amounts of data" | **The list envelope.** Every list tool returns `{items, returned, limit, total, truncated, hint}`, so the model reads truncation instead of guessing at it. Most tools are unlimited unless you pass `limit` (`vm_performance` defaults to 25); the envelope states which case you got. |
+| "Use explicit limits for queries that may return large amounts of data" | **The list envelope.** Every list tool returns `{items, returned, limit, total, truncated, hint}`, so the model reads truncation instead of guessing at it. Most tools are unlimited unless you pass `limit` (`get_vm_performance` defaults to 25); the envelope states which case you got. |
 | "If a requested field was not returned by any tool, show it as not available" | Tools return explicit `null` for unresolved fields rather than omitting the key. |
 
 ---
@@ -105,7 +105,7 @@ checklist when evaluating any local model against these skills:
 | Long tool responses: omits items, or reports "no data returned" when data was present | Ask for explicit limits so responses stay small. Check the envelope's `truncated` / `returned` / `total` fields rather than trusting the model's summary — every list tool states them, so a "no data" claim is checkable against `returned`. |
 | Adds generic recommendations unsupported by results | The "analysis discipline" rules. |
 | Drops requested fields or reorders results | State the required fields and ordering in the request itself, not only in the system prompt. |
-| Multi-tool workflows take 30–50s end to end | Prefer the aggregate tools — `investigate_alert`, `cluster_health_summary`, `vm_investigation_bundle` — which collapse a 3-4 call sequence into one round trip. |
+| Multi-tool workflows take 30–50s end to end | Prefer the aggregate tools — `investigate_alert`, `get_cluster_health_summary`, `investigate_vm` — which collapse a 3-4 call sequence into one round trip. |
 
 ## Reporting results
 

@@ -1,4 +1,4 @@
-"""host_log_scan must read host logs, and say so when it cannot.
+"""scan_host_logs must read host logs, and say so when it cannot.
 
 From v0.1.0 until 2026-09-11 this tool never read a single log line. It called
 ``BrowseDiagnosticLog`` on ``host.configManager.diagnosticSystem`` — a
@@ -179,7 +179,7 @@ def test_the_mcp_tool_returns_the_teaching_error_for_an_unknown_host(monkeypatch
     stub = LogStub({"hostd": [ERROR_LINE]})
     si = _si(monkeypatch, stub)
     monkeypatch.setattr(server, "_get_connection", lambda target=None: si)
-    out = server.host_log_scan(host_name="esx-99")
+    out = server.scan_host_logs(host_name="esx-99")
     assert "items" not in out
     assert "list_esxi_hosts" in out["error"] and "esx-99" in out["error"]
 

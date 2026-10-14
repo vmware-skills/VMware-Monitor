@@ -1,4 +1,4 @@
-"""One recent task whose result pyVmomi cannot deserialize must not sink active_tasks.
+"""One recent task whose result pyVmomi cannot deserialize must not sink list_active_tasks.
 
 On a lab vCenter 8.0.3 (2026-09-15) reading ``task.info`` for one recent task
 raised ``KeyError('vslmCatalogChangeResult')`` — a result type this pyVmomi does

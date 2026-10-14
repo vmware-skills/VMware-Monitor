@@ -1,6 +1,6 @@
 """Three findings from the second field report on issue #26 (2026-09-01).
 
-The reporter ran `vm_backup_snapshot_history` against a large vCenter 8.0.3 with
+The reporter ran `get_vm_backup_snapshot_history` against a large vCenter 8.0.3 with
 Veeam driving the snapshots — the environment this feature was built for and had
 never seen. Thirty complete cycles matched the estate's known backup activity,
 which settles the correlation arithmetic. These pin the three things that report
@@ -166,7 +166,7 @@ def test_the_tool_description_names_the_option_that_exists() -> None:
 
     from vmware_monitor.mcp_server import server
 
-    desc = inspect.getsource(server.vm_backup_snapshot_history)
+    desc = inspect.getsource(server.get_vm_backup_snapshot_history)
     assert "task.maxAge" in desc
     assert "NOT" in desc or "not called" in desc, "the wrong name must be marked wrong, not just absent"
 

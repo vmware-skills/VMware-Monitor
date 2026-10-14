@@ -87,14 +87,14 @@ A ready-to-use template is available at `examples/mcp-configs/vscode-copilot.jso
 | `list_all_clusters` | List clusters with host count, DRS/HA status |
 | `get_alarms` | Get active alarms with severity and description |
 | `get_events` | Get recent vCenter/ESXi events |
-| `vm_info` | Get detailed VM info including snapshot list |
+| `get_vm_info` | Get detailed VM info including snapshot list |
 
 The table above is the most-used subset. The server exposes 27 read-only tools in
 total — performance, host health, platform state, and the investigation bundles are
 listed in [`skills/vmware-monitor/references/capabilities.md`](../../skills/vmware-monitor/references/capabilities.md).
 
 All tools accept an optional `target` parameter to switch between environments, except
-`cross_vcenter_attention`, which sweeps every configured target by design.
+`get_cross_vcenter_attention`, which sweeps every configured target by design.
 
 ## Usage Examples
 
@@ -102,7 +102,7 @@ All tools accept an optional `target` parameter to switch between environments, 
 ```
 You: @vmware-monitor Is the staging environment healthy?
 
-Copilot: [calls get_alarms + vm_info for vm-staging]
+Copilot: [calls get_alarms + get_vm_info for vm-staging]
 vm-staging: ✓ ON | 8 vCPU | 16GB (11GB used)
 No active alarms | Datastore: 450GB free
 Ready for deployment ✓
@@ -124,7 +124,7 @@ esxi-03 (14 VMs — CPU 88%, RAM 94%):
 ```
 You: @vmware-monitor Find VMs with snapshots older than 7 days
 
-Copilot: [calls list_virtual_machines → vm_info for each]
+Copilot: [calls list_virtual_machines → get_vm_info for each]
 3 VMs with stale snapshots:
 - vm-db-01: snapshot "pre-patch" — 21 days old (4.2GB)
 - vm-web03: snapshot "before-upgrade" — 14 days old (1.8GB)

@@ -77,14 +77,14 @@ anthropic:
 | `list_all_clusters` | List clusters with host count, DRS/HA status |
 | `get_alarms` | Get active alarms with severity and description |
 | `get_events` | Get recent vCenter/ESXi events |
-| `vm_info` | Get detailed VM info including snapshot list |
+| `get_vm_info` | Get detailed VM info including snapshot list |
 
 The table above is the most-used subset. The server exposes 27 read-only tools in
 total — performance, host health, platform state, and the investigation bundles are
 listed in [`skills/vmware-monitor/references/capabilities.md`](../../skills/vmware-monitor/references/capabilities.md).
 
 All tools accept an optional `target` parameter to switch between environments, except
-`cross_vcenter_attention`, which sweeps every configured target by design.
+`get_cross_vcenter_attention`, which sweeps every configured target by design.
 
 ## Usage Examples
 
@@ -114,7 +114,7 @@ async with app.run() as vmware_app:
 **Example 2: Automated alarm triage**
 ```
 Agent: [calls get_alarms] → 5 active alarms
-Agent: [calls vm_info for each alarmed VM]
+Agent: [calls get_vm_info for each alarmed VM]
 Agent: Summary:
   - 2 CRITICAL: disk latency on vm-db-01, vm-db-02 (same datastore → storage issue)
   - 2 WARNING: memory pressure on vm-analytics (expected, batch job running)

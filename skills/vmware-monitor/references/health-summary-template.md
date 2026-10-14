@@ -1,7 +1,7 @@
 # Cluster Health Summary — Display Template
 
-This is the **editable template** for the `cluster_health_summary` view (CLI:
-`vmware-monitor summary`, MCP tool: `cluster_health_summary`). It is intentionally
+This is the **editable template** for the `get_cluster_health_summary` view (CLI:
+`vmware-monitor summary`, MCP tool: `get_cluster_health_summary`). It is intentionally
 opinionated and intentionally *not* a widget builder — the goal is the 5-second
 "is anything on fire?" glance, not a replacement for Aria Operations dashboards.
 
@@ -89,8 +89,8 @@ map to exactly these and nothing more:
 - **Health**  → `HA`, `DRS`, hosts connected
 
 If a proposed new column does not answer one of those three, it probably belongs
-in a drill-down tool (`get_alarms`, `datastore_capacity`, `host_performance`,
-`vm_info`), not here.
+in a drill-down tool (`get_alarms`, `get_datastore_capacity`, `get_host_performance`,
+`get_vm_info`), not here.
 
 ---
 

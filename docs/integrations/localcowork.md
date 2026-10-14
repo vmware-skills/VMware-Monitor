@@ -62,14 +62,14 @@ A ready-to-use template is available at `examples/mcp-configs/localcowork.json`.
 | `list_all_clusters` | List clusters with host count, DRS/HA status |
 | `get_alarms` | Get active alarms with severity and description |
 | `get_events` | Get recent vCenter/ESXi events |
-| `vm_info` | Get detailed VM info including snapshot list |
+| `get_vm_info` | Get detailed VM info including snapshot list |
 
 The table above is the most-used subset. The server exposes 27 read-only tools in
 total — performance, host health, platform state, and the investigation bundles are
 listed in [`skills/vmware-monitor/references/capabilities.md`](../../skills/vmware-monitor/references/capabilities.md).
 
 All tools accept an optional `target` parameter to switch between environments, except
-`cross_vcenter_attention`, which sweeps every configured target by design.
+`get_cross_vcenter_attention`, which sweeps every configured target by design.
 
 ## Usage Examples
 

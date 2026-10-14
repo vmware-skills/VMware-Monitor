@@ -160,7 +160,7 @@ def test_cli_deployment_size_prints_one_line_and_audits_ok(monkeypatch, target, 
     assert "Traceback" not in result.output
     assert result.exception is None, repr(result.exception)
     assert "9.1" in result.output and "8.0.3" in result.output
-    rows = [r for r in audit.rows if r.get("tool") == "vcenter_deployment_size"]
+    rows = [r for r in audit.rows if r.get("tool") == "get_vcenter_deployment_size"]
     assert rows and rows[-1]["status"] == "ok", audit.rows
 
 

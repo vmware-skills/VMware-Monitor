@@ -88,7 +88,7 @@ def test_missing_password_keeps_the_env_var_name():
     "exc_type", [VMNotFoundError, HostNotFoundError, DatastoreNotFoundError]
 )
 def test_domain_exceptions_keep_their_message(exc_type):
-    assert _safe_error(exc_type(TEACHING), "vm_info") == TEACHING
+    assert _safe_error(exc_type(TEACHING), "get_vm_info") == TEACHING
 
 
 @pytest.mark.parametrize("exc_type", [ValueError, FileNotFoundError, KeyError, PermissionError])

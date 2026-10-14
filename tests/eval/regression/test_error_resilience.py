@@ -40,8 +40,8 @@ ALL_TOOLS: list[tuple[str, dict]] = [
     ("get_events", {}),
     ("get_host_sensors", {}),
     ("get_host_services", {}),
-    ("vm_info", {"vm_name": "ghost-vm"}),
-    ("vm_list_snapshots", {"vm_name": "ghost-vm"}),
+    ("get_vm_info", {"vm_name": "ghost-vm"}),
+    ("list_vm_snapshots", {"vm_name": "ghost-vm"}),
 ]
 
 

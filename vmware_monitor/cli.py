@@ -465,7 +465,7 @@ def health_services(
 
 @vm_app.command("info")
 @_cli_errors
-@audited("vm_info")
+@audited("get_vm_info")
 def vm_info(
     name: str,
     target: TargetOption = None,
@@ -483,7 +483,7 @@ def vm_info(
 
 @vm_app.command("snapshot-list")
 @_cli_errors
-@audited("vm_list_snapshots")
+@audited("list_vm_snapshots")
 def vm_snapshot_list(
     vm_name: str,
     target: TargetOption = None,
@@ -535,7 +535,7 @@ def scan_now(target: TargetOption = None, config: ConfigOption = None) -> None:
 
 @scan_app.command("logs")
 @_cli_errors
-@audited("host_log_scan")
+@audited("scan_host_logs")
 def scan_logs_cmd(
     host: Annotated[
         str | None, typer.Option("--host", help="Exact ESXi host name (default: all)")
@@ -554,7 +554,7 @@ def scan_logs_cmd(
 
     si, _, tgt = _get_connection(target, config)
     result = scan_host_logs(si, host_name=host, lines=lines, group=not raw)
-    _audit.log_query(target=tgt, resource="host_logs", query_type="host_log_scan")
+    _audit.log_query(target=tgt, resource="host_logs", query_type="scan_host_logs")
     sev_style = {"critical": "red", "warning": "yellow", "info": "dim"}
     items = result["items"]
     if raw:

@@ -56,7 +56,7 @@ vmware-monitor investigate vm web-01 --hours 72   # 一个 VM 的全貌，72 小
 vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmware-health/
 ```
 
-对象名不存在时返回**教学性错误**，明确告诉你如何列出对象。MCP 下对应工具为 `cluster_health_summary`、`cross_vcenter_attention`、`vm_investigation_bundle`、`host_investigation_bundle`、`datastore_investigation_bundle`——模型调用后用运维语言解释聚合结果。完整参数见 [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md)。
+对象名不存在时返回**教学性错误**，明确告诉你如何列出对象。MCP 下对应工具为 `get_cluster_health_summary`、`get_cross_vcenter_attention`、`investigate_vm`、`investigate_host`、`investigate_datastore`——模型调用后用运维语言解释聚合结果。完整参数见 [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md)。
 
 ### 快速安装（推荐）
 
@@ -136,8 +136,8 @@ ESXi 独立主机 ──→ VM
 | 功能 | 说明 |
 |------|------|
 | VM 详情 | 名称、电源状态、操作系统、CPU、内存、IP、VMware Tools、磁盘、网卡、`folder_path` |
-| 快照列表 | 列出已有快照名称和创建时间（无创建/恢复/删除）— CLI `vm snapshot-list`，MCP 工具 `vm_list_snapshots` |
-| 备份窗口 | 从 vCenter 任务历史推算某台 VM 的备份保持快照打开的时长 — CLI `snapshots backup-window`，MCP 工具 `vm_backup_snapshot_history`。这是备份作业时长的**下界**，不是官方作业时长 |
+| 快照列表 | 列出已有快照名称和创建时间（无创建/恢复/删除）— CLI `vm snapshot-list`，MCP 工具 `list_vm_snapshots` |
+| 备份窗口 | 从 vCenter 任务历史推算某台 VM 的备份保持快照打开的时长 — CLI `snapshots backup-window`，MCP 工具 `get_vm_backup_snapshot_history`。这是备份作业时长的**下界**，不是官方作业时长 |
 
 ### 4. 定时扫描与通知
 
@@ -403,7 +403,7 @@ VMware-Monitor/
 │   ├── ops/                       # 查询操作
 │   │   ├── inventory.py           # 资源清单
 │   │   ├── health.py              # 健康检查
-│   │   └── vm_info.py             # VM 信息、快照列表（只读）
+│   │   └── vm_info.py                 # VM 信息、快照列表（只读）
 │   ├── scanner/                   # 日志扫描守护进程
 │   ├── notify/                    # 通知（JSONL + Webhook）
 │   └── mcp_server/                # MCP 服务器（仅只读工具）

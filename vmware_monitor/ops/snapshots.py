@@ -141,7 +141,7 @@ def list_snapshot_aging(
         hint = (
             f"{old_count} snapshot(s) older than {age_threshold_days} days. "
             "Old snapshots consume datastore space and degrade I/O. "
-            "Delete via vmware-aiops: vm_delete_snapshot(vm_name=..., snapshot_name=...)."
+            "Delete via vmware-aiops: delete_vm_snapshot(vm_name=..., snapshot_name=...)."
         )
 
     return {

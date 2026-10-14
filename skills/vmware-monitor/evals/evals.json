@@ -29,7 +29,7 @@
       "expected_output": "Host details with CPU, memory, version, uptime",
       "files": [],
       "expectations": [
-        "Uses list_esxi_hosts or vm_info for host details",
+        "Uses list_esxi_hosts or get_vm_info for host details",
         "Presents information in a readable format",
         "Does NOT attempt any modifications"
       ]

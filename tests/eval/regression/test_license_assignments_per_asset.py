@@ -1,4 +1,4 @@
-"""Regression — license_status says which license each asset is assigned.
+"""Regression — get_license_status says which license each asset is assigned.
 
 Found 2026-09-14 on a lab vCenter 8.0.3. vCenter showed "Expired vCenter Server
 license" (since 2026-06-01) while `infra licenses` listed only valid licenses
@@ -135,7 +135,7 @@ def test_cli_and_mcp_show_assignments(monkeypatch):
     from vmware_monitor import cli, cli_observability
     from vmware_monitor.mcp_server import server
 
-    assert "assignments" in inspect.getdoc(server.license_status)
+    assert "assignments" in inspect.getdoc(server.get_license_status)
     monkeypatch.setattr(
         cli_observability, "get_connection", lambda target, config: (_si(), None, "vc")
     )

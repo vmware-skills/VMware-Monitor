@@ -1,6 +1,6 @@
 """Regression — host log findings are ranked by the log's own level and grouped.
 
-Found 2026-09-14 on a lab vCenter 8.0.3: one ``host_log_scan`` call returned 353
+Found 2026-09-14 on a lab vCenter 8.0.3: one ``scan_host_logs`` call returned 353
 rows, about 150 KB. Every row was ``warning``, including informational lines
 that merely contain "error" or "timed out" (``In(166) ... HTTP Connection has
 timed out while waiting for further requests``), and 195 of them were the same
@@ -10,7 +10,7 @@ model reads that; and the tool had no CLI command at all.
 * ESXi writes the level on every line (``Em/Al/Cr`` / ``Er`` / ``Wa`` / ``No`` /
   ``In`` / ``Db``). A finding's severity now follows it; ``log_level`` carries
   the raw token. A line with no level keeps the keyword rule.
-* ``host_log_scan`` groups findings by pattern by default — count, hosts,
+* ``scan_host_logs`` groups findings by pattern by default — count, hosts,
   first/last log time, one sample — and ``group=false`` returns the raw rows.
 * ``vmware-monitor scan logs`` runs it from the CLI.
 """
@@ -128,7 +128,7 @@ def test_the_mcp_tool_groups_by_default_and_can_return_raw(monkeypatch):
     ]
     si = _scan_si(monkeypatch, lines)
     monkeypatch.setattr(server, "_get_connection", lambda target: si)
-    grouped = server.host_log_scan()
+    grouped = server.scan_host_logs()
     assert grouped["grouped"] is True and grouped["lines_matched"] == 15  # 3 logs × 5 lines
     # One group per pattern per log: the same text in hostd and vpxa is two findings.
     assert [g["count"] for g in grouped["items"]] == [5, 5, 5]
@@ -137,9 +137,9 @@ def test_the_mcp_tool_groups_by_default_and_can_return_raw(monkeypatch):
         "host_log:vmkernel",
         "host_log:vpxa",
     }
-    raw = server.host_log_scan(group=False)
+    raw = server.scan_host_logs(group=False)
     assert raw["grouped"] is False and len(raw["items"]) == 15
-    doc = inspect.getdoc(server.host_log_scan)
+    doc = inspect.getdoc(server.scan_host_logs)
     assert "group:" in doc
 
 

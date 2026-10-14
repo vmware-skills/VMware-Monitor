@@ -107,7 +107,7 @@ def test_an_overcommitted_datastore_is_a_top_issue(monkeypatch):
     assert issue["kind"] == "capacity" and issue["severity"] == "warning"
     assert issue["cluster"] == "(standalone hosts)"
     assert "216.5%" in issue["detail"] and "1738.8" in issue["detail"] and "803.2" in issue["detail"]
-    assert "datastore_capacity" in issue["drilldown"]
+    assert "get_datastore_capacity" in issue["drilldown"]
 
 
 @pytest.mark.unit

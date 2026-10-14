@@ -69,9 +69,9 @@ _SEV_RANK = {"critical": 0, "warning": 1}
 # registry and the Typer command tree by
 # test_next_step_names_the_surface_it_is_read_on.py.
 _DRILLDOWN = {
-    "host_down": "host_investigation_bundle, then get_alarms; reconnect via vmware-aiops",
+    "host_down": "investigate_host, then get_alarms; reconnect via vmware-aiops",
     "alarm": "get_alarms for detail; remediate via vmware-aiops",
-    "capacity": "host_performance, then datastore_capacity",
+    "capacity": "get_host_performance, then get_datastore_capacity",
     "config": "enable vSphere HA on this cluster (vSphere admin)",
 }
 _CLI_DRILLDOWN = {
@@ -451,7 +451,7 @@ def get_cluster_health_summary(
 #: shared datastore — so it is read afterwards, for over-committed datastores alone.
 _DATASTORE_PROPS = ["name", "summary.capacity", "summary.freeSpace", "summary.uncommitted"]
 
-_DATASTORE_DRILLDOWN = "datastore_capacity, then datastore_investigation_bundle"
+_DATASTORE_DRILLDOWN = "get_datastore_capacity, then investigate_datastore"
 
 
 def _drilldown_key(issue: dict) -> str:

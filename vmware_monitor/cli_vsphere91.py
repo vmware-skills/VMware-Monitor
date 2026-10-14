@@ -38,7 +38,7 @@ ClusterArg = Annotated[str, typer.Argument(help="Cluster MoID, e.g. domain-c123"
 
 @memory_app.command("tiering")
 @cli_errors
-@audited("host_memory_tiering")
+@audited("get_host_memory_tiering")
 def memory_tiering(
     host: Annotated[str | None, typer.Option("--host", help="Single host by exact name")] = None,
     target: TargetOption = None,
@@ -98,7 +98,7 @@ def _target_config(target: str | None, config):
 
 @patch_app.command("compliance")
 @cli_errors
-@audited("cluster_patch_compliance")
+@audited("get_cluster_patch_compliance")
 def patch_compliance(
     cluster: ClusterArg,
     target: TargetOption = None,
@@ -123,7 +123,7 @@ def patch_compliance(
 
 @patch_app.command("last-apply")
 @cli_errors
-@audited("cluster_last_apply_result")
+@audited("get_cluster_last_apply_result")
 def patch_last_apply(
     cluster: ClusterArg,
     target: TargetOption = None,
@@ -149,7 +149,7 @@ def patch_last_apply(
 
 
 @cli_errors
-@audited("vcenter_deployment_size")
+@audited("get_vcenter_deployment_size")
 def deployment_size_cmd(
     target: TargetOption = None,
     config: ConfigOption = None,

@@ -1,4 +1,4 @@
-"""Regression — cluster_health_summary aggregation, status rollup, and shape.
+"""Regression — get_cluster_health_summary aggregation, status rollup, and shape.
 
 Locks the opinionated triage logic added for the issue #31 follow-up discussion:
 one aggregated read that rolls hosts / VMs / alarms up to the owning cluster and
@@ -414,7 +414,7 @@ def test_a_loaded_standalone_host_is_not_reported_as_all_clear(monkeypatch):
 #     Root user password expired.     on Datacenters
 #     Expired vCenter Server license  on Datacenters
 #
-# `get_active_alarms` returned all three. `cluster_health_summary` counted ONE,
+# `get_active_alarms` returned all three. `get_cluster_health_summary` counted ONE,
 # because it scans ClusterComputeResource and HostSystem and nothing else. An
 # alarm raised on a datacenter or on the vCenter root belongs to no cluster and
 # no host, so it was dropped — and the count that remained looked authoritative.

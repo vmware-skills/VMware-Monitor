@@ -32,8 +32,8 @@ Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code
 
 | Category | Capabilities |
 |----------|-------------|
-| **Cluster Triage** | One-glance `cluster_health_summary` — cross-cluster Problems/Capacity/Health rollup with an opinionated status; customizable view |
-| **Object Investigation** | "What is happening around this VM / host / datastore?" — one correlated drill-down bundle per object, plus `cross_vcenter_attention` — one ranked "what needs attention now?" list across every configured vCenter |
+| **Cluster Triage** | One-glance `get_cluster_health_summary` — cross-cluster Problems/Capacity/Health rollup with an opinionated status; customizable view |
+| **Object Investigation** | "What is happening around this VM / host / datastore?" — one correlated drill-down bundle per object, plus `get_cross_vcenter_attention` — one ranked "what needs attention now?" list across every configured vCenter |
 | **Inventory** | List VMs, ESXi hosts, datastores, clusters, networks |
 | **Health** | Active alarms, recent events (filter by severity/time), hardware sensors, host services |
 | **Performance** | Real-time host & VM CPU/memory/disk/network utilisation (PerfManager) |
@@ -48,7 +48,7 @@ Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code
 ## Quick Install
 
 ```bash
-uv tool install vmware-monitor==1.16.0
+uv tool install vmware-monitor==2.0.0
 vmware-monitor doctor
 ```
 
@@ -98,7 +98,7 @@ reasoning about skill routing. Example payload: `references/capabilities.md`.
 
 **Judgment**: this is the 5-second triage glance, not an Aria replacement. One call rolls every cluster's hosts, VM power, live CPU/memory and alarms up, flattens the individual anomalies into a ranked **top-N focus list** (`top_issues`), and gives each cluster an opinionated `status`. On a big fleet, lead with the focus list — scanning per-cluster rows is too slow.
 
-1. One glance --> `vmware-monitor summary` (MCP: `cluster_health_summary`). Read `top_issues` first (worst first, each with a drill-down `next step`); the per-cluster table is context. `issues_total` shows how many anomalies existed before the top-N cap
+1. One glance --> `vmware-monitor summary` (MCP: `get_cluster_health_summary`). Read `top_issues` first (worst first, each with a drill-down `next step`); the per-cluster table is context. `issues_total` shows how many anomalies existed before the top-N cap
 2. Tighten or widen the focus --> `--top 5` for the 5 most urgent, `--top 20` for more, `--top 0` to hide the list and just see the table
 3. Drill into what the list points at --> e.g. a `host_down` row → `inventory hosts`; an `alarm` row → `get_alarms`; a `capacity` row → `perf hosts` / `capacity datastores`; scope with `--cluster prod-a`
 4. Reshape the view on request --> the output ends with a friendly hint; the operator can say "add datastore free space", "drop the DRS column", "only show clusters needing attention", or "save this as an HTML page". Default layout, columns, and thresholds live in [`references/health-summary-template.md`](references/health-summary-template.md) and are meant to be edited
@@ -120,11 +120,11 @@ reasoning about skill routing. Example payload: `references/capabilities.md`.
 **Judgment**: this is the drill-down the operator wants after triage points at a problem — one call *correlates* the object with its surrounding infrastructure and recent history, so you explain the aggregated result in operational language instead of stitching five tools yourself. The tool aggregates; you never dump raw inventory into the conversation.
 
 Offer the levels progressively — do **not** ask for details the environment already fixes:
-1. **Start at the top** --> `cross_vcenter_attention` (CLI: `vmware-monitor attention`) for "what needs attention now?" across every vCenter. If only one vCenter is configured, skip straight to its `cluster_health_summary` — no need to ask which target
+1. **Start at the top** --> `get_cross_vcenter_attention` (CLI: `vmware-monitor attention`) for "what needs attention now?" across every vCenter. If only one vCenter is configured, skip straight to its `get_cluster_health_summary` — no need to ask which target
 2. **Offer to drill into an object** the top-issues list points at. Ask *which level* only when it is genuinely ambiguous:
-   - a VM --> `vm_investigation_bundle` (CLI: `vmware-monitor investigate vm <name>`) → VM state, recent events, snapshots, alarms & recent changes, the host it runs on, the cluster context, the datastores backing it, performance signals, and a correlated event timeline
-   - a host --> `host_investigation_bundle` (CLI: `investigate host <name>`) → host state, cluster context, the VMs it runs, mounted datastores, alarms, performance, correlated timeline
-   - a datastore --> `datastore_investigation_bundle` (CLI: `investigate datastore <name>`) → capacity/free, mounting hosts, VMs it backs, alarms, correlated timeline
+   - a VM --> `investigate_vm` (CLI: `vmware-monitor investigate vm <name>`) → VM state, recent events, snapshots, alarms & recent changes, the host it runs on, the cluster context, the datastores backing it, performance signals, and a correlated event timeline
+   - a host --> `investigate_host` (CLI: `investigate host <name>`) → host state, cluster context, the VMs it runs, mounted datastores, alarms, performance, correlated timeline
+   - a datastore --> `investigate_datastore` (CLI: `investigate datastore <name>`) → capacity/free, mounting hosts, VMs it backs, alarms, correlated timeline
 3. **Widen or narrow** on request --> `--hours 72` for a longer event window; the bundle ends with a hint listing what is adjustable
 4. **Make it tangible** --> add `--html` to any `investigate`/`attention` command for a self-contained offline snapshot (drill-down sections collapse/expand natively, no JS, nothing uploaded) written to `~/vmware-health/`
 5. **If the object name is unknown** --> the tool returns a *teaching* error naming exactly how to list the objects (`list_virtual_machines` / `list_esxi_hosts` / `list_all_datastores`); get the exact name and retry
@@ -164,36 +164,36 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `list_esxi_hosts` | ESXi hosts with CPU, memory, version, uptime |
 | `list_all_datastores` | Datastores with capacity, free space, type |
 | `list_all_clusters` | Clusters with host count, DRS/HA status |
-| `cluster_health_summary` | One-glance triage across all clusters — ranked `top_issues` focus list + per-cluster rollup with opinionated `status`. Params: `cluster_filter`, `include_vms`, `top_n`. Render per `references/health-summary-template.md` |
-| `vm_investigation_bundle` | "What is happening around this VM?" — correlated drill-down with a merged, newest-first **event timeline** (contents listed in the workflow above). Params: `vm_name`, `hours`. Aggregated in the tool; explain, don't dump raw |
-| `host_investigation_bundle` | Same correlated drill-down around an ESXi host. Params: `host_name`, `hours` |
-| `datastore_investigation_bundle` | Same correlated drill-down around a datastore. Params: `datastore_name`, `hours` |
-| `cross_vcenter_attention` | "What needs attention now?" across **every** configured vCenter — one globally-ranked `top_issues` list (each tagged with its `vcenter`) + per-target rollup; unreachable targets degrade gracefully. Params: `cluster_filter`, `top_n` |
+| `get_cluster_health_summary` | One-glance triage across all clusters — ranked `top_issues` focus list + per-cluster rollup with opinionated `status`. Params: `cluster_filter`, `include_vms`, `top_n`. Render per `references/health-summary-template.md` |
+| `investigate_vm` | "What is happening around this VM?" — correlated drill-down with a merged, newest-first **event timeline** (contents listed in the workflow above). Params: `vm_name`, `hours`. Aggregated in the tool; explain, don't dump raw |
+| `investigate_host` | Same correlated drill-down around an ESXi host. Params: `host_name`, `hours` |
+| `investigate_datastore` | Same correlated drill-down around a datastore. Params: `datastore_name`, `hours` |
+| `get_cross_vcenter_attention` | "What needs attention now?" across **every** configured vCenter — one globally-ranked `top_issues` list (each tagged with its `vcenter`) + per-target rollup; unreachable targets degrade gracefully. Params: `cluster_filter`, `top_n` |
 | `list_all_networks` | Networks with attached VM count and accessibility |
 | `get_alarms` | Active alarms: `suggested_actions`, acknowledger, `condition_now` (`cleared` = stale) |
 | `get_events` | Events by severity and time window (`start`/`end`) |
 | `get_host_sensors` | Hardware sensor status (temperature/voltage/fan) per host with green/yellow/red health |
 | `get_host_services` | Host service status (running state and startup policy), optionally filtered by host |
-| `vm_info` | Detailed VM info (CPU, memory, disks, NICs, snapshots) |
-| `vm_list_snapshots` | Snapshot list for one VM with nesting hierarchy (read-only) |
-| `host_performance` | **Real-time** host CPU/mem/disk/net utilisation (PerfManager); busiest first |
-| `vm_performance` | **Real-time** VM CPU/mem/balloon/swap/disk/net utilisation (top 25 by default); powered-on only |
-| `snapshot_aging` | Inventory-wide snapshot sweep with age + sprawl; flags snapshots older than N days |
-| `vm_backup_snapshot_history` | Backup windows for one VM from snapshot task history; a lower bound, not job duration |
-| `certificate_status` | Per-host ESXi management certificate expiry (days until expiry, expiring flag) |
-| `license_status` | Licenses and per-asset `assignments` |
-| `ntp_status` | Per-host NTP config health (servers + ntpd state); live offset not in SOAP API |
-| `datastore_capacity` | Datastore over-commit (provisioned vs capacity); thin-provisioning risk |
-| `resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
-| `active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
-| `active_sessions` | Who is logged in, and from which client |
-| `host_log_scan` | ESXi host log trouble lines, grouped by pattern (CLI: `scan logs`) |
-| `host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
-| `cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
-| `cluster_last_apply_result` | **vSphere 9.1** — result of the last vLCM remediation (apply) on one cluster (REST). Param: `cluster` (MoID). Reports outcome only; never runs a remediation |
-| `vcenter_deployment_size` | **vSphere 9.1** — vCenter appliance deployment size class (REST, NEW in 9.1). `available:false` on 503 |
+| `get_vm_info` | Detailed VM info (CPU, memory, disks, NICs, snapshots) |
+| `list_vm_snapshots` | Snapshot list for one VM with nesting hierarchy (read-only) |
+| `get_host_performance` | **Real-time** host CPU/mem/disk/net utilisation (PerfManager); busiest first |
+| `get_vm_performance` | **Real-time** VM CPU/mem/balloon/swap/disk/net utilisation (top 25 by default); powered-on only |
+| `find_aging_snapshots` | Inventory-wide snapshot sweep with age + sprawl; flags snapshots older than N days |
+| `get_vm_backup_snapshot_history` | Backup windows for one VM from snapshot task history; a lower bound, not job duration |
+| `get_certificate_status` | Per-host ESXi management certificate expiry (days until expiry, expiring flag) |
+| `get_license_status` | Licenses and per-asset `assignments` |
+| `get_ntp_status` | Per-host NTP config health (servers + ntpd state); live offset not in SOAP API |
+| `get_datastore_capacity` | Datastore over-commit (provisioned vs capacity); thin-provisioning risk |
+| `get_resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
+| `list_active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
+| `list_active_sessions` | Who is logged in, and from which client |
+| `scan_host_logs` | ESXi host log trouble lines, grouped by pattern (CLI: `scan logs`) |
+| `get_host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
+| `get_cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
+| `get_cluster_last_apply_result` | **vSphere 9.1** — result of the last vLCM remediation (apply) on one cluster (REST). Param: `cluster` (MoID). Reports outcome only; never runs a remediation |
+| `get_vcenter_deployment_size` | **vSphere 9.1** — vCenter appliance deployment size class (REST, NEW in 9.1). `available:false` on 503 |
 
-> **vSphere 9.1 field-parse honesty**: the 3 REST tools' *endpoints* are spec-verified, but their JSON field names have NOT yet been replayed against a live 9.1 vCenter — every field is read defensively and each result self-labels via its `note` (`endpoint verified; field parse best-effort pending live 9.1 vCenter`). `host_memory_tiering` requires vCenter/ESXi 8.0U3+; older targets raise a teaching error naming the missing property.
+> **vSphere 9.1 field-parse honesty**: the 3 REST tools' *endpoints* are spec-verified, but their JSON field names have NOT yet been replayed against a live 9.1 vCenter — every field is read defensively and each result self-labels via its `note` (`endpoint verified; field parse best-effort pending live 9.1 vCenter`). `get_host_memory_tiering` requires vCenter/ESXi 8.0U3+; older targets raise a teaching error naming the missing property.
 
 No tool modifies, creates, or deletes any vCenter/ESXi resource.
 Performance/capacity readings are point-in-time samples — this skill retains no
@@ -201,13 +201,13 @@ history, so it never reports a fabricated "trend" or runway date.
 
 ### List result shape
 
-The 21 row-listing tools above (including `host_memory_tiering`) return the family list envelope
+The 21 row-listing tools above (including `get_host_memory_tiering`) return the family list envelope
 `{items, returned, limit, total, truncated, hint}`, not a bare array. Read
 `truncated` before summarising: `true` means more rows exist — never call
 `items` the whole picture; `false` means complete, so empty `items` means
-"checked, found none" — for `host_log_scan`, only if `logs_unavailable`
+"checked, found none" — for `scan_host_logs`, only if `logs_unavailable`
 (logs it could not read) is empty too. A `null` `total`
-(`get_events`, `host_log_scan`) is deliberate. Aggregate tools return
+(`get_events`, `scan_host_logs`) is deliberate. Aggregate tools return
 purpose-built objects — see `references/capabilities.md`.
 
 ## Read-Only by Design
@@ -267,7 +267,7 @@ simply not matched by such a rule. Config example: `references/setup-guide.md`.
 ## Setup
 
 ```bash
-uv tool install vmware-monitor==1.16.0
+uv tool install vmware-monitor==2.0.0
 vmware-monitor init      # guided: prompts for host/user/password, writes config + .env (chmod 600), then verifies
 ```
 

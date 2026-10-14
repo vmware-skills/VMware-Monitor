@@ -74,7 +74,7 @@ def _ds_issue(name, pct, provisioned):
             f"thin-provisioned to {pct}% of capacity ({provisioned} of 803.2 GB promised) "
             "— can fill while it shows free space"
         ),
-        "drilldown": "datastore_capacity, then datastore_investigation_bundle",
+        "drilldown": "get_datastore_capacity, then investigate_datastore",
     }
 
 

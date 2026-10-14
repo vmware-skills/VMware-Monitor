@@ -151,6 +151,6 @@ def test_cli_capacity_datastores_shows_the_view_and_vm_count(monkeypatch):
 
 @pytest.mark.unit
 def test_the_mcp_tool_documents_the_view_fields():
-    doc = server.datastore_capacity.__doc__ or ""
+    doc = server.get_datastore_capacity.__doc__ or ""
     for field in ("view", "view_note", "vm_count", "vms_not_connected"):
-        assert field in doc, f"datastore_capacity docstring does not mention {field}"
+        assert field in doc, f"get_datastore_capacity docstring does not mention {field}"

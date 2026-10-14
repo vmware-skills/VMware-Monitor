@@ -110,8 +110,8 @@ def test_the_mcp_tool_and_cli_expose_the_switch(monkeypatch):
     from vmware_monitor import cli, cli_observability
     from vmware_monitor.mcp_server import server
 
-    assert "include_service" in inspect.signature(server.active_sessions).parameters
-    assert "include_service:" in inspect.getdoc(server.active_sessions)
+    assert "include_service" in inspect.signature(server.list_active_sessions).parameters
+    assert "include_service:" in inspect.getdoc(server.list_active_sessions)
 
     monkeypatch.setattr(
         cli_observability, "get_connection", lambda target, config: (_si(_LAB), None, "vc")

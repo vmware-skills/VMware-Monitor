@@ -44,12 +44,16 @@ from vmware_monitor import __version__
 from vmware_monitor.config import CONFIG_FILE, ConfigError, load_config
 from vmware_monitor.connection import ConnectionManager
 from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
-from vmware_monitor.ops.attention import get_cross_vcenter_attention
-from vmware_monitor.ops.capacity import (
-    get_datastore_capacity,
-    get_resource_pool_usage,
+from vmware_monitor.ops.attention import (
+    get_cross_vcenter_attention as _ops_get_cross_vcenter_attention,
 )
-from vmware_monitor.ops.cluster_summary import get_cluster_health_summary
+from vmware_monitor.ops.capacity import (
+    get_datastore_capacity as _ops_get_datastore_capacity,
+    get_resource_pool_usage as _ops_get_resource_pool_usage,
+)
+from vmware_monitor.ops.cluster_summary import (
+    get_cluster_health_summary as _ops_get_cluster_health_summary,
+)
 from vmware_monitor.ops.health import (
     get_active_alarms,
     get_host_hardware_status,
@@ -57,9 +61,9 @@ from vmware_monitor.ops.health import (
 )
 from vmware_monitor.ops.health import get_host_services as _ops_get_host_services
 from vmware_monitor.ops.infra_health import (
-    get_certificate_status,
-    get_license_status,
-    get_ntp_status,
+    get_certificate_status as _ops_get_certificate_status,
+    get_license_status as _ops_get_license_status,
+    get_ntp_status as _ops_get_ntp_status,
 )
 from vmware_monitor.ops.inventory import (
     list_clusters,
@@ -77,13 +81,17 @@ from vmware_monitor.ops.investigate_host import (
     get_host_investigation_bundle,
 )
 from vmware_monitor.ops.investigate_vm import get_vm_investigation_bundle
-from vmware_monitor.ops.performance import get_host_performance, get_vm_performance
+from vmware_monitor.ops.performance import (
+    get_host_performance as _ops_get_host_performance,
+    get_vm_performance as _ops_get_vm_performance,
+)
 from vmware_monitor.ops.backup_window import (
     AmbiguousVMError,
     get_backup_snapshot_history,
 )
 from vmware_monitor.ops.snapshots import list_snapshot_aging
-from vmware_monitor.ops.vm_info import VMNotFoundError, get_vm_info, list_snapshots
+from vmware_monitor.ops.vm_info import VMNotFoundError, list_snapshots
+from vmware_monitor.ops.vm_info import get_vm_info as _ops_get_vm_info
 from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs
 
 logger = logging.getLogger(__name__)
@@ -350,9 +358,9 @@ def list_virtual_machines(
     below come back (``mode`` says which). ``vms`` is a deprecated pre-1.8.0
     alias of ``items``, removed in 2.0 — read ``items``.
 
-    Use this to resolve an exact VM name, then vm_info for detail or
-    vm_investigation_bundle to drill into one; for a fleet-wide view start at
-    cluster_health_summary instead.
+    Use this to resolve an exact VM name, then get_vm_info for detail or
+    investigate_vm to drill into one; for a fleet-wide view start at
+    get_cluster_health_summary instead.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -396,8 +404,8 @@ def list_esxi_hosts(
     """[READ] List ESXi hosts with CPU cores, memory, version, VM count, and uptime.
 
     Returns the list envelope; ``total`` is the real host count. Static config only
-    (cores, total GB) — use this to resolve a host name, then host_performance for
-    live load or host_investigation_bundle to drill into one host.
+    (cores, total GB) — use this to resolve a host name, then get_host_performance for
+    live load or investigate_host to drill into one host.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -424,8 +432,8 @@ def list_all_datastores(
     """[READ] List datastores with capacity, free space, type, and VM count.
 
     Returns the list envelope with a real ``total``. Raw free/used only — use this
-    to resolve a datastore name, then datastore_capacity for thin-provisioning
-    over-commit risk or datastore_investigation_bundle to drill into one datastore.
+    to resolve a datastore name, then get_datastore_capacity for thin-provisioning
+    over-commit risk or investigate_datastore to drill into one datastore.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -452,7 +460,7 @@ def list_all_clusters(
     """[READ] List clusters with host count, DRS/HA status, and resource totals.
 
     Returns the list envelope with a real ``total``. Static topology only — use this
-    to resolve a cluster name, then cluster_health_summary, which supersedes
+    to resolve a cluster name, then get_cluster_health_summary, which supersedes
     stitching this with list_esxi_hosts and get_alarms yourself.
 
     Args:
@@ -473,7 +481,7 @@ def list_all_clusters(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def cluster_health_summary(
+def get_cluster_health_summary(
     target: Optional[str] = None,
     cluster_filter: Optional[str] = None,
     include_vms: bool = True,
@@ -491,15 +499,15 @@ def cluster_health_summary(
     first), show ``clusters`` as context, always echo ``customization_hint`` last.
     Point-in-time — no trending. ``top_issues`` includes datastores thin-provisioned
     past 100% of capacity (kind capacity, scope datastore), attributed to the
-    cluster of a host that mounts them; datastore_capacity has the full table.
+    cluster of a host that mounts them; get_datastore_capacity has the full table.
     Alarm issues carry ``condition_now`` and ``acknowledged_days``. Only a
     ``cleared`` alarm (its condition is read to be false now) ranks after live
     issues; an ``unknown`` one is not re-checked and keeps its severity rank,
     however long ago it was acknowledged — report it as possibly still live.
 
-    Then drill into what ``top_issues`` names with vm_investigation_bundle,
-    host_investigation_bundle or datastore_investigation_bundle; use
-    cross_vcenter_attention to cover every target at once. Acting on a finding
+    Then drill into what ``top_issues`` names with investigate_vm,
+    investigate_host or investigate_datastore; use
+    get_cross_vcenter_attention to cover every target at once. Acting on a finding
     belongs to vmware-aiops.
 
     Args:
@@ -511,7 +519,7 @@ def cluster_health_summary(
             the pre-cap count.
     """
     si = _get_connection(target)
-    return get_cluster_health_summary(
+    return _ops_get_cluster_health_summary(
         si, cluster_filter=cluster_filter, include_vms=include_vms, top_n=top_n
     )
 
@@ -526,27 +534,27 @@ def cluster_health_summary(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vm_investigation_bundle(
+def investigate_vm(
     vm_name: str,
     target: Optional[str] = None,
     hours: int = 24,
 ) -> dict:
     """[READ] "What is happening around this VM?" — one correlated drill-down.
 
-    Use this instead of stitching vm_info + vm_list_snapshots + get_alarms +
-    vm_performance + get_events yourself. Returns one correlated bundle (not the
+    Use this instead of stitching get_vm_info + list_vm_snapshots + get_alarms +
+    get_vm_performance + get_events yourself. Returns one correlated bundle (not the
     list envelope): the VM's state, its host, cluster and backing datastores, its
     snapshots and triggered alarms, live performance, and a merged event timeline
     across VM/host/cluster/datastore (newest first). All reads are batched.
     Explain it in operational language; do not dump it raw.
 
-    Reach for it after cluster_health_summary names a problem VM, or when asked
+    Reach for it after get_cluster_health_summary names a problem VM, or when asked
     "what's going on with <vm>?". Point-in-time snapshot — no trending. Acting on
     what you find (power, migrate, delete snapshot) belongs to vmware-aiops.
 
     Args:
         vm_name: Exact VM name; unknown names return a teaching error. Get it from
-            list_virtual_machines or cluster_health_summary first.
+            list_virtual_machines or get_cluster_health_summary first.
         target: vCenter/ESXi target from config (default if omitted).
         hours: Event-timeline look-back window in hours (default 24).
     """
@@ -564,27 +572,27 @@ def vm_investigation_bundle(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def host_investigation_bundle(
+def investigate_host(
     host_name: str,
     target: Optional[str] = None,
     hours: int = 24,
 ) -> dict:
     """[READ] "What is happening around this ESXi host?" — one correlated drill-down.
 
-    Use this instead of stitching list_esxi_hosts + host_performance + get_alarms
+    Use this instead of stitching list_esxi_hosts + get_host_performance + get_alarms
     + get_events yourself. Returns one correlated bundle (not the list envelope):
     the host's state (connection, CPU/memory pressure, version, uptime), its
     cluster, a rollup of the VMs it runs, the datastores it mounts, alarms across
     host/cluster/datastore, live performance, and a merged event timeline. All
     reads are batched. Explain it in operational language; do not dump it raw.
 
-    Reach for it after cluster_health_summary flags a host. Point-in-time
-    snapshot — no trending; for syslog lines use host_log_scan. Acting on a
+    Reach for it after get_cluster_health_summary flags a host. Point-in-time
+    snapshot — no trending; for syslog lines use scan_host_logs. Acting on a
     finding (maintenance mode, evacuate) belongs to vmware-aiops.
 
     Args:
         host_name: Exact ESXi host name; unknown names return a teaching error.
-            Get it from list_esxi_hosts or cluster_health_summary first.
+            Get it from list_esxi_hosts or get_cluster_health_summary first.
         target: vCenter/ESXi target from config (default if omitted).
         hours: Event-timeline look-back window in hours (default 24).
     """
@@ -602,27 +610,27 @@ def host_investigation_bundle(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def datastore_investigation_bundle(
+def investigate_datastore(
     datastore_name: str,
     target: Optional[str] = None,
     hours: int = 24,
 ) -> dict:
     """[READ] "What is happening around this datastore?" — one correlated drill-down.
 
-    Use this instead of stitching list_all_datastores + datastore_capacity +
+    Use this instead of stitching list_all_datastores + get_datastore_capacity +
     get_alarms + get_events yourself. Returns one correlated bundle (not the list
     envelope): capacity / free space / accessibility, the hosts that mount it, a
     rollup of the VMs it backs, alarms across datastore/host, and a merged event
     timeline. All reads are batched. Explain it in operational language; do not
     dump it raw. Per-datastore latency is not included.
 
-    Reach for it after cluster_health_summary flags storage pressure.
+    Reach for it after get_cluster_health_summary flags storage pressure.
     Point-in-time snapshot — no trending. Freeing space (deleting snapshots,
     storage vMotion) belongs to vmware-aiops.
 
     Args:
         datastore_name: Exact datastore name; unknown names return a teaching
-            error. Get it from list_all_datastores or datastore_capacity first.
+            error. Get it from list_all_datastores or get_datastore_capacity first.
         target: vCenter/ESXi target from config (default if omitted).
         hours: Event-timeline look-back window in hours (default 24).
     """
@@ -640,7 +648,7 @@ def datastore_investigation_bundle(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def cross_vcenter_attention(
+def get_cross_vcenter_attention(
     cluster_filter: Optional[str] = None,
     top_n: int = 10,
 ) -> dict:
@@ -649,7 +657,7 @@ def cross_vcenter_attention(
     Start here when the estate has more than one vCenter. Rolls every configured
     target's cluster-health summary into one globally ranked ``top_issues`` list
     (worst first, each tagged with its ``vcenter``) plus a per-target rollup. Use
-    this instead of calling cluster_health_summary once per target and merging
+    this instead of calling get_cluster_health_summary once per target and merging
     yourself. Returns a rollup, not the list envelope; lead with ``top_issues``.
 
     Degrades gracefully: an unreachable target is listed under ``unreachable``
@@ -659,8 +667,8 @@ def cross_vcenter_attention(
     one issue with the other view's figure under ``also_seen_via`` (datastore
     URL), and ``totals`` separates ``vcenters``, ``esxi_targets`` and
     ``unidentified_targets``.
-    Then drill in with vm_investigation_bundle, host_investigation_bundle or
-    datastore_investigation_bundle against the ``vcenter`` the issue names.
+    Then drill in with investigate_vm, investigate_host or
+    investigate_datastore against the ``vcenter`` the issue names.
 
     Args:
         cluster_filter: Case-insensitive cluster substring applied to every target
@@ -669,7 +677,7 @@ def cross_vcenter_attention(
             the pre-cap count.
     """
     sessions, unreachable = _ensure_conn_mgr().connect_all()
-    return get_cross_vcenter_attention(
+    return _ops_get_cross_vcenter_attention(
         sessions, unreachable=unreachable, cluster_filter=cluster_filter, top_n=top_n
     )
 
@@ -692,7 +700,7 @@ def list_all_networks(
 
     Returns the list envelope with a real ``total``. Name, vm_count and accessible
     only — no VLAN, uplink or NSX overlay detail. Use this to resolve a port-group
-    name, then vm_info for the NICs of one VM. NSX segments live in vmware-nsx.
+    name, then get_vm_info for the NICs of one VM. NSX segments live in vmware-nsx.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -738,9 +746,9 @@ def get_alarms(
     ``items`` with ``truncated`` False means there genuinely are no active alarms —
     never report "no data" otherwise.
 
-    Use this for the raw alarm list; prefer cluster_health_summary when you want
+    Use this for the raw alarm list; prefer get_cluster_health_summary when you want
     alarms folded into a whole-cluster verdict. Then drill into the flagged
-    object with vm_investigation_bundle or host_investigation_bundle.
+    object with investigate_vm or investigate_host.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -783,9 +791,9 @@ def get_events(
     window was quiet — read the note before reporting all-clear.
 
     Use this for an inventory-wide event sweep. When you already know the object,
-    prefer vm_investigation_bundle / host_investigation_bundle instead: they
+    prefer investigate_vm / investigate_host instead: they
     return the same events correlated with that object's state in one call. ESXi
-    syslog lines are not events — use host_log_scan for those.
+    syslog lines are not events — use scan_host_logs for those.
 
     Args:
         hours: How many hours back to query (default 24). Ignored when both
@@ -829,8 +837,8 @@ def get_host_sensors(
     ``sensors_note`` says what that means — quote it.
 
     Use this for physical hardware only — for CPU/memory load use
-    host_performance, and follow up on a red sensor with
-    host_investigation_bundle to see the alarms and events around that host.
+    get_host_performance, and follow up on a red sensor with
+    investigate_host to see the alarms and events around that host.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
@@ -861,7 +869,7 @@ def get_host_services(
     ``truncated`` is always False.
 
     Use this to check whether SSH, NTP or the firewall service is in the expected
-    state. For NTP specifically prefer ntp_status, which also reports the
+    state. For NTP specifically prefer get_ntp_status, which also reports the
     configured servers. Starting or stopping a service is a write — this skill
     cannot do it; use vmware-aiops.
 
@@ -883,7 +891,7 @@ def get_host_services(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def host_log_scan(
+def scan_host_logs(
     host_name: Optional[str] = None,
     lines: int = 500,
     target: Optional[str] = None,
@@ -906,7 +914,7 @@ def host_log_scan(
     the reason (e.g. the account lacks Global.Diagnostics); empty ``items`` means
     nothing matched only when ``logs_unavailable`` is empty too.
 
-    Use this when get_events or host_investigation_bundle show a host in trouble
+    Use this when get_events or investigate_host show a host in trouble
     but not why: vCenter events and ESXi syslog are different sources. Filter
     with ``host_name`` to keep the scan fast on large clusters; a name that
     matches no host returns an error (get the exact name from list_esxi_hosts),
@@ -938,12 +946,12 @@ def host_log_scan(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vm_info(vm_name: str, target: Optional[str] = None) -> dict:
+def get_vm_info(vm_name: str, target: Optional[str] = None) -> dict:
     """[READ] Get detailed information about one VM (CPU, memory, disks, NICs, snapshots).
 
     Returns a single detail dict, not the list envelope. Static configuration
-    only — for live CPU/memory use vm_performance, and for the same VM correlated
-    with its host, alarms and events use vm_investigation_bundle.
+    only — for live CPU/memory use get_vm_performance, and for the same VM correlated
+    with its host, alarms and events use investigate_vm.
 
     Use this when you already know the exact name; get it from
     list_virtual_machines first, since an unknown name returns a teaching error
@@ -954,7 +962,7 @@ def vm_info(vm_name: str, target: Optional[str] = None) -> dict:
         target: vCenter/ESXi target from config (default if omitted).
     """
     si = _get_connection(target)
-    return get_vm_info(si, vm_name)
+    return _ops_get_vm_info(si, vm_name)
 
 
 @mcp.tool(
@@ -967,7 +975,7 @@ def vm_info(vm_name: str, target: Optional[str] = None) -> dict:
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vm_list_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
+def list_vm_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
     """[READ] List all snapshots of one VM, including the nesting hierarchy.
 
     Returns the list envelope, one row per snapshot with name, description, created
@@ -975,7 +983,7 @@ def vm_list_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
     with ``truncated`` False means the VM genuinely has no snapshots. Read-only —
     creating, reverting and deleting snapshots live in vmware-aiops.
 
-    Use this for one known VM; prefer snapshot_aging to sweep the whole inventory
+    Use this for one known VM; prefer find_aging_snapshots to sweep the whole inventory
     for old or sprawling snapshots. Get the name from list_virtual_machines
     first — an unknown name returns a teaching error.
 
@@ -1002,7 +1010,7 @@ def vm_list_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def host_performance(
+def get_host_performance(
     host_name: Optional[str] = None,
     target: Optional[str] = None,
     limit: Optional[int] = None,
@@ -1016,8 +1024,8 @@ def host_performance(
     provider are skipped, not reported as zero. Point-in-time only — no historical
     trend.
 
-    Use this to find which host is hot, then host_investigation_bundle to drill
-    into it, or vm_performance to see which VMs on it are driving the load.
+    Use this to find which host is hot, then investigate_host to drill
+    into it, or get_vm_performance to see which VMs on it are driving the load.
 
     Args:
         host_name: Filter to a single host by exact name (None = all hosts).
@@ -1025,7 +1033,7 @@ def host_performance(
         limit: Max host rows to return (None = all).
     """
     si = _get_connection(target)
-    return get_host_performance(si, host_name=host_name, limit=limit)
+    return _ops_get_host_performance(si, host_name=host_name, limit=limit)
 
 
 @mcp.tool(
@@ -1038,7 +1046,7 @@ def host_performance(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vm_performance(
+def get_vm_performance(
     vm_name: Optional[str] = None,
     target: Optional[str] = None,
     limit: Optional[int] = 25,
@@ -1056,9 +1064,9 @@ def vm_performance(
     Only powered-on VMs have a real-time provider; powered-off VMs are skipped.
     Point-in-time only.
 
-    Use this to rank load across VMs; for one VM's configuration use vm_info, and
+    Use this to rank load across VMs; for one VM's configuration use get_vm_info, and
     to see the same VM correlated with its host, alarms and events use
-    vm_investigation_bundle.
+    investigate_vm.
 
     Args:
         vm_name: Filter to a single VM by exact name (None = all powered-on VMs).
@@ -1066,7 +1074,7 @@ def vm_performance(
         limit: Max VM rows to return (default 25; None = all).
     """
     si = _get_connection(target)
-    return get_vm_performance(si, vm_name=vm_name, limit=limit)
+    return _ops_get_vm_performance(si, vm_name=vm_name, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1084,7 +1092,7 @@ def vm_performance(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def snapshot_aging(
+def find_aging_snapshots(
     age_threshold_days: int = 30,
     only_old: bool = False,
     target: Optional[str] = None,
@@ -1092,7 +1100,7 @@ def snapshot_aging(
 ) -> dict:
     """[READ] Sweep ALL VMs for snapshots and flag old / sprawling ones.
 
-    Use this for fleet-wide snapshot sprawl; prefer vm_list_snapshots when you
+    Use this for fleet-wide snapshot sprawl; prefer list_vm_snapshots when you
     only care about one VM. Returns {total_snapshots, old_snapshots,
     vms_with_snapshots, threshold_days, snapshots[], hint} — a rollup, not the
     list envelope. Each row has age_days, is_old and an est_size_mb lower bound
@@ -1122,7 +1130,7 @@ def snapshot_aging(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def vm_backup_snapshot_history(
+def get_vm_backup_snapshot_history(
     vm_name: str,
     days: int = 30,
     include_cycles: bool = False,
@@ -1171,7 +1179,7 @@ def vm_backup_snapshot_history(
 
     Duplicate VM names raise rather than resolve to one, because a duration
     attributed to the wrong same-named VM looks exactly like a correct answer.
-    For snapshots that exist right now use vm_list_snapshots or snapshot_aging.
+    For snapshots that exist right now use list_vm_snapshots or find_aging_snapshots.
 
     Args:
         vm_name: Exact VM name; duplicates are refused, not guessed.
@@ -1200,7 +1208,7 @@ def vm_backup_snapshot_history(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def certificate_status(
+def get_certificate_status(
     warn_days: int = 30,
     target: Optional[str] = None,
     limit: Optional[int] = None,
@@ -1212,7 +1220,7 @@ def certificate_status(
     not_after, days_until_expiry and an ``expiring`` flag, soonest first. Host
     certificates only — the vCenter appliance's own certificate is not covered.
 
-    Use this alongside license_status and ntp_status for a platform-hygiene
+    Use this alongside get_license_status and get_ntp_status for a platform-hygiene
     sweep. Renewing a certificate is a write this skill cannot do; use
     vmware-aiops or vCenter directly.
 
@@ -1222,7 +1230,7 @@ def certificate_status(
         limit: Max host rows to return (None = all).
     """
     si = _get_connection(target)
-    return get_certificate_status(si, warn_days=warn_days, limit=limit)
+    return _ops_get_certificate_status(si, warn_days=warn_days, limit=limit)
 
 
 @mcp.tool(
@@ -1235,7 +1243,7 @@ def certificate_status(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def license_status(target: Optional[str] = None) -> dict:
+def get_license_status(target: Optional[str] = None) -> dict:
     """[READ] vCenter/ESXi license inventory with usage and expiry.
 
     Returns the list envelope, one row per license: name, edition_key, total/used
@@ -1243,7 +1251,7 @@ def license_status(target: Optional[str] = None) -> dict:
     enumerated, so ``truncated`` is always False — this is the complete inventory.
 
     Use this to catch over-allocation or an approaching expiry, alongside
-    certificate_status and ntp_status for a platform-hygiene sweep. ``assignments``
+    get_certificate_status and get_ntp_status for a platform-hygiene sweep. ``assignments``
     says which license each asset (vCenter, hosts, clusters) is assigned, with
     ``expired`` per asset — use it to tell whether an "expired license" alarm still
     applies. It is null with ``assignments_note`` when the account cannot read
@@ -1253,7 +1261,7 @@ def license_status(target: Optional[str] = None) -> dict:
         target: vCenter/ESXi target from config (default if omitted).
     """
     si = _get_connection(target)
-    return get_license_status(si)
+    return _ops_get_license_status(si)
 
 
 @mcp.tool(
@@ -1266,7 +1274,7 @@ def license_status(target: Optional[str] = None) -> dict:
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def ntp_status(
+def get_ntp_status(
     host_name: Optional[str] = None,
     target: Optional[str] = None,
 ) -> dict:
@@ -1299,7 +1307,7 @@ def ntp_status(
         target: vCenter/ESXi target from config (default if omitted).
     """
     si = _get_connection(target)
-    return get_ntp_status(si, host_name=host_name)
+    return _ops_get_ntp_status(si, host_name=host_name)
 
 
 # ---------------------------------------------------------------------------
@@ -1317,7 +1325,7 @@ def ntp_status(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def datastore_capacity(
+def get_datastore_capacity(
     target: Optional[str] = None,
     limit: Optional[int] = None,
 ) -> dict:
@@ -1336,7 +1344,7 @@ def datastore_capacity(
     many VMs the figure covers, and ``vms_not_connected`` names those reported as
     orphaned/inaccessible/disconnected (None = could not be read).
 
-    Use this for the capacity view, then datastore_investigation_bundle to drill
+    Use this for the capacity view, then investigate_datastore to drill
     into a specific datastore's hosts, VMs and alarms. Reclaiming space (delete
     snapshots, storage vMotion) belongs to vmware-aiops.
 
@@ -1345,7 +1353,7 @@ def datastore_capacity(
         limit: Max datastore rows to return (None = all).
     """
     si = _get_connection(target)
-    return get_datastore_capacity(si, limit=limit)
+    return _ops_get_datastore_capacity(si, limit=limit)
 
 
 @mcp.tool(
@@ -1358,7 +1366,7 @@ def datastore_capacity(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def resource_pool_usage(
+def get_resource_pool_usage(
     target: Optional[str] = None,
     limit: Optional[int] = None,
 ) -> dict:
@@ -1371,15 +1379,15 @@ def resource_pool_usage(
     different clusters may look alike.
 
     Use this when a VM is throttled but its host is not busy — the cap is usually
-    the pool. Then vm_performance to see which VMs in it are demanding, or
-    cluster_health_summary for the cluster-level picture.
+    the pool. Then get_vm_performance to see which VMs in it are demanding, or
+    get_cluster_health_summary for the cluster-level picture.
 
     Args:
         target: vCenter/ESXi target from config (default if omitted).
         limit: Max pool rows to return (None = all).
     """
     si = _get_connection(target)
-    return get_resource_pool_usage(si, limit=limit)
+    return _ops_get_resource_pool_usage(si, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1397,7 +1405,7 @@ def resource_pool_usage(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def active_tasks(
+def list_active_tasks(
     include_recent: bool = True,
     target: Optional[str] = None,
     limit: Optional[int] = None,
@@ -1411,7 +1419,7 @@ def active_tasks(
     window, so an old task may simply be gone rather than absent.
 
     Use this before blaming load: a migration or clone in flight explains
-    pressure that host_performance shows. Pair with active_sessions to see who
+    pressure that get_host_performance shows. Pair with list_active_sessions to see who
     started it. Read-only — cancelling a task belongs to vmware-aiops.
 
     Args:
@@ -1433,7 +1441,7 @@ def active_tasks(
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors
-def active_sessions(
+def list_active_sessions(
     target: Optional[str] = None,
     limit: Optional[int] = None,
     include_service: bool = False,
@@ -1448,7 +1456,7 @@ def active_sessions(
     counted in ``service_sessions``. Requires the Sessions privilege; low-privilege
     accounts get a single explanatory row instead of a traceback.
 
-    Use this to attribute a change to a person — pair it with active_tasks, which
+    Use this to attribute a change to a person — pair it with list_active_tasks, which
     names the user who started each task. Read-only — terminating a session is
     not supported here.
 

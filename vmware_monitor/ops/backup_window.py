@@ -199,7 +199,7 @@ def _resolve_vm_unique(si: ServiceInstance, vm_name: str) -> vim.VirtualMachine:
         raise AmbiguousVMError(
             f"{len(matches)} VMs are named '{sanitize(vm_name)}'. Backup history for the "
             f"wrong one would look like a valid answer, so this tool refuses to guess. "
-            f"Run vm_investigation_bundle or list_virtual_machines to tell them apart, "
+            f"Run investigate_vm or list_virtual_machines to tell them apart, "
             f"then retry once the duplicate is renamed or removed."
         )
     return matches[0]

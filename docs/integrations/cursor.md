@@ -66,8 +66,8 @@ Add to `~/.cursor/mcp.json`:
 | `list_all_clusters` | List clusters with DRS/HA status |
 | `get_alarms` | Get active alarms |
 | `get_events` | Get recent events |
-| `vm_info` | Get detailed VM information |
-| `cluster_health_summary` | Cross-cluster triage rollup with Top-N issues |
+| `get_vm_info` | Get detailed VM information |
+| `get_cluster_health_summary` | Cross-cluster triage rollup with Top-N issues |
 
 The table above is the most-used subset. The server exposes 27 read-only tools in
 total — performance, host health, platform state, and the investigation bundles are
