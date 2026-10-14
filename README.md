@@ -38,7 +38,7 @@ English | [中文](README-CN.md)
 
 ## Upgrading to 2.0
 
-2.0 renames 23 MCP tools so every name starts with a verb (e.g. `active_sessions` → `list_active_sessions`, `active_tasks` → `list_active_tasks`, `certificate_status` → `get_certificate_status`). The full old → new table is in
+2.0 renames 23 of its 32 MCP tools so every name starts with a verb (e.g. `active_sessions` → `list_active_sessions`, `active_tasks` → `list_active_tasks`, `certificate_status` → `get_certificate_status`). The full old → new table is in
 [RELEASE_NOTES.md](RELEASE_NOTES.md#v200--mcp-tools-renamed-verb-first). Nothing else changes: same tools, parameters,
 safety gates and CLI commands. If an agent prompt, script or `~/.vmware/rules.yaml` names a tool, update it — though deny
 rules written with the old names keep working with vmware-policy ≥ 1.18 (`vmware-audit policy` lists any rule the
