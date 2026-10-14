@@ -36,6 +36,13 @@
 | **[vmware-debug](https://github.com/vmware-skills/VMware-Debug)** | 故障时间线关联、根因定位 | 2 | `uv tool install vmware-debug` |
 | **[vmware-pilot](https://github.com/vmware-skills/VMware-Pilot)** | 多步骤工作流编排、审批门控 | 13 | `uv tool install vmware-pilot` |
 
+## 升级到 2.0
+
+2.0 把 23 个 MCP 工具改成动词在前（例如 `active_sessions` → `list_active_sessions`, `active_tasks` → `list_active_tasks`, `certificate_status` → `get_certificate_status`），完整的新旧名对照表见
+[RELEASE_NOTES.md](RELEASE_NOTES.md#v200--mcp-tools-renamed-verb-first)。其他都不变：工具、参数、安全确认门和 CLI 命令都一样。
+如果 agent 提示词、脚本或 `~/.vmware/rules.yaml` 里写了工具名，请改成新名——不过用旧名写的 deny 规则在
+vmware-policy ≥ 1.18 下仍然生效（`vmware-audit policy` 会列出因改名而多匹配的规则），vmware-pilot ≥ 1.13 也会自动转换已保存工作流里的旧名。
+
 ## ⚡ 快速调查报告
 
 五个有主见的只读报告，直接回答运维最关心的问题——每个都在**服务端聚合并关联**数据，返回高信号结果（绝不把 raw inventory 灌给模型）。每个报告都支持 `--html` 生成**自包含离线 HTML 快照**（零外链、内网主机名不外泄；下钻细节用原生 `<details>` 折叠，零 JavaScript）。

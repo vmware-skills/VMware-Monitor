@@ -36,6 +36,14 @@ English | [中文](README-CN.md)
 | **[vmware-debug](https://github.com/vmware-skills/VMware-Debug)** | Incident timeline correlation, root cause | 2 | `uv tool install vmware-debug` |
 | **[vmware-pilot](https://github.com/vmware-skills/VMware-Pilot)** | Multi-step workflow orchestration, approval gates | 13 | `uv tool install vmware-pilot` |
 
+## Upgrading to 2.0
+
+2.0 renames 23 MCP tools so every name starts with a verb (e.g. `active_sessions` → `list_active_sessions`, `active_tasks` → `list_active_tasks`, `certificate_status` → `get_certificate_status`). The full old → new table is in
+[RELEASE_NOTES.md](RELEASE_NOTES.md#v200--mcp-tools-renamed-verb-first). Nothing else changes: same tools, parameters,
+safety gates and CLI commands. If an agent prompt, script or `~/.vmware/rules.yaml` names a tool, update it — though deny
+rules written with the old names keep working with vmware-policy ≥ 1.18 (`vmware-audit policy` lists any rule the
+renames widened), and vmware-pilot ≥ 1.13 translates old names in saved workflows.
+
 ## ⚡ Quick Investigation Reports
 
 Five opinionated, read-only reports that answer an operator's real questions — each **aggregates and correlates server-side** and hands back a high-signal result (never raw inventory). Every report also renders a **self-contained offline HTML snapshot** with `--html` (no external assets, nothing leaves the machine; drill-down detail collapses in native `<details>` sections, zero JavaScript).
