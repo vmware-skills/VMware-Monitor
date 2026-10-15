@@ -1,4 +1,4 @@
-## Unreleased — calls on one target run side by side; `get_access_info`
+## v2.3.0 — calls on one target run side by side; `get_access_info`
 
 Needs vmware-policy 1.22.0.
 
