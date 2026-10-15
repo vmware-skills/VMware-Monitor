@@ -1,3 +1,10 @@
+## v2.1.0 — `mcp --expose` options; the account is the boundary
+
+`vmware-monitor mcp` accepts the family's new `--expose` / `--allow-write` options (vmware-policy 1.20.0). This server has
+no write tools, so `--expose read` offers the same tools as the default; the options exist so every server in the
+family can be started the same way. `references/setup-guide.md` now says why the service account must itself be
+read-only: an agent with a shell can reach the platform without this skill. Requires `vmware-policy>=1.20.0`.
+
 ## v2.0.0 — MCP tools renamed verb-first
 
 **Breaking for MCP clients.** 23 of the 32 MCP tools have new names. The family now follows one naming
