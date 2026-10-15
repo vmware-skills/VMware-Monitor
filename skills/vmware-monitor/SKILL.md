@@ -254,15 +254,16 @@ VMware Tools not installed or not running in the guest. Install/start VMware Too
 ### Doctor passes but commands fail with timeout
 vCenter may be under heavy load. Try targeting a specific ESXi host directly instead of vCenter, or increase connection timeout in config.yaml.
 
+### Doctor passes but every command fails with "session is not authenticated"
+The account has no vSphere role. Assign one (Read-Only or higher) on the vCenter root folder; `vmware-monitor doctor` reports this case by name.
+
 ### Should I set `environment:` on a read-only skill?
-You can — add `environment: production` (or `staging`, `lab`, your own label)
-to each target in `~/.vmware-monitor/config.yaml`. It's an optional label; this
-skill has zero write tools, so nothing it exposes is ever gated by it — reads
-are never gated. It matters for the write skills (`vmware-aiops`,
-`vmware-storage`, `vmware-nsx`) pointed at the same vCenter: an
-environment-scoped `deny` rule in `~/.vmware/rules.yaml` can match on the label
-to block their writes (e.g. freeze `production`). A target with no label is
-simply not matched by such a rule. Config example: `references/setup-guide.md`.
+Optional: add `environment: production` (or `staging`, `lab`, your own label)
+to each target in `~/.vmware-monitor/config.yaml`. Reads are never gated by it.
+It matters for the write skills (`vmware-aiops`, `vmware-storage`, `vmware-nsx`)
+on the same vCenter: an environment-scoped `deny` rule in `~/.vmware/rules.yaml`
+can match the label to block their writes (e.g. freeze `production`).
+Config example: `references/setup-guide.md`.
 
 ## Setup
 

@@ -1,3 +1,17 @@
+## Unreleased — an account with no vSphere role is named, not passed (AIops#47)
+
+Needs vmware-policy 1.23.0.
+
+* **A login with no vSphere role fails at connect time with the reason.** vCenter accepts the login but shows no
+  session for it, and every call then fails with `NotAuthenticated`. The connection is now closed at once and
+  `doctor`, the CLI and MCP tools say the account most likely has no vSphere role and to assign one (Read-Only or
+  higher). Reported on vCenter 8.0.3; not yet reproduced on our own hardware.
+* **`NotAuthenticated` later on names both causes**: the session expired (retry), or the account's role was
+  removed. It no longer says "verify connectivity and credentials".
+* **`attention` never reports OK for targets it could not read.** Any unread target makes the overall status at
+  least WARN, none read makes it CRITICAL, and `totals.status_reason` (shown in the console and HTML) says how
+  many targets were not read. A role-less target is listed as unreachable with reason `NoVSphereRoleError`.
+
 ## v2.3.0 — calls on one target run side by side; `get_access_info`
 
 Needs vmware-policy 1.22.0.

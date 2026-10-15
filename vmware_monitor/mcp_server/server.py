@@ -30,6 +30,7 @@ from typing import Any, Literal, Optional
 
 # MCP SDK — Model Context Protocol server framework
 from mcp.server.fastmcp import FastMCP
+from pyVmomi import vim
 from vmware_policy import (
     describe_tool_parameters,
     mtime_cached_loader,
@@ -43,7 +44,11 @@ from vmware_monitor import __version__
 
 # Internal VMware monitoring modules (all read-only operations)
 from vmware_monitor.config import CONFIG_FILE, ConfigError, load_config
-from vmware_monitor.connection import ConnectionManager
+from vmware_monitor.connection import (
+    NOT_AUTHENTICATED_HINT,
+    ConnectionManager,
+    NoVSphereRoleError,
+)
 from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
 from vmware_monitor.ops.attention import (
     get_cross_vcenter_attention as _ops_get_cross_vcenter_attention,
@@ -142,6 +147,14 @@ def _safe_error(exc: Exception, tool: str) -> str:
     # ConnectError that names the target and verify_ssl instead.
     if isinstance(exc, ssl.SSLError):
         return f"{type(exc).__name__}: operation failed."
+    # AIops#47. The role message is authored from the target name and fixed
+    # text, and is longer than the 300-character cap that would cut off its
+    # remedy; NotAuthenticated is a vmodl fault, which would otherwise be
+    # reduced to its class name with a hint about credentials.
+    if isinstance(exc, NoVSphereRoleError):
+        return sanitize(str(exc), 600)
+    if isinstance(exc, vim.fault.NotAuthenticated):
+        return f"NotAuthenticated: {NOT_AUTHENTICATED_HINT}"
     _passthrough = (
         ValueError,
         FileNotFoundError,
@@ -161,6 +174,17 @@ def _safe_error(exc: Exception, tool: str) -> str:
 
 
 _DOCTOR_HINT = "Run 'vmware-monitor doctor' to verify connectivity and credentials."
+#: For the two failures where connectivity and credentials are fine (AIops#47).
+_ROLE_HINT = (
+    "Run 'vmware-monitor doctor': it checks every target's login and whether "
+    "vCenter gives the account a session."
+)
+
+
+def _hint_for(exc: Exception) -> str:
+    if isinstance(exc, (NoVSphereRoleError, vim.fault.NotAuthenticated)):
+        return _ROLE_HINT
+    return _DOCTOR_HINT
 
 
 def _catch_tool_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -178,7 +202,7 @@ def _catch_tool_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
         try:
             return fn(*args, **kwargs)
         except Exception as e:
-            return {"error": _safe_error(e, fn.__name__), "hint": _DOCTOR_HINT}
+            return {"error": _safe_error(e, fn.__name__), "hint": _hint_for(e)}
 
     return wrapper
 
@@ -668,7 +692,10 @@ def get_cross_vcenter_attention(
     yourself. Returns a rollup, not the list envelope; lead with ``top_issues``.
 
     Degrades gracefully: an unreachable target is listed under ``unreachable``
-    with a reason and the rest still aggregate. Point-in-time — no trending.
+    with a reason and the rest still aggregate, but it is never counted as
+    healthy: ``totals.worst_status`` is at least ``warn`` (``critical`` when no
+    target answered) and ``totals.status_reason`` says how many were not read.
+    Point-in-time — no trending.
     Overlap is removed by identity: a host reached through a vCenter and as its
     own ESXi target counts once (hardware UUID), a datastore seen through both is
     one issue with the other view's figure under ``also_seen_via`` (datastore

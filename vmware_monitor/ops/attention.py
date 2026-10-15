@@ -181,6 +181,30 @@ def _host_overlap(collected: list[tuple[str, dict, dict | None]]) -> dict[str, d
     return overlap
 
 
+def _floor_for_unread(totals: dict, read: int, unread: int) -> None:
+    """Never let a target that could not be read count as healthy (AIops#47).
+
+    The worst status only came from targets that answered, so a vCenter that
+    refused every call left the estate ``ok`` — "0 vCenters … overall: OK" for an
+    estate nobody had looked at. Any unread target makes it at least ``warn``;
+    nothing read at all makes it ``critical``. ``status_reason`` says why, so a
+    renderer can show it next to the status. ``totals`` is this function's own
+    freshly built dict, filled in place like the loop above it.
+    """
+    if read and not unread:
+        totals["status_reason"] = None
+        return
+    floor = "critical" if not read else "warn"
+    if _STATUS_ORDER[floor] < _STATUS_ORDER.get(totals["worst_status"], 2):
+        totals["worst_status"] = floor
+    configured = read + unread
+    totals["status_reason"] = (
+        f"{unread} of {configured} target{'' if configured == 1 else 's'} could not be read"
+        if configured
+        else "no target was read"
+    )
+
+
 def get_cross_vcenter_attention(
     sessions: list[tuple[str, ServiceInstance]],
     unreachable: list[tuple[str, str]] | None = None,
@@ -207,8 +231,10 @@ def get_cross_vcenter_attention(
         its ``vcenter``; a datastore seen through two targets is one issue with the
         other view under ``also_seen_via``), ``issues_total``, ``totals``
         (estate-wide, hosts counted once; ``vcenters`` / ``esxi_targets`` /
-        ``unidentified_targets``), ``unreachable``, ``snapshot`` and
-        ``customization_hint``.
+        ``unidentified_targets``; ``worst_status`` is at least ``warn`` when a
+        target could not be read and ``critical`` when none could, with
+        ``status_reason`` saying so, else ``None``), ``unreachable``, ``snapshot``
+        and ``customization_hint``.
     """
     unreachable_out = [{"vcenter": n, "reason": r} for n, r in (unreachable or [])]
     collected: list[tuple[str, dict, dict | None]] = []
@@ -297,6 +323,8 @@ def get_cross_vcenter_attention(
         totals["alarms"]["warning"] += t.get("alarms", {}).get("warning", 0)
         if _STATUS_ORDER.get(worst, 2) < _STATUS_ORDER.get(totals["worst_status"], 2):
             totals["worst_status"] = worst
+
+    _floor_for_unread(totals, read=len(collected), unread=len(unreachable_out))
 
     # Global re-rank across every target's anomalies (reuses the summary ranking).
     top_issues, issues_total = _rank_issues(kept, top_n)

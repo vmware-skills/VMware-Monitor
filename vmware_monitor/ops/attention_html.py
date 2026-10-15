@@ -98,6 +98,9 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         f'<span class="w">{al.get("warning", 0)}</span><small> warn</small></div></div>',
     ]
 
+    reason = totals.get("status_reason")
+    reason_line = f'<div class="stamp">{escape(str(reason))}</div>' if reason else ""
+
     unreachable = data.get("unreachable", [])
     unreachable_block = ""
     if unreachable:
@@ -108,7 +111,7 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         unreachable_block = (
             f'<div class="issue warn" style="margin-bottom:24px"><div class="rank">!</div>'
             f'<div class="chip warn">Skipped</div><div class="what"><div class="prob">'
-            f"{len(unreachable)} vCenter(s) unreachable</div>"
+            f"{len(unreachable)} target(s) unreachable, not included in the status</div>"
             f'<div class="obj">{items}</div></div><div class="next"></div></div>'
         )
 
@@ -120,6 +123,13 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         issues_block = (
             f'<div class="section-label">Top issues across all vCenters <span class="count">{count}</span></div>'
             f'<div class="issues">{rows}</div>'
+        )
+    elif totals.get("status_reason"):
+        # Nothing found on the targets that were read is not "every vCenter is OK"
+        # when some were not read (AIops#47).
+        issues_block = (
+            '<div class="clean-all">No issues on the targets that were read — '
+            f"but {escape(str(totals['status_reason']))}.</div>"
         )
     else:
         issues_block = '<div class="clean-all">No issues detected — every vCenter is OK.</div>'
@@ -144,7 +154,7 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         '<h1>What needs attention <span class="vc">now</span></h1></div>'
         f'<div class="stamp">Snapshot {escape(stamp)}</div>'
         f'<div class="overall {STATUS_CLASS.get(worst, "ok")}"><span class="dot"></span>'
-        f"{STATUS_LABEL.get(worst, worst)}</div></header>"
+        f"{STATUS_LABEL.get(worst, worst)}</div>{reason_line}</header>"
         f'<div class="totals" style="--tc:4">{"".join(cells)}</div>'
         f"{unreachable_block}"
         f"{issues_block}"

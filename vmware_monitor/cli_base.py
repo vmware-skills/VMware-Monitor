@@ -40,8 +40,9 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        from pyVmomi import vmodl
+        from pyVmomi import vim, vmodl
 
+        from vmware_monitor.connection import NOT_AUTHENTICATED_HINT, NoVSphereRoleError
         from vmware_monitor.ops.memory_tiering import MemoryTieringUnsupportedError
         from vmware_monitor.ops.vm_info import VMNotFoundError
         from vmware_monitor.rest import RestAuthError, RestNotFoundError
@@ -87,11 +88,21 @@ def cli_errors(fn: Callable[..., Any]) -> Callable[..., Any]:
                 f"'vmware-monitor health alarms', 'vmware-monitor scan logs', "
                 f"'vmware-monitor summary'."
             )
+        except vim.fault.NotAuthenticated:
+            # An account with no vSphere role looks exactly like this (AIops#47),
+            # and 'doctor' passed for it, so "verify credentials" was a dead end.
+            fail(NOT_AUTHENTICATED_HINT)
         except vmodl.MethodFault as e:
             fail(
                 f"vSphere API fault: {getattr(e, 'msg', None) or type(e).__name__}. "
-                "Run 'vmware-monitor doctor' to verify connectivity and credentials."
+                "Run 'vmware-monitor doctor' to check connectivity, credentials and the "
+                "account's vSphere role, and 'vmware-monitor access-info' for what this "
+                "account may do."
             )
+        except NoVSphereRoleError as e:
+            # Authored at connect time; the OSError clause below would wrap it in
+            # "Connection failed: … verify connectivity and credentials".
+            fail(str(e))
         except (ConnectionError, OSError) as e:
             fail(
                 f"Connection failed: {e}. "

@@ -974,11 +974,14 @@ def render_attention_console(data: dict) -> None:
 
     Public so vmware-aiops can present the identical view via the delegated library.
     """
+    from rich.markup import escape
+
     t = data["totals"]
     console.print(
         f"[bold]What needs attention[/] — {_target_counts(t)}, "
         f"{t['clusters']} clusters, {t['hosts_connected']}/{t['hosts_total']} hosts connected"
         f"  ·  overall: [{_STATUS_STYLE[t['worst_status']]}]{t['worst_status'].upper()}[/]"
+        + (f" ({escape(t['status_reason'])})" if t.get("status_reason") else "")
     )
     for u in data.get("unreachable", []):
         console.print(f"[yellow]unreachable:[/] {u['vcenter']} ({u['reason']})")
