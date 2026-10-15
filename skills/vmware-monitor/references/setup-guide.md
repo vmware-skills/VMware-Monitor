@@ -215,6 +215,13 @@ vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
 - Behind a reverse proxy that terminates TLS (Nginx, HAProxy) on the same machine, use
   `--transport http --host 127.0.0.1 --public-name mcp.example.com` (the names the proxy forwards in `Host`), and
   have the proxy pass the `Authorization` header through.
+- Behind a load balancer or gateway on another machine, keep `--transport https` (a self-signed certificate is
+  fine: the balancer is the client that has to trust it), list in `--public-name` the host name the balancer sends
+  as `Host`, and have it forward `Authorization`. Point its health probe at `GET /healthz`: it needs no token, returns
+  only `{"status": "ok"}` and accepts any `Host` (vmware-policy ≥ 1.23.0). Every other path still needs the token.
+- Correlation: each audit row stores the caller's `traceparent` trace-id, else its `X-Request-ID` /
+  `X-Correlation-ID`. Have the agent platform send one, and `vmware-audit log --correlation-id ID` lists the calls
+  behind one platform request.
 - `vmware-audit token list` / `token revoke NAME` manage callers; a revoked token is refused from its next request.
   Replace a leaked token under a new name.
 - The server will not start without at least one token, and checks before it binds that unauthenticated requests
