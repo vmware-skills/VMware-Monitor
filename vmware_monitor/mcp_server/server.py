@@ -1572,13 +1572,27 @@ def _exit_on_stop_signals() -> None:
         signal.signal(sig, _stop)
 
 
-def main(expose: Optional[str] = None, allow_write: Optional[str] = None) -> None:
+def main(
+    expose: Optional[str] = None,
+    allow_write: Optional[str] = None,
+    transport: Optional[str] = None,
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+    public_name: Optional[str] = None,
+    token_file: Optional[str] = None,
+) -> None:
     """Run the MCP server over stdio."""
     logging.basicConfig(level=logging.INFO)
     _exit_on_stop_signals()
-    from vmware_policy.exposure import apply_or_exit
-    apply_or_exit(mcp, skill="monitor", expose=expose, allow_write=allow_write)
-    mcp.run(transport="stdio")
+    from vmware_policy.serve import run_server
+    run_server(
+        mcp,
+        skill="monitor",
+        expose=expose, allow_write=allow_write, transport=transport, host=host, port=port,
+        cert=cert, key=key, public_name=public_name, token_file=token_file,
+    )
 
 
 # vSphere 9.1 read tools (memory tiering + vLCM/deployment REST) live in a focused

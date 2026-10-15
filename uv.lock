@@ -1195,7 +1195,7 @@ wheels = [
 
 [[package]]
 name = "vmware-monitor"
-version = "2.1.0"
+version = "2.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
@@ -1220,13 +1220,13 @@ dev = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.10,<4.0" },
     { name = "httpx", specifier = ">=0.27,<1.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.10,<2.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.28,<2.0" },
     { name = "pyaml", specifier = ">=24.0,<27.0" },
     { name = "python-dotenv", specifier = ">=1.0,<2.0" },
     { name = "pyvmomi", specifier = ">=8.0.3.0,<10.0" },
     { name = "rich", specifier = ">=13.0,<16.0" },
     { name = "typer", specifier = ">=0.12,<1.0" },
-    { name = "vmware-policy", specifier = ">=1.20.0,<2.0" },
+    { name = "vmware-policy", specifier = ">=1.21.0,<2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1238,14 +1238,14 @@ dev = [
 
 [[package]]
 name = "vmware-policy"
-version = "1.20.0"
+version = "1.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/f3/cae0e18d269bd4764d5f9b34a838174e9668f931e44d41effab620aeecf4/vmware_policy-1.20.0.tar.gz", hash = "sha256:eb9875d3e94435a18d1dd6cf2c71905c46e2e812808556db3fb741ef322bee99", size = 220048, upload-time = "2026-10-15T06:33:35.174Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/5d/4221ea4a344ec33d6b54903682ce8ae2013bb0a2d6137c94ac769690ea8b/vmware_policy-1.21.0.tar.gz", hash = "sha256:f42b794ea69e52e1fa13aff8b5bc07631d82683b1c12872f2f2ec744e3853549", size = 303862, upload-time = "2026-10-15T10:13:33.719Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/cf/6c87f6b5439407c1c3b83b84a5ef53def7544b687efd6f16a6cb187acf78/vmware_policy-1.20.0-py3-none-any.whl", hash = "sha256:cea9451c70be96e3d7adc420a2ac001cf431c29b61350dd58c3771378058737a", size = 86684, upload-time = "2026-10-15T06:33:33.413Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/b4/feb7015ae5f7870e8058ad713050f7fe3ddefa57aa7bdd4a83f2e3b9abb4/vmware_policy-1.21.0-py3-none-any.whl", hash = "sha256:a10c26816be09f9a2823cc58bc4eacb9b5eff8b6df49dfc5b504b3d76cb3b7ec", size = 99818, upload-time = "2026-10-15T10:13:31.67Z" },
 ]
