@@ -92,10 +92,7 @@ def test_repeated_eviction_does_not_pin_every_session() -> None:
         for _ in range(20):
             seen.append(weakref.ref(mgr.connect("vcenter-prod")))
 
-    live = mgr._connections.pop("vcenter-prod", None)
-    if live is not None:
-        _release_si(live)
-        del live
+        mgr.disconnect("vcenter-prod")  # the last one is still cached
     gc.collect()
 
     pinned = sum(1 for r in seen if r() is not None)

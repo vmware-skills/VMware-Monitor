@@ -7,7 +7,7 @@
 
 [English](README.md) | 中文
 
-**只读** VMware vCenter/ESXi 监控 — 32 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
+**只读** VMware vCenter/ESXi 监控 — 33 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
 
 > **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数——不是提示词约束，是这些代码根本不存在。
 >
@@ -138,6 +138,7 @@ ESXi 独立主机 ──→ VM
 | 事件日志查询 | ✅ | ✅ | 按时间、严重级别过滤，识别 50+ 事件类型 |
 | 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red） — CLI `health sensors`，MCP `get_host_sensors` |
 | 主机服务状态 | ✅ | ✅ | 服务运行/停止状态 — CLI `health services`，MCP `get_host_services` |
+| 账号权限 | ✅ | ✅ | server 使用哪个账号，以及它在根文件夹上是否具备每个工具所需的权限 — CLI `access-info`，MCP `get_access_info` |
 
 ### 3. VM 信息与快照列表（只读）
 
@@ -257,7 +258,7 @@ vCenter 可能负载过高。尝试直接连接特定 ESXi 主机而非 vCenter�
 
 ### MCP Server 集成（本地 Agent）
 
-vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 32 个工具均为**只读**，由上述白名单闸门守住。
+vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](examples/mcp-configs/)。所有 33 个工具均为**只读**，由上述白名单闸门守住。
 
 | Agent / 工具 | 本地模型支持 | 配置模板 | 集成指南 |
 |-------------|:----------:|---------|---------|
@@ -374,6 +375,7 @@ vmware-monitor health alarms --target home-esxi
 # 环境诊断
 vmware-monitor doctor                   # 检查环境、配置、连通性
 vmware-monitor doctor --skip-auth       # 跳过 vSphere 认证检查（更快）
+vmware-monitor access-info [--tool <mcp-tool>] [--target <name>]  # 当前账号 + 每个工具的权限
 
 # MCP 配置生成
 vmware-monitor mcp-config generate --agent goose        # 生成 Goose 配置
@@ -481,8 +483,8 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
   证书要用客户端信任、且覆盖这些名字的证书。
 - 在同一台机器上由反向代理终结 TLS 时，用 `--transport http --host 127.0.0.1 --public-name mcp.example.com`，
   并让代理透传 `Authorization` 头。
-- 审计日志把每个调用者记为 `token:<名字>`。指定不同 target 的调用并行执行；不指定 target 的调用逐个执行，
-  所以多人共用一个 server 时请写明 target。
+- 审计日志把每个调用者记为 `token:<名字>`。调用并行执行，每个 target 最多 `VMWARE_MCP_POOL_SIZE`（默认 2）
+  个会话；每个会话都是在该 target 上的一次登录，一个调用最多等待 300 秒拿到会话。
 - **能连到这个端点的人，都以该 server 配置的账号操作。** token 只用来识别调用者，不在平台上授予任何权限。
   每个权限级别单独起一个端点。
 

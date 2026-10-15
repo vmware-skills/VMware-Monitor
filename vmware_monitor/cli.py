@@ -17,7 +17,7 @@ from typing import Optional, Annotated
 import typer
 from rich.table import Table
 
-from vmware_monitor import cli_observability, cli_vsphere91
+from vmware_monitor import cli_access, cli_observability, cli_vsphere91
 from vmware_monitor.cli_base import (
     ConfigOption,
     TargetOption,
@@ -84,6 +84,7 @@ cli_observability.register(app)
 
 # vSphere 9.1 read command groups (memory tiering / vLCM patch / deployment size).
 cli_vsphere91.register(app)
+cli_access.register(app)
 
 
 # ─── Inventory ────────────────────────────────────────────────────────────────

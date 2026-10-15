@@ -24,6 +24,7 @@ License: MIT
 import functools
 import logging
 import ssl
+import threading
 from collections.abc import Callable
 from typing import Any, Literal, Optional
 
@@ -295,19 +296,25 @@ mcp._mcp_server.version = __version__
 # ---------------------------------------------------------------------------
 
 _conn_mgr: Optional[ConnectionManager] = None
+# Calls run in worker threads side by side (HLD §16 D-13(2)); without the lock two
+# first calls could each build a manager, and so a second pool of sessions.
+_conn_mgr_lock = threading.Lock()
 
 
 def _ensure_conn_mgr() -> ConnectionManager:
     """Lazily build the shared ConnectionManager (does not connect anything)."""
     global _conn_mgr  # noqa: PLW0603
-    if _conn_mgr is None:
-        # No env-var read here: load_config resolves the path (explicit arg,
-        # then the environment, then the default). This copy was the reason the
-        # server and the CLI opened different files — load_config did not look
-        # at the variable at all, so only this path honoured it (形态 #6).
-        config = load_config()
-        _conn_mgr = ConnectionManager(config)
-    return _conn_mgr
+    if _conn_mgr is not None:
+        return _conn_mgr
+    with _conn_mgr_lock:
+        if _conn_mgr is None:
+            # No env-var read here: load_config resolves the path (explicit arg,
+            # then the environment, then the default). This copy was the reason the
+            # server and the CLI opened different files — load_config did not look
+            # at the variable at all, so only this path honoured it (形态 #6).
+            config = load_config()
+            _conn_mgr = ConnectionManager(config)
+        return _conn_mgr
 
 
 def _get_connection(target: Optional[str] = None) -> Any:
@@ -1470,6 +1477,51 @@ def list_active_sessions(
     return get_active_sessions(si, limit=limit, include_service=include_service)
 
 
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
+@vmware_tool(risk_level="low")
+@_catch_tool_errors
+def get_access_info(
+    tool: Optional[str] = None,
+    target: Optional[str] = None,
+) -> dict:
+    """[READ] The account this server uses on a target, and whether it holds a tool's privileges.
+
+    When to use: a tool failed with NoPermission, returned fewer objects than
+    expected, or you want to know up front what the configured account may read.
+    Ask about one ``tool``, or omit it to sort every tool of this server into
+    granted / not granted / undetermined.
+
+    What it returns: {target, account, checked_on, privileges {id: state}, and
+    either ``tool`` {name, requires, verdict, meaning, missing_at_root} or the
+    tools_* lists}, plus the account's direct permissions (role, on, propagate).
+
+    Gotchas: privileges are checked on the vCenter/ESXi **root folder** only.
+    ``not_granted_at_root`` does not mean no access — a permission on a cluster,
+    folder or VM still lets the tool work there. ``undetermined`` means the
+    platform did not answer and is never to be read as granted. Permissions held
+    through a group count in the verdict but are not listed by name.
+
+    Args:
+        tool: A tool name on this server, e.g. list_active_sessions (None = all tools).
+        target: vCenter/ESXi target from config (default if omitted).
+    """
+    from vmware_policy.access import vsphere_access_info
+
+    from vmware_monitor.access_requirements import REQUIREMENTS
+
+    si = _get_connection(target)
+    return vsphere_access_info(
+        si, target=_get_target_config(target).name, requirements=REQUIREMENTS, tool=tool
+    )
+
+
 # ---------------------------------------------------------------------------
 # Environment declaration
 # ---------------------------------------------------------------------------
@@ -1592,6 +1644,7 @@ def main(
         skill="monitor",
         expose=expose, allow_write=allow_write, transport=transport, host=host, port=port,
         cert=cert, key=key, public_name=public_name, token_file=token_file,
+        pooled=True,
     )
 
 

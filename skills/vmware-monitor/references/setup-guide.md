@@ -161,7 +161,7 @@ For Claude Code / Cursor users who prefer structured tool calls, add to `~/.clau
 > PyPI on each launch and breaks behind corporate TLS proxies. The legacy
 > `vmware-monitor-mcp` entry point is also kept for backward compatibility.
 
-MCP exposes 32 read-only tools:
+MCP exposes 33 read-only tools:
 
 | Group | Tools |
 |---|---|
@@ -173,6 +173,7 @@ MCP exposes 32 read-only tools:
 | Investigation bundles | `investigate_vm`, `investigate_host`, `investigate_datastore` |
 | Patching & vSphere 9 | `get_cluster_patch_compliance`, `get_cluster_last_apply_result`, `get_host_memory_tiering`, `get_vcenter_deployment_size` |
 | Backups | `get_vm_backup_snapshot_history` |
+| Account access | `get_access_info` |
 
 All accept an optional `target` parameter except `get_cross_vcenter_attention`, which
 sweeps every configured target by design.
@@ -218,8 +219,8 @@ vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
   Replace a leaked token under a new name.
 - The server will not start without at least one token, and checks before it binds that unauthenticated requests
   are refused.
-- Each audit row records the caller as `token:<name>`. Calls naming different targets run in parallel; calls that
-  name no target run one at a time, so name the target when several people use one server.
+- Each audit row records the caller as `token:<name>`. Calls run side by side, with up to `VMWARE_MCP_POOL_SIZE`
+  (default 2) sessions per target; each session is a login on the target, and a call waits at most 300 s for one.
 - **Everyone who can reach the endpoint acts with this server's account.** Tokens identify callers; they grant
   nothing on the platform. Run one endpoint per privilege level (for example a read-only account behind
   `--expose read`, and a separate endpoint for operators).
@@ -260,7 +261,7 @@ nothing in the skill can stop the same credentials being used another way.
 
 ### MCP Server — Local Agent Compatibility
 
-The MCP server works with any MCP-compatible agent via stdio transport. All 32 tools are **read-only** toward vSphere. Config templates in `examples/mcp-configs/`:
+The MCP server works with any MCP-compatible agent via stdio transport. All 33 tools are **read-only** toward vSphere. Config templates in `examples/mcp-configs/`:
 
 | Agent | Local Models | Config Template |
 |-------|:----------:|-----------------|

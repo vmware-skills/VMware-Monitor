@@ -15,6 +15,12 @@ vmware-monitor doctor [--skip-auth]
 
 Checks config file, connectivity, authentication, and pyVmomi version. Use `--skip-auth` to test config parsing without connecting.
 
+```bash
+vmware-monitor access-info [--tool <mcp-tool>] [--target <name>]
+```
+
+Which account the target sees, and whether it holds the privileges each MCP tool needs (one tool with `--tool`). Checked on the root folder: `not_granted_at_root` can still be granted on a cluster, folder or VM; `undetermined` is never read as granted. Prints JSON. MCP tool: `get_access_info`.
+
 ## MCP Config Generator
 
 ```bash

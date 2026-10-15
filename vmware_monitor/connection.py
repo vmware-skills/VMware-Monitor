@@ -1,6 +1,6 @@
 """Connection management for vCenter and ESXi hosts.
 
-Handles multi-target connections via pyVmomi with session reuse.
+Handles multi-target connections via pyVmomi, with per-target session pools.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pyVmomi import vim
+from vmware_policy.pool import SessionPool
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
@@ -95,10 +96,11 @@ def _release_si(si: ServiceInstance) -> None:
     the id(si) side stores stayed correctly at one entry -- the side-store
     discipline was never the leak, the registration was.
 
-    Boundary: this covers the paths that drop a *connection* -- the eviction
-    inside connect() and disconnect(). A caller that drops the whole
-    ConnectionManager while it still holds connections leaks them exactly as
-    before, since both atexit and this table still reach them. Unchanged rather
+    Boundary: this covers the paths that drop a *connection* -- the session
+    pool's close (dead-session eviction, disconnect, a call's extra session). A
+    caller that drops the whole ConnectionManager while it still holds
+    connections leaks them exactly as before, since both atexit and this table
+    still reach them. Unchanged rather
     than fixed: the reconnect loop is the shape that grows without bound.
     """
     fn = _SI_ATEXIT.pop(id(si), None)
@@ -106,12 +108,52 @@ def _release_si(si: ServiceInstance) -> None:
         atexit.unregister(fn)
 
 
+def _session_alive(si: ServiceInstance) -> bool:
+    """Liveness probe for a pooled session.
+
+    An expired token can surface as a ``None`` currentSession instead of raising
+    (踩坑 #40), and any failure (NotAuthenticated, socket error, …) means the
+    session is unusable.
+    """
+    try:
+        return si.content.sessionManager.currentSession is not None
+    except Exception:
+        return False
+
+
+def _close_session(si: ServiceInstance) -> None:
+    """Drop a session: take back its atexit cleanup, then log it out.
+
+    Called by the pool for an evicted dead session, on disconnect, and for a
+    call's temporary extra session. Never raises: the session may already be dead.
+    """
+    from pyVim.connect import Disconnect
+
+    _release_si(si)
+    try:
+        Disconnect(si)
+    except Exception:
+        pass
+
+
 class ConnectionManager:
-    """Manages connections to multiple vCenter/ESXi targets."""
+    """Manages connections to multiple vCenter/ESXi targets.
+
+    Sessions come from a :class:`vmware_policy.pool.SessionPool` keyed by target
+    name (HLD §16 D-13(2)): inside an MCP call scope each call holds its own
+    session for the whole call, so two calls never interleave SOAP on one
+    connection; outside one (CLI, stdio) one cached session per target is reused.
+    """
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
-        self._connections: dict[str, ServiceInstance] = {}
+        self._pool: SessionPool[ServiceInstance] = SessionPool(
+            "vmware-monitor",
+            # Looked up on self at call time so a test can patch _create_connection.
+            create=lambda name: self._create_connection(self._config.get_target(name)),
+            is_alive=_session_alive,
+            close=_close_session,
+        )
 
     @classmethod
     def from_config(cls, config: AppConfig | None = None) -> ConnectionManager:
@@ -125,39 +167,15 @@ class ConnectionManager:
             if target_name
             else self._config.default_target
         )
-
-        if target.name in self._connections:
-            si = self._connections[target.name]
-            try:
-                # Probe liveness; expired tokens can surface as a None
-                # currentSession instead of raising.
-                alive = si.content.sessionManager.currentSession is not None
-            except Exception:
-                # Any failure (NotAuthenticated, socket error, …) means the
-                # cached session is unusable — drop it and reconnect below.
-                alive = False
-            if alive:
-                return si
-            _release_si(si)
-            del self._connections[target.name]
-
-        si = self._create_connection(target)
-        self._connections[target.name] = si
-        return si
+        return self._pool.get(target.name)
 
     def disconnect(self, target_name: str) -> None:
-        """Disconnect from a specific target."""
-        if target_name in self._connections:
-            from pyVim.connect import Disconnect
-
-            _release_si(self._connections[target_name])
-            Disconnect(self._connections[target_name])
-            del self._connections[target_name]
+        """Disconnect from a specific target (busy sessions close when their call ends)."""
+        self._pool.discard(target_name)
 
     def disconnect_all(self) -> None:
         """Disconnect from all targets."""
-        for name in list(self._connections):
-            self.disconnect(name)
+        self._pool.close_all()
 
     def list_targets(self) -> list[str]:
         """List all configured target names."""
@@ -183,7 +201,7 @@ class ConnectionManager:
 
     def list_connected(self) -> list[str]:
         """List currently connected target names."""
-        return list(self._connections.keys())
+        return self._pool.keys()
 
     @staticmethod
     def _create_connection(target: TargetConfig) -> ServiceInstance:

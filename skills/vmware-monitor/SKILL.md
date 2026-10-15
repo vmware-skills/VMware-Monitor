@@ -21,7 +21,7 @@ compatibility: >
 
 > **Disclaimer**: This is a community-maintained open-source project and is **not affiliated with, endorsed by, or sponsored by VMware, Inc. or Broadcom Inc.** "VMware" and "vSphere" are trademarks of Broadcom. Source code is publicly auditable at [github.com/vmware-skills/VMware-Monitor](https://github.com/vmware-skills/VMware-Monitor) under the MIT license.
 
-Read-only VMware vCenter/ESXi monitoring — 32 MCP tools, zero destructive code.
+Read-only VMware vCenter/ESXi monitoring — 33 MCP tools, zero destructive code.
 
 > **Read-only toward vSphere**: no code path changes vCenter/ESXi state — no power, create, delete, snapshot, or reconfigure call exists. On vCenter it opens only its login session and short-lived query handles it releases. Gate: [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) (source repo, not this bundle) requires every vSphere method called to be on a reviewed allowlist, checked against pyVmomi's type metadata. It checks source, not runtime, and no CI runs it. Independent of this code: use a dedicated account with vCenter's Read-Only role.
 > **Local writes** (this machine only): `init` writes `~/.vmware-monitor/config.yaml` and `.env` (0600; plaintext passwords are rewritten as `b64:` on load); audit logs `~/.vmware/audit.db` (MCP and CLI) and `~/.vmware-monitor/audit.log` (CLI); `--html` snapshots in `~/vmware-health/`; after `daemon start` only, `scan.log`, `daemon.pid` and opt-in webhook posts.
@@ -62,11 +62,9 @@ vmware-monitor doctor
 
 ### Alarm/Event Output: `suggested_actions` Field
 
-`get_alarms` and `get_events` results include a `suggested_actions` list. Each
-item is a ready-to-use hint naming the correct companion skill and tool call
-(e.g. `"vmware-aiops: acknowledge_vcenter_alarm(entity_name=..., alarm_name=...)"`),
-so agents — especially smaller local models — can follow them directly without
-reasoning about skill routing. Example payload: `references/capabilities.md`.
+`get_alarms` and `get_events` results include `suggested_actions`: ready-to-use
+companion-skill tool calls (e.g. `"vmware-aiops: acknowledge_vcenter_alarm(...)"`)
+an agent can follow directly. Example: `references/capabilities.md`.
 
 **Use companion skills for**:
 - Power on/off, deploy, clone, migrate --> `vmware-aiops`
@@ -101,8 +99,8 @@ reasoning about skill routing. Example payload: `references/capabilities.md`.
 1. One glance --> `vmware-monitor summary` (MCP: `get_cluster_health_summary`). Read `top_issues` first (worst first, each with a drill-down `next step`); the per-cluster table is context. `issues_total` shows how many anomalies existed before the top-N cap
 2. Tighten or widen the focus --> `--top 5` for the 5 most urgent, `--top 20` for more, `--top 0` to hide the list and just see the table
 3. Drill into what the list points at --> e.g. a `host_down` row → `inventory hosts`; an `alarm` row → `get_alarms`; a `capacity` row → `perf hosts` / `capacity datastores`; scope with `--cluster prod-a`
-4. Reshape the view on request --> the output ends with a friendly hint; the operator can say "add datastore free space", "drop the DRS column", "only show clusters needing attention", or "save this as an HTML page". Default layout, columns, and thresholds live in [`references/health-summary-template.md`](references/health-summary-template.md) and are meant to be edited
-5. Save an offline snapshot --> `vmware-monitor summary --html` writes a self-contained HTML file (no external assets, nothing uploaded) to `~/vmware-health/cluster-health-<vc>-<timestamp>.html`; `--html-path <file>` for an explicit path. The timestamped filename means a folder of them becomes a browsable point-in-time history. It is a snapshot, not a live page — re-run to refresh
+4. Reshape the view on request --> the output ends with a friendly hint; the operator can say "add datastore free space", "only show clusters needing attention", or "save this as an HTML page". Default layout, columns, and thresholds live in [`references/health-summary-template.md`](references/health-summary-template.md) and are meant to be edited
+5. Save an offline snapshot --> `vmware-monitor summary --html` writes a self-contained HTML file (no external assets, nothing uploaded) to `~/vmware-health/cluster-health-<vc>-<timestamp>.html`; `--html-path <file>` for an explicit path. It is a snapshot, not a live page — re-run to refresh
 6. **On a very large fleet** --> add `--no-vms` to skip the VM rollup pass when you only need host/alarm/capacity signals
 7. **`totals.clusters` is 0** --> not empty: un-clustered hosts (standalone ESXi, or a cluster-less vCenter) form the `(standalone hosts)` row, still in `totals` and `top_issues`
 
@@ -110,10 +108,11 @@ reasoning about skill routing. Example payload: `references/capabilities.md`.
 
 **Judgment**: alarms tell you what vCenter has decided is wrong, events tell you what happened. They diverge — an event burst with no alarms often signals a metric threshold miscalibration, not "everything is fine." Read both.
 
-1. Check alarms --> `vmware-monitor health alarms --target prod-vcenter` — focus on Red severity AND alarms older than 1 hour (transient ones self-clear)
+1. Check alarms --> `vmware-monitor health alarms --target prod-vcenter` — focus on Red severity AND alarms older than 1 hour
 2. Review recent events --> `vmware-monitor health events --hours 24 --severity warning` — look for repeated events from the same entity (a single event is noise; 50 events in an hour is a pattern)
 3. List hosts --> `vmware-monitor inventory hosts` — flag hosts disconnected, in maintenance mode unexpectedly, or memory > 90%
 4. **If connection fails** --> run `vmware-monitor doctor` to diagnose config/network issues
+5. **If a tool says NoPermission or returns too little** --> `vmware-monitor access-info --tool <tool>` (MCP: `get_access_info`) shows what the account may do
 
 ### Object-Centered Investigation ("what is happening around this VM / host / datastore?")
 
@@ -156,7 +155,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | Cloud models (Claude, GPT-4o) | Either | MCP gives structured JSON I/O |
 | Automated pipelines | **MCP** | Type-safe parameters, structured output |
 
-## MCP Tools (32 — all read-only)
+## MCP Tools (33 — all read-only)
 
 | Tool | Description |
 |------|------------|
@@ -187,6 +186,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `get_resource_pool_usage` | Resource-pool CPU/memory reservation, limit, and current usage |
 | `list_active_tasks` | In-flight (and recently completed) vCenter tasks with progress/errors |
 | `list_active_sessions` | Who is logged in, and from which client |
+| `get_access_info` | Account in use, and whether it holds a tool's privileges on the root folder (`undetermined` is not granted) |
 | `scan_host_logs` | ESXi host log trouble lines, grouped by pattern (CLI: `scan logs`) |
 | `get_host_memory_tiering` | **vSphere 9.1** — per-host memory tiering (DRAM/NVMe tiers) + NVMe uplift ratio (pyVmomi `hardware.memoryTierInfo`, needs ESXi 8.0U3+). Params: `host_name`, `limit`. Returns the list envelope |
 | `get_cluster_patch_compliance` | **vSphere 9.1** — vLCM software (patch) compliance for one cluster over vSphere Automation REST. Param: `cluster` (MoID, e.g. `domain-c123`). `available:false` = vCenter answered 503 (likely mid-patch), not an error; `non_compliant_hosts` is `null` when the host-status field is unknown, never a false 0 |
@@ -212,7 +212,7 @@ purpose-built objects — see `references/capabilities.md`.
 
 ## Read-Only by Design
 
-All 32 tools are vSphere reads (local writes: see top). Running
+All 33 tools are vSphere reads (local writes: see top). Running
 with local or small models? See
 [`references/agent-guardrails.md`](references/agent-guardrails.md).
 

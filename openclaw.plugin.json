@@ -1,7 +1,7 @@
 {
   "id": "vmware-monitor",
   "name": "VMware Monitor",
-  "description": "Read-only VMware vCenter/ESXi monitoring for OpenClaw: the vmware-monitor skill plus its MCP server (32 read-only tools). No code path writes to vSphere.",
+  "description": "Read-only VMware vCenter/ESXi monitoring for OpenClaw: the vmware-monitor skill plus its MCP server (33 read-only tools). No code path writes to vSphere.",
   "skills": [
     "./skills"
   ],

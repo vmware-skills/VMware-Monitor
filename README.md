@@ -7,7 +7,7 @@
 
 English | [中文](README-CN.md)
 
-**Read-only** VMware vCenter/ESXi monitoring — 32 tools. No destructive operations exist in this codebase, and a test enforces that.
+**Read-only** VMware vCenter/ESXi monitoring — 33 tools. No destructive operations exist in this codebase, and a test enforces that.
 
 > **Why a separate repository?** VMware Monitor is fully independent from [VMware-AIops](https://github.com/vmware-skills/VMware-AIops). No power off, delete, create, reconfigure, snapshot-create/revert/delete, clone, or migrate functions exist in this codebase — not a prompt constraint, an absence.
 >
@@ -176,6 +176,7 @@ ESXi Standalone ──→ VMs
 | Event/Log Query | ✅ | ✅ | Filter by time range, severity; 50+ event types |
 | Hardware Sensors | ✅ | ✅ | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red) — CLI `health sensors`, MCP `get_host_sensors` |
 | Host Services | ✅ | ✅ | hostd, vpxa running/stopped status — CLI `health services`, MCP `get_host_services` |
+| Account Access | ✅ | ✅ | Which account the server uses and whether it holds each tool's privileges on the root folder — CLI `access-info`, MCP `get_access_info` |
 
 **Monitored Event Types:**
 
@@ -316,7 +317,7 @@ vCenter may be under heavy load. Try targeting a specific ESXi host directly ins
 
 ### MCP Server Integrations
 
-The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 32 tools are **read-only**, enforced by the allowlist gate described above.
+The vmware-monitor MCP server works with **any MCP-compatible agent or tool**. Ready-to-use configuration templates are in [`examples/mcp-configs/`](examples/mcp-configs/). All 33 tools are **read-only**, enforced by the allowlist gate described above.
 
 | Agent / Tool | Local Model Support | Config Template | Integration Guide |
 |-------------|:-------------------:|-----------------|-------------------|
@@ -678,6 +679,7 @@ aider --conventions skills/vmware-monitor/SKILL.md \
 # Diagnostics
 vmware-monitor doctor                   # Check environment, config, connectivity
 vmware-monitor doctor --skip-auth       # Skip vSphere auth check (faster)
+vmware-monitor access-info [--tool <mcp-tool>] [--target <name>]  # Account in use + privileges per tool
 
 # MCP Config Generator
 vmware-monitor mcp-config generate --agent goose        # Generate config for Goose
@@ -813,8 +815,8 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
   before it binds that unauthenticated requests get 401. Use a certificate your clients trust for those names.
 - Behind a TLS-terminating reverse proxy on the same machine use `--transport http --host 127.0.0.1
   --public-name mcp.example.com` and pass the `Authorization` header through.
-- The audit log records each caller as `token:<name>`. Calls naming different targets run in parallel; calls that
-  name no target run one at a time, so name the target when several people share a server.
+- The audit log records each caller as `token:<name>`. Calls run side by side, with up to `VMWARE_MCP_POOL_SIZE`
+  (default 2) sessions per target; each session is a login on the target, and a call waits at most 300 s for one.
 - **Everyone who can reach the endpoint acts with this server's account.** Tokens identify callers; they grant
   nothing on the platform. Run one endpoint per privilege level.
 

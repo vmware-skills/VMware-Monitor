@@ -222,6 +222,21 @@ null otherwise. `entity_name` is unchanged, because vmware-aiops resolves it.
 | `get_datastore_capacity` | `vms_not_connected` | Those VMs the endpoint reports as orphaned / inaccessible / disconnected, as `name (state)`; null when the state could not be read |
 | `get_vcenter_deployment_size` (`deployment-size`) | `available: false`, `reason`, `requires` | The appliance reported a version below 9.1 — an answer, not a failure (audited `ok`). If the version cannot be read, the call still returns an error that explains the 9.1 floor without claiming a build. An ESXi target gets an error saying these REST reads need a vCenter target |
 
+### `get_access_info` — what the configured account may do
+
+`get_access_info(tool=None, target=None)` (CLI `access-info`) asks the target about this
+server's own session (`HasPrivilegeOnEntities`, which needs only System.View) and returns
+`{target, account, checked_on, privileges, ...}`: with `tool`, a `tool` object
+`{name, requires, verdict, meaning, missing_at_root}`; without it, every tool sorted into
+`tools_granted_at_root` / `tools_not_granted_at_root` / `tools_undetermined` /
+`tools_no_privilege_needed`; plus `direct_permissions` (role, object, propagate) granted to
+the account by name. Checked on the **root folder** only — `not_granted_at_root` may still
+be granted on a cluster, folder or VM, and `undetermined` is never read as granted. Only
+`list_active_sessions` (Sessions.TerminateSession), `get_certificate_status`
+(Certificate.Manage) and `scan_host_logs` (Global.Diagnostics) need more than vCenter's
+Read-Only role. The three vSphere Automation REST tools are always `undetermined`: what
+authorizes them (vLCM, appliance) is not a privilege this check can ask about. **Typical response tokens**: ~170 for one tool, ~430 for all.
+
 ### Alarm/Event `suggested_actions` example
 
 `get_alarms` and `get_events` results include a `suggested_actions` list — each
