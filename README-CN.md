@@ -441,6 +441,56 @@ VMware-Monitor/
 
 如果遇到任何报错或问题，请将错误信息、日志或截图发送至 **zhouwei008@gmail.com**。欢迎贡献！
 
+<!-- usage: remote-and-exposure -->
+## 远程访问（HTTPS）与限制工具
+
+默认情况下 `vmware-monitor mcp` 通过 stdio 服务一个本地客户端，并提供全部工具。以下两个选项可以改变这一点
+（需 vmware-policy ≥ 1.21.0）。
+
+**通过 HTTPS 提供服务**，让其他机器上的客户端连接。每个调用者都需要一个 bearer token：
+
+```bash
+vmware-audit token create alice          # 只显示一次，交给 alice
+vmware-audit token list                  # 只列名字
+vmware-audit token revoke alice          # 下一个请求起即拒绝，无需重启
+vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
+    --cert /etc/vmware-mcp/server.pem --key /etc/vmware-mcp/server-key.pem \
+    --public-name mcp.example.com
+```
+
+连接客户端（以 Claude Code 为例；任何支持 streamable HTTP 和自定义请求头的 MCP 客户端都可以）：
+
+```bash
+claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp \
+    --header "Authorization: Bearer $VMWARE_MCP_TOKEN"
+```
+
+```json
+{
+  "mcpServers": {
+    "vmware-monitor": {
+      "type": "http",
+      "url": "https://mcp.example.com:8443/mcp",
+      "headers": { "Authorization": "Bearer ${VMWARE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+- 没有 token 时服务不会启动；`--public-name` 之外的 Host/Origin 一律拒绝；绑定端口前会自检，确认未认证请求得到 401。
+  证书要用客户端信任、且覆盖这些名字的证书。
+- 在同一台机器上由反向代理终结 TLS 时，用 `--transport http --host 127.0.0.1 --public-name mcp.example.com`，
+  并让代理透传 `Authorization` 头。
+- 审计日志把每个调用者记为 `token:<名字>`。指定不同 target 的调用并行执行；不指定 target 的调用逐个执行，
+  所以多人共用一个 server 时请写明 target。
+- **能连到这个端点的人，都以该 server 配置的账号操作。** token 只用来识别调用者，不在平台上授予任何权限。
+  每个权限级别单独起一个端点。
+
+**限制工具：**本 server 的工具全部只读，所以 `--expose read` 在这里不改变任何东西，它是为有写工具的 skill
+准备的。最小权限来自 server 使用的账号。
+
+详见 `skills/vmware-monitor/references/setup-guide.md`（"Serving MCP over HTTPS"、"Limiting which tools are offered"）。
+
 ## 许可证
 
 MIT

@@ -773,6 +773,56 @@ VMware-Monitor/
 
 If you encounter any errors or issues, please send the error message, logs, or screenshots to **zhouwei008@gmail.com**. Contributions are welcome!
 
+<!-- usage: remote-and-exposure -->
+## Remote access (HTTPS) and limiting tools
+
+By default `vmware-monitor mcp` speaks stdio to one local client and offers every tool. Two options change that
+(vmware-policy ≥ 1.21.0).
+
+**Serve over HTTPS** so clients on other machines can connect. Every caller needs a bearer token:
+
+```bash
+vmware-audit token create alice          # prints the token once; give it to alice
+vmware-audit token list                  # names only
+vmware-audit token revoke alice          # refused from its next request, no restart
+vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
+    --cert /etc/vmware-mcp/server.pem --key /etc/vmware-mcp/server-key.pem \
+    --public-name mcp.example.com
+```
+
+Connect a client (Claude Code shown; any MCP client that supports streamable HTTP and custom headers works):
+
+```bash
+claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp \
+    --header "Authorization: Bearer $VMWARE_MCP_TOKEN"
+```
+
+```json
+{
+  "mcpServers": {
+    "vmware-monitor": {
+      "type": "http",
+      "url": "https://mcp.example.com:8443/mcp",
+      "headers": { "Authorization": "Bearer ${VMWARE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+- The server will not start without a token, refuses Host/Origin values outside `--public-name`, and checks
+  before it binds that unauthenticated requests get 401. Use a certificate your clients trust for those names.
+- Behind a TLS-terminating reverse proxy on the same machine use `--transport http --host 127.0.0.1
+  --public-name mcp.example.com` and pass the `Authorization` header through.
+- The audit log records each caller as `token:<name>`. Calls naming different targets run in parallel; calls that
+  name no target run one at a time, so name the target when several people share a server.
+- **Everyone who can reach the endpoint acts with this server's account.** Tokens identify callers; they grant
+  nothing on the platform. Run one endpoint per privilege level.
+
+**Limiting tools:** every tool of this server is read-only, so `--expose read` changes nothing here; it
+exists for the write-capable skills. Least privilege comes from the account the server uses.
+
+Details: `skills/vmware-monitor/references/setup-guide.md` ("Serving MCP over HTTPS", "Limiting which tools are offered").
+
 ## License
 
 MIT

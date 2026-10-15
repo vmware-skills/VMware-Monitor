@@ -8,6 +8,15 @@ vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
     --cert server.pem --key server-key.pem --public-name mcp.example.com
 ```
 
+Connect a client and manage callers (Claude Code shown; any MCP client with streamable HTTP and custom headers works):
+
+```bash
+claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp \
+    --header "Authorization: Bearer $VMWARE_MCP_TOKEN"
+vmware-audit token list                  # names only
+vmware-audit token revoke alice          # refused from its next request, no restart
+```
+
 * Every request needs `Authorization: Bearer <token>`; the server will not start without a token, refuses Host or
   Origin values outside `--public-name`, and checks itself (unauthenticated requests must get 401) before it
   binds. `--transport http` binds loopback only, for a TLS-terminating reverse proxy.
