@@ -198,11 +198,14 @@ ESXi 独立主机 ──→ VM
 2. 查看近期事件：`vmware-monitor health events --hours 24 --severity warning`
 3. 列出主机：`vmware-monitor inventory hosts` — 检查连接状态和内存使用
 
-### 排查特定虚拟机
+### 排查特定对象（钻取）
 
-1. 查找 VM：`vmware-monitor inventory vms --power-state poweredOff`
-2. 获取详情：`vmware-monitor vm info problem-vm`
-3. 查看相关事件：`vmware-monitor health events --hours 48`
+一次调用就把对象与其周边基础设施和近期历史关联起来——见上文 [⚡ 快速调查报告](#-快速调查报告)。
+
+1. 从速览开始：`vmware-monitor attention`（所有 vCenter）或 `vmware-monitor summary`（单个）
+2. 钻取它标出的对象：`vmware-monitor investigate vm <名>`（或 `host` / `datastore`）
+3. 用 `--hours 72` 扩大事件窗口；用 `--html` 分享（离线快照）
+4. **名字不对时** → 教学性错误会告诉你怎么列出对象（`inventory vms/hosts`、`list_all_datastores`）
 
 ### 设置持续监控
 
