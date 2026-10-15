@@ -1512,10 +1512,13 @@ def get_access_info(
         tool: A tool name on this server, e.g. list_active_sessions (None = all tools).
         target: vCenter/ESXi target from config (default if omitted).
     """
-    from vmware_policy.access import vsphere_access_info
+    from vmware_policy.access import unknown_tool_message, vsphere_access_info
 
     from vmware_monitor.access_requirements import REQUIREMENTS
 
+    unknown = unknown_tool_message(tool, REQUIREMENTS)  # no login for a misspelled name
+    if unknown:
+        return {"error": unknown}
     si = _get_connection(target)
     return vsphere_access_info(
         si, target=_get_target_config(target).name, requirements=REQUIREMENTS, tool=tool

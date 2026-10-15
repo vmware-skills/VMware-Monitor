@@ -93,8 +93,11 @@ def test_a_failed_lookup_is_undetermined_not_granted(_wired) -> None:
     assert server.get_access_info(tool="get_alarms")["tool"]["verdict"] == "undetermined"
 
 
-def test_unknown_tool_is_a_teaching_error(_wired) -> None:
-    _wired(_fake_si(set()))
+def test_unknown_tool_is_a_teaching_error(monkeypatch) -> None:
+    def no_login(*_a, **_k):
+        raise AssertionError("connected for a misspelled tool name")
+
+    monkeypatch.setattr(server, "_get_connection", no_login)
     out = server.get_access_info(tool="list_sessions")
     assert "list_active_sessions" in out["error"]
 
