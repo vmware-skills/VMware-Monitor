@@ -44,14 +44,23 @@ def _config(*names: str) -> AppConfig:
     )
 
 
-def _si(has_session: bool) -> MagicMock:
+def _si(has_session: bool, *, root_readable: bool = False) -> MagicMock:
+    """A login as vCenter answers it.
+
+    No role (AIops#47) takes both signals: ``currentSession`` reads ``None`` and
+    a container view on the root folder is refused with NotAuthenticated.
+    ``root_readable`` is the scoped account (one folder, or Supervisor namespace
+    permissions only): no session either, but the root view opens.
+    """
     si = MagicMock()
     si.content.sessionManager.currentSession = object() if has_session else None
+    if not has_session and not root_readable:
+        si.content.viewManager.CreateContainerView.side_effect = vim.fault.NotAuthenticated()
     return si
 
 
-def _connect(mgr: ConnectionManager, target: str, *, role: bool):
-    si = _si(role)
+def _connect(mgr: ConnectionManager, target: str, *, role: bool, root_readable: bool = False):
+    si = _si(role, root_readable=root_readable)
     with (
         patch("pyVim.connect.SmartConnect", return_value=si),
         patch("pyVim.connect.Disconnect") as disconnect,
@@ -82,6 +91,19 @@ def test_a_normal_login_is_unaffected() -> None:
     assert result is si
     disconnect.assert_not_called()
     assert mgr.list_connected() == ["vc1"]
+    mgr.disconnect_all()
+
+
+def test_a_scoped_account_without_a_session_still_connects() -> None:
+    """``currentSession`` alone is not a verdict: a readable root view lets it through."""
+    mgr = ConnectionManager(_config("vc1"))
+    si, result, disconnect = _connect(mgr, "vc1", role=False, root_readable=True)
+
+    assert result is si  # no NoVSphereRoleError
+    disconnect.assert_not_called()
+    assert mgr.list_connected() == ["vc1"]  # cached like any session
+    view = si.content.viewManager.CreateContainerView.return_value
+    view.Destroy.assert_called_once_with()  # the probe leaves no view behind
     mgr.disconnect_all()
 
 
@@ -252,3 +274,6 @@ def test_attention_renderers_say_why(monkeypatch: pytest.MonkeyPatch) -> None:
     # Beside the overall status, and again where "no issues" would have read as all-clear.
     assert html.count("1 of 2 targets could not be read") == 2
     assert "every vCenter is OK" not in html
+    # The skipped-targets row must not say they were left out of the status, which they floor.
+    assert "not included in the status" not in html
+    assert "1 target(s) unreachable and not read; the overall status is raised for them" in html

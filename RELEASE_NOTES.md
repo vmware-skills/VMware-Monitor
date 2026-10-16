@@ -6,6 +6,11 @@ Needs vmware-policy 1.23.0.
   session for it, and every call then fails with `NotAuthenticated`. The connection is now closed at once and
   `doctor`, the CLI and MCP tools say the account most likely has no vSphere role and to assign one (Read-Only or
   higher). Reported on vCenter 8.0.3; not yet reproduced on our own hardware.
+* Refused only when two signals agree: no session, **and** vCenter refuses a view of the root folder
+  (`NotAuthenticated` / `NoPermission`). An account scoped to one folder can also show no session, and still
+  connects; anything the check cannot read lets the login through.
+* The HTML snapshot's skipped-targets row no longer says unread targets are "not included in the status";
+  they raise it.
 * **`NotAuthenticated` later on names both causes**: the session expired (retry), or the account's role was
   removed. It no longer says "verify connectivity and credentials".
 * **`attention` never reports OK for targets it could not read.** Any unread target makes the overall status at

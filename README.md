@@ -289,7 +289,7 @@ VMware Tools not installed or not running in the guest. Install/start VMware Too
 
 vCenter may be under heavy load. Try targeting a specific ESXi host directly instead of vCenter, or increase connection timeout in `config.yaml`.
 
-### Doctor passes but every command fails with "session is not authenticated"
+### `doctor` reports "no vSphere role", or every command fails with "session is not authenticated"
 
 The account logs in but has no vSphere role, so vCenter gives it no session (AIops#47). Assign it a role (Read-Only or higher) on the vCenter root folder: Administration > Access Control > Global Permissions. Changing the password will not help. `vmware-monitor doctor` reports this case by name, and `attention` counts such a target as unread (overall at least WARN).
 

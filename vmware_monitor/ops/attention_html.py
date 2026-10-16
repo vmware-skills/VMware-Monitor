@@ -111,7 +111,7 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         unreachable_block = (
             f'<div class="issue warn" style="margin-bottom:24px"><div class="rank">!</div>'
             f'<div class="chip warn">Skipped</div><div class="what"><div class="prob">'
-            f"{len(unreachable)} target(s) unreachable, not included in the status</div>"
+            f"{len(unreachable)} target(s) unreachable and not read; the overall status is raised for them</div>"
             f'<div class="obj">{items}</div></div><div class="next"></div></div>'
         )
 
