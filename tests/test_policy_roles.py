@@ -30,3 +30,20 @@ def test_metadata_is_declared_when_policy_has_roles():
     assert meta is not None and meta.version == 1
     assert meta.escapes == policy_roles.ESCAPES
     assert (meta.resolver is not None) is True
+
+
+@pytest.mark.unit
+def test_the_resolver_reads_the_config_once_like_the_connection(monkeypatch):
+    """Review H1: a config edit after startup must not move the role check off the
+    target the (load-once) connection manager uses."""
+    from vmware_monitor import policy_roles as pr
+
+    loads = []
+    monkeypatch.setattr(pr, "load_config", lambda: loads.append(1) or object())
+    pr._startup_config.cache_clear()
+    try:
+        first = pr._startup_config()
+        assert pr._startup_config() is first
+        assert loads == [1]
+    finally:
+        pr._startup_config.cache_clear()

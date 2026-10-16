@@ -8,21 +8,32 @@ declared.
 
 from __future__ import annotations
 
-from vmware_policy import mtime_cached_loader, skill_name
+import functools
 
-from vmware_monitor.config import CONFIG_FILE, load_config
+from vmware_policy import skill_name
 
-_cached_config = mtime_cached_loader("VMWARE_MONITOR_CONFIG", CONFIG_FILE, load_config)
-
+from vmware_monitor.config import load_config
 
 #: Tools that give their holder more than a role. Host-path tools are added by
 #: policy while a file root is set.
 ESCAPES = frozenset()
 
 
+@functools.cache
+def _startup_config():
+    """The config as loaded once, like the connection manager, which never reloads it.
+
+    A role must be checked against the target ``connect()`` will use. Following config
+    edits here while connections keep the startup copy let a role limited to one target
+    run a default-target call on another after the file was edited (review H1). Both
+    pick up an edited config together, on restart.
+    """
+    return load_config()
+
+
 def _target_name(target: str | None) -> str:
     """The target the connection layer would use for ``target`` (or the default)."""
-    config = _cached_config()
+    config = _startup_config()
     return (config.get_target(target) if target else config.default_target).name
 
 
