@@ -496,6 +496,7 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
   个会话；每个会话都是在该 target 上的一次登录，一个调用最多等待 300 秒拿到会话。
 - **能连到这个端点的人，都以该 server 配置的账号操作。** token 只用来识别调用者，不在平台上授予任何权限。
   每个权限级别单独起一个端点。
+- **一个端点给多人或多种角色用：** 给每个 token 指定角色（`vmware-audit token create 名字 --role reader`，或在 `roles.yaml` 里定义可用的工具和 target；需 vmware-policy ≥ 1.24.0）。角色只能限定这个 token 在本端点上能调用什么，不能超出账号本身的权限。详见 vmware-policy README 的「网络调用者的角色」一节。
 
 **限制工具：**本 server 的工具全部只读，所以 `--expose read` 在这里不改变任何东西，它是为有写工具的 skill
 准备的。最小权限来自 server 使用的账号。

@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==2.3.1
+uv tool install vmware-monitor==2.4.0
 
 # Via Skills.sh (fetches from GitHub)
-npx skills add vmware-skills/VMware-Monitor#v2.3.1
+npx skills add vmware-skills/VMware-Monitor#v2.4.0
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 2.3.1
+clawhub install @zw008/vmware-monitor --version 2.4.0
 ```
 
 ### Claude Code
@@ -63,7 +63,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==2.3.1
+uv tool install vmware-monitor==2.4.0
 
 # 2. Verify
 vmware-monitor --version
@@ -115,7 +115,7 @@ question about vCenter.
 ## Development Install
 
 ```bash
-git clone --branch v2.3.1 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.4.0 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
@@ -231,6 +231,7 @@ vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
 - **Everyone who can reach the endpoint acts with this server's account.** Tokens identify callers; they grant
   nothing on the platform. Run one endpoint per privilege level (for example a read-only account behind
   `--expose read`, and a separate endpoint for operators).
+- **Several people or roles on one endpoint:** give each token a role (`vmware-audit token create NAME --role reader`, or a role in `roles.yaml` naming tools and targets; vmware-policy ≥ 1.24.0). A role limits what the token may call on this endpoint; it cannot grant more than the account has. See vmware-policy's README, "Roles for network callers".
 
 ## Security
 
