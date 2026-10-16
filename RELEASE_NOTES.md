@@ -1,4 +1,4 @@
-## Unreleased — an account with no vSphere role is named, not passed (AIops#47)
+## v2.3.1 — an account with no vSphere role is named, not passed (AIops#47)
 
 Needs vmware-policy 1.23.0.
 
