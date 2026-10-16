@@ -33,17 +33,23 @@ def test_metadata_is_declared_when_policy_has_roles():
 
 
 @pytest.mark.unit
-def test_the_resolver_reads_the_config_once_like_the_connection(monkeypatch):
-    """Review H1: a config edit after startup must not move the role check off the
-    target the (load-once) connection manager uses."""
+def test_the_resolver_uses_the_config_the_connection_manager_holds(monkeypatch):
+    """Review H1/H-1: once the server's connection manager exists, a config edit must
+    not move the role check off the config it connects with; before, read the file."""
+    import importlib
+    import types
+
     from vmware_monitor import policy_roles as pr
 
-    loads = []
-    monkeypatch.setattr(pr, "load_config", lambda: loads.append(1) or object())
-    pr._startup_config.cache_clear()
-    try:
-        first = pr._startup_config()
-        assert pr._startup_config() is first
-        assert loads == [1]
-    finally:
-        pr._startup_config.cache_clear()
+    server = importlib.import_module("vmware_monitor.mcp_server.server")
+    assert hasattr(server, "_conn_mgr"), "policy_roles looks up a global the server does not have"
+    edited, loads = object(), []
+    monkeypatch.setattr(pr, "load_config", lambda: loads.append(1) or edited)
+
+    monkeypatch.setattr(server, "_conn_mgr", None)
+    assert pr._connection_config() is edited and pr._connection_config() is edited
+    assert len(loads) == 2  # no manager yet: the file as it is now, every time
+
+    held = object()
+    monkeypatch.setattr(server, "_conn_mgr", types.SimpleNamespace(_config=held))
+    assert pr._connection_config() is held  # the manager's copy, not the edited file
