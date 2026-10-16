@@ -1689,3 +1689,6 @@ from vmware_monitor.mcp_server import tools_vsphere91  # noqa: E402,F401
 # type, which is how a wrong guess becomes an unfiltered result or a silent
 # zero-row answer instead of an error (real-hardware round, 2026-08-30).
 _DESCRIBED_PARAMS = describe_tool_parameters(mcp._tool_manager._tools)
+
+# Role metadata for network callers (HLD §18).
+import vmware_monitor.policy_roles  # noqa: E402,F401
