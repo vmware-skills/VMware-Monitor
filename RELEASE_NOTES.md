@@ -1,3 +1,21 @@
+## v2.4.1 — fixes from real-hardware testing (2026-10-17)
+
+* **`get_vm_backup_snapshot_history` on a standalone ESXi host answers instead of failing.** Its error handler named
+  `vim.fault.InvalidArgument`, a class pyVmomi does not have, so every call on ESXi ended in
+  `AttributeError: operation failed.`. ESXi keeps no queryable task history; the tool now says so in
+  `history_unavailable` and points at the vCenter that manages the host.
+* **`list_active_tasks` with `limit` keeps the newest tasks.** It kept the oldest (57 tasks, `limit=40` dropped the 17
+  newest). Running and queued tasks come first, then newest first.
+* **`get_datastore_capacity`'s `view_note` no longer blames a vCenter/ESXi gap on different VMs alone.** On the test
+  lab both listed the same 10 VMs and still reported different uncommitted space; the note now says how to tell the
+  two cases apart (`vm_count`).
+* **`list_all_clusters` rows carry the cluster `moid`** (also a CLI column), the id the vLCM tools take and their
+  errors send you to look up.
+* Error hints: `doctor` is suggested for connection, credential and proxy problems, not for a name that does not
+  resolve or a bad argument. A reverse proxy answering HTML on the REST session call is named as such. Messages
+  name MCP tools and parameters, with the CLI form in brackets.
+* Gate: every pyVmomi class named in an `except` clause or `isinstance()` must exist (family smoke).
+
 ## v2.4.0 — roles for network callers (HLD §18)
 
 * Declares the role metadata vmware-policy ≥ 1.24.0 needs to apply **roles** to this server over HTTPS
