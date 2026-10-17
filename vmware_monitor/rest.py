@@ -173,15 +173,17 @@ def _translate_status(
             # additive, not alternatives.
             hint = (
                 " If you passed a cluster's display name, this API wants its MoID "
-                "(e.g. domain-c123) — 'vmware-monitor inventory clusters' lists them."
+                "(e.g. domain-c123) — the moid column of list_all_clusters "
+                "(CLI: 'vmware-monitor inventory clusters') lists them."
                 if "/clusters/" in path
                 else ""
             )
             return RestNotFoundError(f"vCenter says: {said} (404 at {path}).{hint}")
         return RestNotFoundError(
             f"vCenter has no resource at {path} (404). If this used a cluster id, "
-            "confirm it with 'vmware-monitor inventory clusters' — the REST API "
-            "wants the cluster MoID (e.g. domain-c123), not its display name."
+            "confirm it against the moid column of list_all_clusters (CLI: "
+            "'vmware-monitor inventory clusters') — the REST API wants the cluster "
+            "MoID (e.g. domain-c123), not its display name."
         )
     if path == _SESSION_PATH and code in (400, 404, 405):
         # A standalone ESXi host has no vSphere Automation REST API: its session
@@ -190,8 +192,8 @@ def _translate_status(
         return RestAuthError(
             f"vCenter REST call to {path} failed ({code}). This endpoint does not "
             "offer the vSphere Automation REST API — an ESXi host does not. These "
-            "commands need a vCenter target: pass --target <a vCenter from "
-            "~/.vmware-monitor/config.yaml>."
+            "calls need a vCenter target: pass target=<a vCenter from "
+            "~/.vmware-monitor/config.yaml> (CLI: --target)."
         )
     return RestAuthError(f"vCenter REST call to {path} failed ({code}).")
 

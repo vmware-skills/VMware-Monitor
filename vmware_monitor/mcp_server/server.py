@@ -181,9 +181,27 @@ _ROLE_HINT = (
 )
 
 
+#: For an error this skill authored that is not about reaching the endpoint:
+#: the message already names the fix, and doctor would report green (2026-10-17).
+_FIX_IN_MESSAGE_HINT = "The error message says what to change; connectivity is not the problem."
+
+#: Authored errors whose cause is the request, not the connection. ssl.SSLError
+#: subclasses ValueError and is excluded explicitly below.
+_REQUEST_ERRORS = (
+    ValueError,
+    KeyError,
+    VMNotFoundError,
+    AmbiguousVMError,
+    HostNotFoundError,
+    DatastoreNotFoundError,
+)
+
+
 def _hint_for(exc: Exception) -> str:
     if isinstance(exc, (NoVSphereRoleError, vim.fault.NotAuthenticated)):
         return _ROLE_HINT
+    if isinstance(exc, _REQUEST_ERRORS) and not isinstance(exc, ssl.SSLError):
+        return _FIX_IN_MESSAGE_HINT
     return _DOCTOR_HINT
 
 
@@ -490,8 +508,9 @@ def list_all_clusters(
 ) -> dict:
     """[READ] List clusters with host count, DRS/HA status, and resource totals.
 
-    Returns the list envelope with a real ``total``. Static topology only — use this
-    to resolve a cluster name, then get_cluster_health_summary, which supersedes
+    Returns the list envelope with a real ``total``. Each row's ``moid`` (e.g.
+    domain-c123) is the cluster id the vLCM patch tools take. Static topology only
+    — use this to resolve a cluster name, then get_cluster_health_summary, which supersedes
     stitching this with list_esxi_hosts and get_alarms yourself.
 
     Args:
@@ -1376,7 +1395,9 @@ def get_datastore_capacity(
     the datastore, so a vCenter and a directly-reached ESXi host can report
     different provisioned_gb for one datastore — each row's ``vm_count`` says how
     many VMs the figure covers, and ``vms_not_connected`` names those reported as
-    orphaned/inaccessible/disconnected (None = could not be read).
+    orphaned/inaccessible/disconnected (None = could not be read). The figures can
+    also differ with the same vm_count: each endpoint aggregates uncommitted
+    space itself.
 
     Use this for the capacity view, then investigate_datastore to drill
     into a specific datastore's hosts, VMs and alarms. Reclaiming space (delete

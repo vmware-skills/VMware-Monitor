@@ -233,12 +233,14 @@ def inventory_clusters(target: TargetOption = None, config: ConfigOption = None)
     _audit.log_query(target=tgt, resource="clusters", query_type="list_clusters")
     table = Table(title="Clusters")
     table.add_column("Name", style="cyan")
+    table.add_column("MoID")
     table.add_column("Hosts", justify="right")
     table.add_column("DRS")
     table.add_column("HA")
     for c in clusters:
         table.add_row(
             c["name"],
+            c.get("moid") or "",
             str(c["host_count"]),
             "[green]ON[/]" if c["drs_enabled"] else "[red]OFF[/]",
             "[green]ON[/]" if c["ha_enabled"] else "[red]OFF[/]",

@@ -18,6 +18,13 @@ has registered on the datastore. On the lab (2026-09-15) the same datastore1 rea
 mounts it: vCenter held two powered-off VMs on that host which the host itself no
 longer had registered. Both figures are right for their endpoint, so the output
 says which endpoint it is and how many VMs each figure covers.
+
+That is one cause, not the only one. On 2026-10-17 a different lab showed both
+endpoints listing the same 10 VMs on datastore1 and still reporting 1291.8 GB
+(vCenter) vs 765.6 GB (ESXi) uncommitted; the host's own per-VM
+``storage.perDatastoreUsage`` summed to ~1275 GB, so it was the endpoint's
+datastore aggregate that differed. The notes therefore say how to tell the two
+cases apart (``vm_count``) instead of naming a single cause.
 """
 
 from __future__ import annotations
@@ -70,23 +77,28 @@ _API_TYPE_VIEW = {"VirtualCenter": "vCenter", "HostAgent": "ESXi host"}
 
 _VIEW_NOTES = {
     "vCenter": (
-        "vCenter view: provisioned_gb is summed by vCenter over every VM it has "
-        "registered on each datastore (vm_count). A direct ESXi target sums only the "
-        "VMs registered on that host, so the same datastore can read lower there — "
-        "for example when vCenter still holds VMs the host no longer has registered "
-        "(see vms_not_connected). Committed space is measured on disk and agrees "
-        "across views."
+        "vCenter view: provisioned_gb uses the summary.uncommitted vCenter reports "
+        "for each datastore, over the VMs it has registered there (vm_count). A "
+        "direct ESXi target computes its own figure and can read lower. If its "
+        "vm_count differs, the endpoints disagree about which VMs are there (see "
+        "vms_not_connected); with the same vm_count, the two endpoints simply "
+        "aggregate uncommitted space differently. Committed space is measured on "
+        "disk and agrees across views."
     ),
     "ESXi host": (
-        "ESXi host view: provisioned_gb is summed by this host over the VMs "
-        "registered on it (vm_count). A vCenter managing this host can read higher "
-        "for the same datastore when it has VMs registered there that this host does "
-        "not list. Committed space is measured on disk and agrees across views."
+        "ESXi host view: provisioned_gb uses the summary.uncommitted this host "
+        "reports for each datastore, over the VMs registered on it (vm_count). A "
+        "vCenter managing this host computes its own figure and can read higher. If "
+        "its vm_count differs, the endpoints disagree about which VMs are there; "
+        "with the same vm_count, the two endpoints simply aggregate uncommitted "
+        "space differently. Committed space is measured on disk and agrees across "
+        "views."
     ),
     "unknown": (
-        "Endpoint type could not be read. provisioned_gb is summed over the VMs the "
-        "endpoint has registered on each datastore (vm_count); a vCenter and a "
-        "directly-reached ESXi host can report different figures for one datastore."
+        "Endpoint type could not be read. provisioned_gb uses the summary.uncommitted "
+        "the endpoint reports over the VMs it has registered on each datastore "
+        "(vm_count); a vCenter and a directly-reached ESXi host can report different "
+        "figures for one datastore, with or without the same vm_count."
     ),
 }
 

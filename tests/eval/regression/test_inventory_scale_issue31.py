@@ -39,6 +39,10 @@ class _NoLazyMO:
         object.__setattr__(self, "_label", label)
 
     def __getattr__(self, name: str):  # pragma: no cover - only hit on regression
+        if name == "_moId":
+            # Set on the stub when pyVmomi builds the reference: reading it is
+            # local, not a property round-trip (list_clusters reports it).
+            return object.__getattribute__(self, "_label")
         raise AssertionError(
             f"lazy property access '{name}' on {object.__getattribute__(self, '_label')}"
             " — list/find must use PropertyCollector, not per-object attributes"

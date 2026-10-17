@@ -154,3 +154,19 @@ def test_the_mcp_tool_documents_the_view_fields():
     doc = server.get_datastore_capacity.__doc__ or ""
     for field in ("view", "view_note", "vm_count", "vms_not_connected"):
         assert field in doc, f"get_datastore_capacity docstring does not mention {field}"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("view", ["vCenter", "ESXi host"])
+def test_view_note_does_not_blame_the_gap_on_different_vms_alone(view):
+    """Real hardware, 2026-10-17: vCenter and ESXi listed the SAME 10 VMs on
+    datastore1 and still reported 1291.8 vs 765.6 GB uncommitted -- the host's
+    own per-VM figures summed to ~1275 GB, so it was the endpoint's datastore
+    aggregate that differed, not the VM set. A note that only offers "the other
+    endpoint has VMs this one doesn't" sends the reader looking for VMs that are
+    not there. It must say the gap can occur with identical vm_count too, and how
+    to tell the two cases apart.
+    """
+    note = capacity._VIEW_NOTES[view]
+    assert "same vm_count" in note
+    assert "summary.uncommitted" in note

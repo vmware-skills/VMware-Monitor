@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from pyVmomi import vim
+from pyVmomi import vim, vmodl
 from vmware_policy import sanitize
 
 from vmware_monitor.ops._collect import _collect
@@ -236,7 +236,16 @@ def _read_task_history(
             "Reading task history needs the System.View privilege on this VM; the "
             "configured account does not have it. This is not an empty history."
         )
-    except vim.fault.InvalidArgument as exc:
+    except vmodl.fault.NotSupported:
+        # A standalone ESXi host has a task manager but keeps no queryable task
+        # history: CreateCollectorForTasks raises NotSupported there (seen on
+        # real ESXi, 2026-10-17). Not an empty history either.
+        return [], (
+            "This endpoint keeps no queryable task history (a standalone ESXi host "
+            "does not support task collectors). Ask the vCenter that manages this "
+            "host instead. This is not an empty history."
+        )
+    except vmodl.fault.InvalidArgument as exc:
         return [], sanitize(
             f"vCenter rejected the task history filter: {getattr(exc, 'msg', None) or exc}", max_len=300
         )

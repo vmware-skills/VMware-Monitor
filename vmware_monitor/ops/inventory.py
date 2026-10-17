@@ -370,12 +370,15 @@ def list_clusters(si: ServiceInstance, limit: int | None = None) -> dict:
         limit: Max number of cluster rows to return (None = all).
     """
     results = []
-    for _obj, p in _collect(si, [vim.ClusterComputeResource], _CLUSTER_PROPS):
+    for obj, p in _collect(si, [vim.ClusterComputeResource], _CLUSTER_PROPS):
         total_mem = p.get("summary.totalMemory")
         drs_behavior = p.get("configuration.drsConfig.defaultVmBehavior")
         results.append(
             {
                 "name": p.get("name", ""),
+                # The id the vLCM/REST tools take (e.g. domain-c123); their
+                # errors send the reader here for it.
+                "moid": getattr(obj, "_moId", None),
                 "host_count": len(p.get("host") or []),
                 "drs_enabled": bool(p.get("configuration.drsConfig.enabled")),
                 "drs_behavior": str(drs_behavior) if drs_behavior else "N/A",

@@ -94,7 +94,9 @@ def test_a_failing_tool_is_audited_as_a_failure(audit, monkeypatch):
 
     # The agent-facing contract: the dict envelope, still teaching.
     assert result["error"] == _TEACHING
-    assert "doctor" in result["hint"]
+    # A name that does not resolve is not a connectivity problem; the hint must
+    # not send the agent to doctor (2026-10-17).
+    assert "doctor" not in result["hint"]
 
     assert audit.rows, "the call was never audited"
     assert audit.rows[-1]["status"] == "error", (
