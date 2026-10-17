@@ -236,7 +236,7 @@ def list_vms(
         results = [{k: r[k] for k in _COMPACT_FIELDS if k in r} for r in results]
         compact_hint = (
             f"Large inventory ({total} VMs): showing compact fields only. "
-            "Use --limit N or --fields to get full details."
+            "Pass limit=N or fields=[...] (CLI: --limit/--fields) to get full details."
         )
     else:
         mode = "full"

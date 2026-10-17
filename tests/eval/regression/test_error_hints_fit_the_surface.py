@@ -26,9 +26,16 @@ from vmware_monitor.ops.vm_info import VMNotFoundError
 from vmware_monitor.rest import _SESSION_PATH, _translate_status
 
 
+def _unknown_target():
+    from vmware_monitor.config import UnknownTargetError
+
+    return UnknownTargetError("Target 'x' not found.")
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "exc", [ValueError("days must be 1..365"), VMNotFoundError("VM 'x' not found."), KeyError("t")]
+    "exc",
+    [ValueError("days must be 1..365"), VMNotFoundError("VM 'x' not found."), _unknown_target()],
 )
 def test_an_authored_non_connectivity_error_does_not_send_the_agent_to_doctor(exc) -> None:
     assert server._hint_for(exc) != server._DOCTOR_HINT
@@ -73,3 +80,47 @@ def test_cluster_rows_carry_the_moid_the_hints_promise(monkeypatch) -> None:
     row = inventory.list_clusters(object())["items"][0]
 
     assert row["moid"] == "domain-c42"
+
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("exc", [
+    __import__("json").JSONDecodeError("Expecting value", "<html>", 0),
+    KeyError("summary.capacity"),
+    UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
+])
+def test_parse_errors_and_bare_key_errors_keep_the_doctor_hint(exc) -> None:
+    """Independent review 2026-10-17: a reverse proxy answering HTML raises
+    JSONDecodeError (a ValueError), and a programming slip raises a bare KeyError;
+    neither message says what to change, so they must not be told it does."""
+    assert server._hint_for(exc) == server._DOCTOR_HINT
+
+
+@pytest.mark.unit
+def test_an_unknown_target_is_still_a_key_error() -> None:
+    """Callers catch KeyError from get_target; the subclass must not break them."""
+    assert issubclass(type(_unknown_target()), KeyError)
+
+
+@pytest.mark.unit
+def test_html_from_the_session_endpoint_names_a_reverse_proxy(monkeypatch) -> None:
+    """A proxy answering HTML 200 used to escape as a bare JSONDecodeError."""
+    from types import SimpleNamespace
+
+    from vmware_monitor import rest
+
+    request = httpx.Request("POST", "https://vc.example.test/api/session")
+    html = httpx.Response(200, text="<html>login</html>", request=request)
+    transport = httpx.MockTransport(lambda request: html)
+    target = SimpleNamespace(username="u", password="p", verify_ssl=True,
+                             host="vc.example.test", port=443)
+    monkeypatch.setattr(rest, "_base_url", lambda t: "https://vc.example.test")
+    client = rest.VsphereRest(target)
+    monkeypatch.setattr(
+        client, "_client",
+        lambda: httpx.Client(base_url="https://vc.example.test", transport=transport),
+    )
+
+    with pytest.raises(rest.RestAuthError, match="reverse proxy") as info:
+        client._login()
+    assert server._hint_for(info.value) == server._DOCTOR_HINT

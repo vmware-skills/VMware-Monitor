@@ -230,7 +230,17 @@ class VsphereRest:
                 f"({type(exc).__name__}). Verify the host is up and run "
                 "'vmware-monitor doctor'."
             ) from exc
-        token = resp.json()
+        try:
+            token = resp.json()
+        except ValueError as exc:
+            # HTML on a 200 is what a reverse proxy or login page in front of
+            # vCenter answers (AIops#47, Broadcom KB 416945).
+            raise RestAuthError(
+                f"vCenter session bootstrap at {self._base} returned a non-JSON body. "
+                "A reverse proxy or login page in front of vCenter answers this way: "
+                "point the target at vCenter's own address, then run "
+                "'vmware-monitor doctor'."
+            ) from exc
         if not isinstance(token, str) or not token:
             raise RestAuthError(
                 f"vCenter session bootstrap at {self._base} returned no session id."

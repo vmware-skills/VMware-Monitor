@@ -22,6 +22,7 @@ License: MIT
 """
 
 import functools
+import json
 import logging
 import ssl
 import threading
@@ -43,7 +44,7 @@ from vmware_policy import (
 from vmware_monitor import __version__
 
 # Internal VMware monitoring modules (all read-only operations)
-from vmware_monitor.config import CONFIG_FILE, ConfigError, load_config
+from vmware_monitor.config import CONFIG_FILE, ConfigError, UnknownTargetError, load_config
 from vmware_monitor.connection import (
     NOT_AUTHENTICATED_HINT,
     ConnectionManager,
@@ -189,18 +190,31 @@ _FIX_IN_MESSAGE_HINT = "The error message says what to change; connectivity is n
 #: subclasses ValueError and is excluded explicitly below.
 _REQUEST_ERRORS = (
     ValueError,
-    KeyError,
+    UnknownTargetError,
     VMNotFoundError,
     AmbiguousVMError,
     HostNotFoundError,
     DatastoreNotFoundError,
 )
 
+#: ValueErrors whose text was not authored as a remedy: a body that was not
+#: JSON (a reverse proxy answering HTML, AIops#47) or not UTF-8. Review
+#: 2026-10-17: these got "connectivity is not the problem", the opposite of true.
+_UNAUTHORED_VALUE_ERRORS = (ssl.SSLError, json.JSONDecodeError, UnicodeError)
+
+
+def _is_request_error(exc: Exception) -> bool:
+    return isinstance(exc, _REQUEST_ERRORS) and not isinstance(exc, _UNAUTHORED_VALUE_ERRORS)
+
 
 def _hint_for(exc: Exception) -> str:
     if isinstance(exc, (NoVSphereRoleError, vim.fault.NotAuthenticated)):
         return _ROLE_HINT
-    if isinstance(exc, _REQUEST_ERRORS) and not isinstance(exc, ssl.SSLError):
+    from vmware_monitor.rest import RestAuthError
+
+    # RestAuthError is a ValueError, but credentials and a missing REST API are
+    # exactly what doctor checks.
+    if _is_request_error(exc) and not isinstance(exc, RestAuthError):
         return _FIX_IN_MESSAGE_HINT
     return _DOCTOR_HINT
 
