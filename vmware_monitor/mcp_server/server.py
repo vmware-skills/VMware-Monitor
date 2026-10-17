@@ -1470,7 +1470,8 @@ def list_active_tasks(
     Answers "why is the cluster busy?". Returns the list envelope {items, returned,
     limit, total, truncated, hint} with a real ``total``; each row has name, entity,
     state, progress_pct, start_time, user, an active flag and error (for failed
-    recent tasks), running/queued first. vCenter keeps only a short recent-task
+    recent tasks), running/queued first, then newest first — so ``limit`` drops the
+    oldest. vCenter keeps only a short recent-task
     window, so an old task may simply be gone rather than absent.
 
     Use this before blaming load: a migration or clone in flight explains

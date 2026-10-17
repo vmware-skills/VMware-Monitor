@@ -11,6 +11,7 @@ session (those are writes owned by vmware-aiops / vSphere admin).
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pyVmomi import vim
@@ -46,6 +47,7 @@ def get_active_tasks(
     recent = getattr(task_mgr, "recentTask", None) or []
 
     results: list[dict] = []
+    started: list = []  # each row's raw startTime, for the sort below
     unreadable: list[str] = []
     for task in recent:
         try:
@@ -71,6 +73,7 @@ def get_active_tasks(
             # TaskInfo.error is a vmodl.MethodFault → .msg (verified against the
             # SDK by the vim-conformance test, not memory).
             error = sanitize(getattr(info.error, "msg", None) or str(info.error), max_len=300)
+        started.append(info.startTime)
         results.append(
             {
                 "name": sanitize(info.descriptionId or info.key),
@@ -88,8 +91,17 @@ def get_active_tasks(
             }
         )
 
-    # Active first, then by start time descending.
-    results.sort(key=lambda x: (not x["active"], x["start_time"]), reverse=False)
+    # Active first, then newest first, unknown start times last -- so a limit
+    # keeps the tasks that just ran. The sort used to be ascending under a
+    # comment saying descending: total 57, limit=40 dropped exactly the 17
+    # newest (real hardware, 2026-10-17). Sorted on the datetime, not its str.
+    def _newest_first(i: int) -> tuple:
+        when = started[i]
+        known = isinstance(when, datetime)
+        return (not results[i]["active"], not known, -when.timestamp() if known else 0.0)
+
+    order = sorted(range(len(results)), key=_newest_first)
+    results = [results[i] for i in order]
     total = len(results)
     if limit is not None:
         results = results[:limit]
