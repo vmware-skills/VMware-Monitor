@@ -99,6 +99,7 @@ from vmware_monitor.ops.backup_window import (
 from vmware_monitor.ops.snapshots import list_snapshot_aging
 from vmware_monitor.ops.vm_info import VMNotFoundError, list_snapshots
 from vmware_monitor.ops.vm_info import get_vm_info as _ops_get_vm_info
+from vmware_monitor.rest import RestAuthError
 from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs
 
 logger = logging.getLogger(__name__)
@@ -210,8 +211,6 @@ def _is_request_error(exc: Exception) -> bool:
 def _hint_for(exc: Exception) -> str:
     if isinstance(exc, (NoVSphereRoleError, vim.fault.NotAuthenticated)):
         return _ROLE_HINT
-    from vmware_monitor.rest import RestAuthError
-
     # RestAuthError is a ValueError, but credentials and a missing REST API are
     # exactly what doctor checks.
     if _is_request_error(exc) and not isinstance(exc, RestAuthError):
