@@ -28,6 +28,7 @@ from vmware_monitor.ops._html_base import (
     STATUS_LABEL,
     clamp,
     meter_class,
+    unreadable_note,
 )
 from vmware_monitor.ops.cluster_summary import cli_drilldown
 
@@ -79,13 +80,18 @@ def _cluster_card(c: dict, has_vms: bool) -> str:
     name = escape(str(c.get("name", "")))
     hosts_t = c.get("hosts_total", 0)
     hosts_c = c.get("hosts_connected", 0)
+    hosts_u = c.get("hosts_unreadable", 0)
     hosts_pct = (hosts_c / hosts_t * 100) if hosts_t else 0
+    # A host this account cannot read is not a disconnected host: amber, not red.
+    if hosts_c == hosts_t:
+        hosts_cls = "mok"
+    else:
+        hosts_cls = "mwarn" if hosts_c + hosts_u == hosts_t else "mcrit"
+    hosts_txt = f"{hosts_c}/{hosts_t}" + (f" ({hosts_u} unreadable)" if hosts_u else "")
     parts = [
         f'<div class="card {cls}"><div class="top"><span class="cname">{name}</span>'
         f'<span class="pill {cls}">{_STATUS_LABEL.get(status, status)}</span></div><div class="body">',
-        _metric(
-            "Hosts", hosts_pct, "mok" if hosts_c == hosts_t else "mcrit", f"{hosts_c}/{hosts_t}"
-        ),
+        _metric("Hosts", hosts_pct, hosts_cls, hosts_txt),
     ]
     if has_vms:
         vms_t = c.get("vms_total", 0)
@@ -146,7 +152,8 @@ def render_cluster_health_html(
     cells = [
         f'<div class="cell"><div class="k">Clusters</div><div class="v">{totals.get("clusters", 0)}</div></div>',
         f'<div class="cell"><div class="k">Hosts connected</div><div class="v">'
-        f"{totals.get('hosts_connected', 0)}<small>/{totals.get('hosts_total', 0)}</small></div></div>",
+        f"{totals.get('hosts_connected', 0)}<small>/{totals.get('hosts_total', 0)}"
+        f"{unreadable_note(totals)}</small></div></div>",
     ]
     if has_vms:
         cells.append(

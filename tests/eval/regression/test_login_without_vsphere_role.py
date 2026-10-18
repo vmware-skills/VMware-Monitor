@@ -277,3 +277,60 @@ def test_attention_renderers_say_why(monkeypatch: pytest.MonkeyPatch) -> None:
     # The skipped-targets row must not say they were left out of the status, which they floor.
     assert "not included in the status" not in html
     assert "1 target(s) unreachable and not read; the overall status is raised for them" in html
+
+
+# 2026-10-18, lab vCenter 8.0.3, SSO account agt-norole@vsphere.local with no
+# permission anywhere: vCenter refuses the *login itself* with NoPermission
+# (System.View on the root folder, group-d1). The connect-time check above never
+# ran, so doctor printed the raw pyVmomi fault and every MCP tool said
+# "vim.fault.NoPermission: operation failed." with a connectivity hint.
+def _login_refused(exc: Exception):
+    mgr = ConnectionManager(_config("vc1"))
+    with patch("pyVim.connect.SmartConnect", side_effect=exc):
+        try:
+            mgr.connect("vc1")
+        except Exception as e:  # noqa: BLE001 — the test inspects whatever is raised
+            return e
+    raise AssertionError("connect did not raise")
+
+
+def test_login_refused_with_no_permission_names_the_missing_role() -> None:
+    fault = vim.fault.NoPermission(
+        privilegeId="System.View", msg="Permission to perform this operation was denied."
+    )
+    err = _login_refused(fault)
+    assert isinstance(err, NoVSphereRoleError)
+    msg = str(err)
+    assert ROLE in msg and "Read-Only" in msg and "'vc1'" in msg
+    assert "dynamicType" not in msg and "operation failed" not in msg
+    assert err.__cause__ is fault
+
+
+def test_wrong_password_is_not_reported_as_a_missing_role() -> None:
+    err = _login_refused(vim.fault.InvalidLogin())
+    assert not isinstance(err, NoVSphereRoleError)
+    assert isinstance(err, vim.fault.InvalidLogin)
+
+
+@pytest.mark.parametrize(
+    ("privilege", "esxi"),
+    [("System.View", True), ("Sessions.ValidateSession", False), (None, False)],
+)
+def test_other_login_refusals_get_a_neutral_remedy(privilege, esxi) -> None:
+    # Review 2026-10-18 (M3): an ESXi host (lockdown mode, host permissions) or
+    # another privilege must not be sent to vCenter Global Permissions.
+    from dataclasses import replace
+
+    fault = vim.fault.NoPermission(privilegeId=privilege)
+    mgr = ConnectionManager(_config("vc1"))
+    if esxi:
+        esxi_targets = tuple(replace(t, type="esxi") for t in mgr._config.targets)
+        mgr._config = replace(mgr._config, targets=esxi_targets)
+    with patch("pyVim.connect.SmartConnect", side_effect=fault):
+        with pytest.raises(Exception) as info:
+            mgr.connect("vc1")
+    msg = str(info.value)
+    assert "Global Permissions" not in msg and "lockdown mode" in msg
+    if privilege:
+        assert f"({privilege})" in msg
+    assert info.value.__cause__ is fault and len(msg) <= 300

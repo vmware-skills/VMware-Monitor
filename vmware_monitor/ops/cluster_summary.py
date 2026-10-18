@@ -55,7 +55,7 @@ DEFAULT_TOP_N = 10
 
 # Ordering within a severity band: which kind of problem an operator should look
 # at first. Lower rank surfaces higher in the top-issues list.
-_KIND_RANK = {"host_down": 0, "alarm": 1, "capacity": 2, "config": 3}
+_KIND_RANK = {"host_down": 0, "alarm": 1, "capacity": 2, "config": 3, "host_unreadable": 4}
 _SEV_RANK = {"critical": 0, "warning": 1}
 
 # Per-kind drill-down hint so each top issue points at the next step to take.
@@ -73,6 +73,9 @@ _DRILLDOWN = {
     "alarm": "get_alarms for detail; remediate via vmware-aiops",
     "capacity": "get_host_performance, then get_datastore_capacity",
     "config": "enable vSphere HA on this cluster (vSphere admin)",
+    "host_unreadable": (
+        "get_access_info for this target; read the host with an account that can see it"
+    ),
 }
 _CLI_DRILLDOWN = {
     "host_down": (
@@ -84,6 +87,10 @@ _CLI_DRILLDOWN = {
     "config": "enable vSphere HA on this cluster (vSphere admin)",
     "datastore": (
         "vmware-monitor capacity datastores, then vmware-monitor investigate datastore"
+    ),
+    "host_unreadable": (
+        "vmware-monitor access-info, then vmware-monitor inventory hosts "
+        "with an account that can see the host"
     ),
 }
 
@@ -138,6 +145,7 @@ def _empty_cluster(name: str, ha: bool | None, drs: bool | None) -> dict:
         "name": sanitize(name),
         "hosts_total": 0,
         "hosts_connected": 0,
+        "hosts_unreadable": 0,
         "vms_total": 0,
         "vms_on": 0,
         "_cpu_used_mhz": 0.0,
@@ -208,10 +216,19 @@ def _rollup_status(rec: dict) -> tuple[str, list[str]]:
     reasons: list[str] = []
     status = "ok"
 
-    disconnected = rec["hosts_total"] - rec["hosts_connected"]
+    unreadable = rec.get("hosts_unreadable", 0)
+    disconnected = rec["hosts_total"] - rec["hosts_connected"] - unreadable
     if disconnected > 0:
         status = "critical"
         reasons.append(f"{disconnected} host(s) disconnected")
+    if unreadable > 0:
+        # Unknown is not a verdict either way: not "down", and not "ok".
+        if status == "ok":
+            status = "warn"
+        reasons.append(
+            f"{unreadable} host(s) whose state this account cannot read "
+            "(not known to be down; grant Read-only on the host to see it)"
+        )
 
     crit = rec["alarms"]["critical"]
     warn = rec["alarms"]["warning"]
@@ -396,8 +413,26 @@ def get_cluster_health_summary(
             continue
         host_name = sanitize(p.get("name", ""))
         rec["hosts_total"] += 1
-        conn = str(p.get("runtime.connectionState"))
-        if conn == "connected":
+        raw_conn = p.get("runtime.connectionState")
+        conn = str(raw_conn)
+        if raw_conn is None:
+            # An account that can see the host object but not read its runtime
+            # (e.g. Read-only on one VM only) gets no connectionState. That is
+            # "unreadable", never "down": reporting it as a critical host_down
+            # sent people chasing a healthy host.
+            rec["hosts_unreadable"] += 1
+            host_issues.append(
+                {
+                    "severity": "warning",
+                    "kind": "host_unreadable",
+                    "object": host_name,
+                    "scope": "host",
+                    "cluster": cname,
+                    "detail": "state not readable with this account (not known to be down)",
+                    "drilldown": _DRILLDOWN["host_unreadable"],
+                }
+            )
+        elif conn == "connected":
             rec["hosts_connected"] += 1
         else:
             host_issues.append(
@@ -654,6 +689,7 @@ def _finalize(
         "clusters": 0,
         "hosts_total": 0,
         "hosts_connected": 0,
+        "hosts_unreadable": 0,
         "vms_total": 0,
         "vms_on": 0,
         "alarms": {"critical": 0, "warning": 0},
@@ -694,6 +730,7 @@ def _finalize(
             totals["clusters"] += 1
         totals["hosts_total"] += rec["hosts_total"]
         totals["hosts_connected"] += rec["hosts_connected"]
+        totals["hosts_unreadable"] += rec["hosts_unreadable"]
         totals["vms_total"] += rec.get("vms_total", 0)
         totals["vms_on"] += rec.get("vms_on", 0)
         totals["alarms"]["critical"] += rec["alarms"]["critical"]

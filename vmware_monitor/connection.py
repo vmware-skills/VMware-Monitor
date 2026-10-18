@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from pyVmomi import vim
+from vmware_policy import sanitize
 from vmware_policy.access import login_has_no_session, no_role_message
 from vmware_policy.pool import SessionPool
 
@@ -51,6 +52,34 @@ class NoVSphereRoleError(ConnectError):
     of its own so the cross-vCenter roll-up, which reports class names only,
     says this rather than a generic connect failure.
     """
+
+
+def login_refused_message(
+    target: str, cli: str, *, privilege: str | None = None, esxi: bool = False
+) -> str:
+    """The teaching error when the login itself is refused with NoPermission.
+
+    vCenter 8.0.3 refuses the login, with NoPermission for System.View on the
+    root folder, for an SSO account holding no vSphere permission anywhere (lab,
+    2026-10-18); an account with a permission lower down still logs in. Only
+    that case gets the "no vSphere role" remedy. An ESXi host (lockdown mode,
+    host permissions) or another privilege gets a neutral text naming the
+    privilege vCenter returned (sanitized, capped at 48). About 300 characters.
+    """
+    if not esxi and privilege == "System.View":
+        return (
+            f"'{target}' refused the login: the password is right but the account has "
+            "no vSphere role (no System.View on the root). Assign Read-Only or higher "
+            f"(vCenter: Global Permissions), then run '{cli} doctor'. A new password "
+            "will not help."
+        )
+    # vCenter's own string: sanitized and bounded so the text stays short.
+    need = f" ({sanitize(privilege, 48)})" if privilege else ""
+    return (
+        f"'{target}' refused the login with NoPermission{need}: the password is right "
+        "but this account may not log in there. On ESXi check the host's Permissions "
+        f"and lockdown mode; on vCenter assign a role. Then run '{cli} doctor'."
+    )
 
 
 #: What a NotAuthenticated fault raised after connecting means. Two causes look
@@ -260,6 +289,20 @@ class ConnectionManager:
             # faults are vmodl types, not OSError, so they pass through
             # untouched to the handlers that already explain them.
             raise _connect_failed(target, exc) from exc
+        except vim.fault.NoPermission as exc:
+            # vCenter 8.0.3 refuses the login itself, with NoPermission on the
+            # root folder (System.View), for an SSO account that holds no vSphere
+            # permission anywhere (lab, 2026-10-18). A wrong password is
+            # InvalidLogin, not this, so it still passes through untouched.
+            raise NoVSphereRoleError(
+                login_refused_message(
+                    target.name,
+                    "vmware-monitor",
+                    privilege=getattr(exc, "privilegeId", None),
+                    esxi=target.type == "esxi",
+                )
+            ) from exc
+
         def _cleanup(_si: ServiceInstance = si) -> None:
             # Sessions may already be dead at interpreter exit (timeout,
             # server restart) — never spray tracebacks during shutdown.

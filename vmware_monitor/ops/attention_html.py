@@ -21,6 +21,7 @@ from vmware_monitor.ops._html_base import (
     SEV_LABEL,
     STATUS_CLASS,
     STATUS_LABEL,
+    unreadable_note,
 )
 from vmware_monitor.ops.cluster_summary import cli_drilldown
 
@@ -56,7 +57,8 @@ def _target_card(t: dict) -> str:
         f'<div class="card {cls}"><div class="top"><span class="cname">{escape(str(t.get("vcenter", "")))}</span>'
         f'<span class="pill {cls}">{STATUS_LABEL.get(status, status)}</span></div><div class="body">'
         f'<div class="kv"><span class="tag">clusters <b>{t.get("clusters", 0)}</b></span>'
-        f'<span class="tag">hosts <b>{t.get("hosts_connected", 0)}</b>/{t.get("hosts_total", 0)}</span>'
+        f'<span class="tag">hosts <b>{t.get("hosts_connected", 0)}</b>/{t.get("hosts_total", 0)}'
+        f"{unreadable_note(t)}</span>"
         f'<span class="tag">alarms <b>{al.get("critical", 0)}</b>c / <b>{al.get("warning", 0)}</b>w</span>'
         "</div></div></div>"
     )
@@ -92,7 +94,8 @@ def render_attention_html(data: dict, generated_at: datetime, filename: str = ""
         ),
         f'<div class="cell"><div class="k">Clusters</div><div class="v">{totals.get("clusters", 0)}</div></div>',
         f'<div class="cell"><div class="k">Hosts connected</div><div class="v">'
-        f"{totals.get('hosts_connected', 0)}<small>/{totals.get('hosts_total', 0)}</small></div></div>",
+        f"{totals.get('hosts_connected', 0)}<small>/{totals.get('hosts_total', 0)}"
+        f"{unreadable_note(totals)}</small></div></div>",
         f'<div class="cell"><div class="k">Active alarms</div><div class="v">'
         f'<span class="c">{al.get("critical", 0)}</span><small> crit</small> · '
         f'<span class="w">{al.get("warning", 0)}</span><small> warn</small></div></div>',

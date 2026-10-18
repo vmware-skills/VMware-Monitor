@@ -269,6 +269,7 @@ def get_cross_vcenter_attention(
         "clusters": 0,
         "hosts_total": 0,
         "hosts_connected": 0,
+        "hosts_unreadable": 0,
         "alarms": {"critical": 0, "warning": 0},
         "worst_status": "ok",
     }
@@ -287,6 +288,7 @@ def get_cross_vcenter_attention(
                 "clusters": t.get("clusters", 0),
                 "hosts_connected": t.get("hosts_connected", 0),
                 "hosts_total": t.get("hosts_total", 0),
+                "hosts_unreadable": t.get("hosts_unreadable", 0),
                 "shared_hosts": shared,
                 "alarms": t.get("alarms", {"critical": 0, "warning": 0}),
             }
@@ -319,6 +321,7 @@ def get_cross_vcenter_attention(
         totals["clusters"] += t.get("clusters", 0)
         totals["hosts_total"] += max(0, t.get("hosts_total", 0) - shared)
         totals["hosts_connected"] += max(0, t.get("hosts_connected", 0) - shared_connected)
+        totals["hosts_unreadable"] += t.get("hosts_unreadable", 0)
         totals["alarms"]["critical"] += t.get("alarms", {}).get("critical", 0)
         totals["alarms"]["warning"] += t.get("alarms", {}).get("warning", 0)
         if _STATUS_ORDER.get(worst, 2) < _STATUS_ORDER.get(totals["worst_status"], 2):

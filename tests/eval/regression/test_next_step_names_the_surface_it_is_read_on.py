@@ -79,6 +79,14 @@ _LAB_ISSUES = [
         "cluster": "prod",
         "detail": "HA disabled on a multi-host cluster",
     },
+    {
+        "severity": "warning",
+        "kind": "host_unreadable",
+        "object": "192.168.1.118",
+        "scope": "host",
+        "cluster": "(standalone hosts)",
+        "detail": "state not readable with this account (not known to be down)",
+    },
 ]
 
 

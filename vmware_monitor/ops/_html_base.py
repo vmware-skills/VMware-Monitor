@@ -144,3 +144,13 @@ def meter_class(pct: float) -> str:
 def clamp(pct: float) -> float:
     """Clamp a percentage to the drawable 0–100 range."""
     return max(0.0, min(100.0, pct))
+
+
+def unreadable_note(row: dict) -> str:
+    """" (N unreadable)" after a connected/total host count, or nothing.
+
+    A host this account cannot read is not a disconnected host; without the
+    note "0/1" reads as an outage (lab 2026-10-18, Read-only on one VM).
+    """
+    n = row.get("hosts_unreadable", 0)
+    return f" ({n} unreadable)" if n else ""

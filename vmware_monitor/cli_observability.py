@@ -726,6 +726,7 @@ def render_summary_console(data: dict, top: int) -> None:
     console.print(
         f"[bold]Cluster health[/] — {t['clusters']} clusters, "
         f"{t['hosts_connected']}/{t['hosts_total']} hosts connected"
+        + (f" ({t['hosts_unreadable']} unreadable)" if t.get("hosts_unreadable") else "")
         + (f", {t.get('vms_on', 0)}/{t.get('vms_total', 0)} VMs on" if "vms_total" in t else "")
         + f"  ·  overall: [{_STATUS_STYLE[worst]}]{worst.upper()}[/]"
     )
@@ -749,7 +750,8 @@ def render_summary_console(data: dict, top: int) -> None:
         row = [
             f"[{style}]{c['status'].upper()}[/]",
             c["name"],
-            f"{c['hosts_connected']}/{c['hosts_total']}",
+            f"{c['hosts_connected']}/{c['hosts_total']}"
+            + (f" ({c['hosts_unreadable']} unreadable)" if c.get("hosts_unreadable") else ""),
         ]
         if "vms_total" in t:
             row.append(f"{c.get('vms_on', 0)}/{c.get('vms_total', 0)}")
@@ -980,7 +982,8 @@ def render_attention_console(data: dict) -> None:
     console.print(
         f"[bold]What needs attention[/] — {_target_counts(t)}, "
         f"{t['clusters']} clusters, {t['hosts_connected']}/{t['hosts_total']} hosts connected"
-        f"  ·  overall: [{_STATUS_STYLE[t['worst_status']]}]{t['worst_status'].upper()}[/]"
+        + (f" ({t['hosts_unreadable']} unreadable)" if t.get("hosts_unreadable") else "")
+        + f"  ·  overall: [{_STATUS_STYLE[t['worst_status']]}]{t['worst_status'].upper()}[/]"
         + (f" ({escape(t['status_reason'])})" if t.get("status_reason") else "")
     )
     for u in data.get("unreachable", []):
@@ -1004,6 +1007,7 @@ def render_attention_console(data: dict) -> None:
             tg.get("endpoint", "unknown"),
             str(tg["clusters"]),
             f"{tg['hosts_connected']}/{tg['hosts_total']}"
+            + (f" ({tg['hosts_unreadable']} unreadable)" if tg.get("hosts_unreadable") else "")
             + (f" [dim]({shared} counted via another target)[/]" if shared else ""),
             f"{tg['alarms']['critical']}/{tg['alarms']['warning']}",
         )
