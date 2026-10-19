@@ -1,3 +1,23 @@
+## v2.4.2 — an unreadable host is not down; a login refused for lack of a role says so (2026-10-19)
+
+Found on a vCenter 8.0.3 lab with two restricted SSO accounts (follow-up to AIops#47).
+
+* **A host this account cannot read is no longer reported as down.** An account with Read-only on one VM sees that
+  VM's host by name only: `runtime.connectionState` reads `None`. `get_cluster_health_summary` ranked it
+  `host_down` / critical ("host None") and `get_cross_vcenter_attention` put it first. It is now counted in
+  `hosts_unreadable`, raises a warning issue `host_unreadable` (ranked after a real outage), and moves the row to
+  WARN (unknown is not OK either). Every surface shows "(N unreadable)": cluster card (amber, not red), totals strip,
+  attention cards and totals, and the CLI lines.
+* **`get_ntp_status` no longer calls an unreadable host unreachable.** Instead of "vCenter cannot reach this host
+  ... reconnect", the row has `reachable: null`, with `hosts_unreadable` and `unreadable_note` in the result.
+  `inventory hosts` colours an unreadable state yellow, not red.
+* **A login vCenter refuses with `NoPermission` gets the role error, not the raw fault.** For an account with no
+  permission anywhere, vCenter refuses the login itself (`System.View` on the root folder), so the 2.3.1 post-login
+  check never ran and `doctor`/MCP showed the raw fault with a connectivity hint. It now raises the no-role error:
+  the "no vSphere role / Global Permissions" remedy only for a vCenter target and `System.View`; an ESXi target or
+  another privilege gets a neutral text naming the (sanitized) privilege. A wrong password (`InvalidLogin`) is
+  unchanged.
+
 ## v2.4.1 — fixes from real-hardware testing (2026-10-17)
 
 * **`get_vm_backup_snapshot_history` on a standalone ESXi host answers instead of failing.** Its error handler named
