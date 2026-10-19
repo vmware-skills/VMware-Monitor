@@ -34,6 +34,8 @@ CERT_WARN_DAYS = 30
 
 #: ``runtime.connectionState`` for a host vCenter is actually talking to.
 _CONNECTED = "connected"
+#: Stand-in for a connectionState this account could not read.
+_UNREADABLE = "unreadable"
 
 
 def _days_until(when: datetime | None, now: datetime) -> int | None:
@@ -248,6 +250,12 @@ def get_ntp_status(
     caller filtering rows for ``healthy is False`` still learns that half the
     estate went unasked.
 
+    **A host this account cannot read is neither.** Its connectionState itself is
+    absent (Read-only on one VM only, lab 2026-10-18): ``reachable: None`` and it
+    counts in ``hosts_unreadable`` (with ``unreadable_note``), not in
+    ``hosts_unreachable`` — "reconnect the host" would send someone to a healthy
+    one.
+
     Args:
         si: vSphere ServiceInstance.
         host_name: Filter to a single host by exact name (None = all hosts).
@@ -270,7 +278,10 @@ def get_ntp_status(
         name = p.get("name", "")
         if host_name and name != host_name:
             continue
-        state = str(p.get("runtime.connectionState") or "unknown")
+        raw_state = p.get("runtime.connectionState")
+        # None is "this account cannot read the host" (e.g. Read-only on one VM
+        # only, lab 2026-10-18), not "vCenter cannot reach it".
+        state = _UNREADABLE if raw_state is None else str(raw_state)
         svc_system = p.get("configManager.serviceSystem")
         hosts.append((name, state, p.get("config.dateTimeInfo"), svc_system))
         # No point asking for the service state of a host nobody can reach; the
@@ -286,7 +297,26 @@ def get_ntp_status(
         )
     }
     unreachable = 0
+    unreadable = 0
     for name, state, dt_info, svc_system in hosts:
+        if state == _UNREADABLE:
+            unreadable += 1
+            results.append(
+                {
+                    "host": sanitize(name),
+                    "reachable": None,
+                    "ntp_servers": None,
+                    "ntpd_running": None,
+                    "ntpd_policy": "unknown",
+                    "healthy": None,
+                    "note": (
+                        "this account cannot read this host's state, so its NTP "
+                        "state was not read. It is not known to be unreachable or "
+                        "misconfigured; grant Read-only on the host to see it."
+                    ),
+                }
+            )
+            continue
         if state != _CONNECTED:
             unreachable += 1
             results.append(
@@ -352,7 +382,12 @@ def get_ntp_status(
             }
         )
     results.sort(key=lambda x: x["host"])
-    extra: dict = {"hosts_unreachable": unreachable}
+    extra: dict = {"hosts_unreachable": unreachable, "hosts_unreadable": unreadable}
+    if unreadable:
+        extra["unreadable_note"] = (
+            f"{unreadable} of {len(results)} host(s) could not be read with this "
+            f"account; their healthy field is null, not false."
+        )
     if unreachable:
         # Its own key rather than the envelope's ``hint``: that one has a fixed
         # family meaning (this page was truncated, here is how to get the rest)

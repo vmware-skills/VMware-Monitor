@@ -181,7 +181,11 @@ def inventory_hosts(target: TargetOption = None, config: ConfigOption = None) ->
     table.add_column("Memory (GB)", justify="right")
     table.add_column("VMs", justify="right")
     for h in hosts:
-        state_style = "green" if h["connection_state"] == "connected" else "red"
+        # Red only for a host vCenter reports as down; a state this account
+        # cannot read ("N/A") is unknown, not an outage.
+        state_style = {"connected": "green", "disconnected": "red", "notResponding": "red"}.get(
+            h["connection_state"], "yellow"
+        )
         table.add_row(
             h["name"],
             f"[{state_style}]{h['connection_state']}[/]",

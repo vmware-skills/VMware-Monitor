@@ -1356,7 +1356,10 @@ def get_ntp_status(
     vCenter could not reach or could not read. Null means nothing was observed;
     false means NTP is misconfigured. Filtering rows for `healthy == false` will
     not surface the unread ones, so check the envelope's `hosts_unreachable`
-    count and `unreachable_note` before reporting the estate as healthy.
+    and `hosts_unreadable` counts (with `unreachable_note` / `unreadable_note`)
+    before reporting the estate as healthy. Unreachable: vCenter cannot reach the
+    host (reachable false). Unreadable: this account cannot read the host's state
+    (reachable null) — not known to be down.
 
     The envelope's ``ntp_sources_consistent`` compares hosts with each other:
     false when hosts that have servers configured use different ones (each row

@@ -330,11 +330,11 @@ def infra_ntp(
             healthy = "[green]yes[/]" if r["healthy"] else "[red]no[/]"
         table.add_row(r["host"], servers, run, r["ntpd_policy"], healthy)
     console.print(table)
-    note = result.get("unreachable_note")
-    if note:
+    for key in ("unreachable_note", "unreadable_note"):
         # Under the table, where someone scanning the Healthy column for red
         # will still meet it. Without this the yellow rows are the only clue.
-        console.print(f"[yellow]{note}[/]")
+        if result.get(key):
+            console.print(f"[yellow]{result[key]}[/]")
     if result.get("ntp_sources_note"):
         console.print(f"[yellow]{result['ntp_sources_note']}[/]")
 
