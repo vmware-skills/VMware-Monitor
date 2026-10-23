@@ -254,8 +254,8 @@ decide:
   gateway misconfiguration then cannot turn into a write.
 - **Tool list size is the main cost, not the extra hop.** The hop adds milliseconds; platform calls take hundreds
   of milliseconds to seconds. But clients put every offered tool's schema into the model's context on every turn.
-  With `--expose read`, vmware-monitor offers 33 tools, vmware-aria 36 and vmware-log-insight 7: about 130,000
-  characters of schema together, roughly 30,000 tokens. Offer the gateway's clients a curated subset, or group
+  Even with `--expose read`, the schemas of vmware-monitor, vmware-aria and vmware-log-insight together come to
+  about 30,000 tokens or more. Offer the gateway's clients a curated subset, or group
   tools per task, rather than passing all of them through.
 - **Timeouts and sessions.** Set the gateway's per-call timeout above the longest call you expect: a call can wait
   up to 300 s for a free session to a busy target. A backend MCP session expires after 30 minutes idle; the gateway
