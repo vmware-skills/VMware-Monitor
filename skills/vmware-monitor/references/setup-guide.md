@@ -233,6 +233,36 @@ vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
   `--expose read`, and a separate endpoint for operators).
 - **Several people or roles on one endpoint:** run `vmware-audit roles enable` once, then give each token a role (`vmware-audit token create NAME --role reader`, or a role in `roles.yaml` naming tools and targets; vmware-policy ≥ 1.24.0). A role limits what the token may call on this endpoint; it cannot grant more than the account has. See vmware-policy's README, "Roles for network callers".
 
+## Behind an MCP gateway
+
+A gateway (one MCP endpoint in front of several servers, for example vmware-monitor, vmware-aria and
+vmware-log-insight) works with these servers as they are: each backend runs as in
+[Serving MCP over HTTPS](#serving-mcp-over-https), and the gateway is just another client. Tool names do not
+collide across vmware-monitor, vmware-aria and vmware-log-insight, so the gateway needs no prefixes. What to
+decide:
+
+- **Who the backend sees.** If the gateway calls every backend with one token of its own, every audit row says
+  `token:<gateway>` and per-caller roles stop meaning anything. To keep per-person audit and roles, have the gateway
+  **forward each caller's own `Authorization` header** to the backend. Servers on one host with the same `OPS_HOME`
+  (default `~/.vmware`) share one token file, so one token per person works on all of them. A backend session is
+  bound to the token that opened it, so the gateway must open a backend session per caller, not share one. If the gateway does
+  its own authentication instead, give it a token per backend and accept that audit identifies the gateway, not
+  the person; forward `traceparent` or `X-Request-ID` so `vmware-audit log --correlation-id ID` still ties calls to
+  one platform request.
+- **Read-only does not depend on the gateway.** Keep the layers on each backend: a read-only platform account (the
+  real boundary), `--expose read` so write tools are never offered, and deny rules in `~/.vmware/rules.yaml`. A
+  gateway misconfiguration then cannot turn into a write.
+- **Tool list size is the main cost, not the extra hop.** The hop adds milliseconds; platform calls take hundreds
+  of milliseconds to seconds. But clients put every offered tool's schema into the model's context on every turn.
+  With `--expose read`, vmware-monitor offers 33 tools, vmware-aria 36 and vmware-log-insight 7: about 130,000
+  characters of schema together, roughly 30,000 tokens. Offer the gateway's clients a curated subset, or group
+  tools per task, rather than passing all of them through.
+- **Timeouts and sessions.** Set the gateway's per-call timeout above the longest call you expect: a call can wait
+  up to 300 s for a free session to a busy target. A backend MCP session expires after 30 minutes idle; the gateway
+  must start a new session when the backend answers 404 for an old one, as the MCP specification requires.
+- **Scaling.** Run one backend endpoint per privilege level, not one per caller. Add sessions per target with
+  `VMWARE_MCP_POOL_SIZE` before adding processes. Point the gateway's health checks at `GET /healthz`.
+
 ## Security
 
 > **Disclaimer**: This is a community-maintained open-source project and is **not affiliated with, endorsed by, or sponsored by VMware, Inc. or Broadcom Inc.** "VMware" and "vSphere" are trademarks of Broadcom.
