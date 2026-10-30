@@ -68,6 +68,10 @@ vmware-monitor investigate vm web-01 --html      # → offline snapshot in ~/vmw
 
 Unknown object names return a **teaching error** naming exactly how to list objects. Via MCP these are the tools `get_cluster_health_summary`, `get_cross_vcenter_attention`, `investigate_vm`, `investigate_host`, `investigate_datastore` — the model calls them and explains the aggregated result in operational language. Full flags: [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md).
 
+### MCP Apps cluster health view (unreleased)
+
+`get_cluster_health_summary` also advertises `ui://vmware-monitor/cluster-health.html` to MCP Apps hosts. A supporting host can render a live cluster dashboard and use its **Investigate** buttons to call the read-only host or datastore tool through the same MCP server, role, Policy and audit path. The HTML is self-contained and renders vSphere names as text. Hosts without MCP Apps support receive the same tool result as before. The view and real vCenter data have been verified through the production loopback HTTP transport; visual rendering in a current third-party host remains to be verified. This is separate from the CLI's offline `--html` snapshot.
+
 ### Quick Install (Recommended)
 
 Works with Claude Code, Cursor, Codex, Gemini CLI, Trae, and 30+ AI agents:
