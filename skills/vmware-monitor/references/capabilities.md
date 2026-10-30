@@ -86,6 +86,13 @@ CLI `summary`, MCP `get_cluster_health_summary`. One aggregated read for a fast
 cross-cluster "is anything on fire?" glance — the operator's first look, not an
 Aria Operations replacement.
 
+On MCP Apps hosts this tool also names the self-contained
+`ui://vmware-monitor/cluster-health.html` view. Its **Investigate** buttons call
+`investigate_host` or `investigate_datastore` through ordinary MCP requests,
+so role checks, Policy and audit still apply. Other hosts see the unchanged
+text result. The UI resource and real vCenter calls have been exercised over
+the production HTTP transport; third-party host rendering remains unverified.
+
 | Aspect | Detail |
 |--------|--------|
 | Passes | 4 batched `RetrievePropertiesEx` calls (clusters, hosts, VMs, datastores) — never one per object (issue #31 class) |

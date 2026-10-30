@@ -50,6 +50,7 @@ from vmware_monitor.connection import (
     ConnectionManager,
     NoVSphereRoleError,
 )
+from vmware_monitor.mcp_server import apps
 from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
 from vmware_monitor.ops.attention import (
     get_cross_vcenter_attention as _ops_get_cross_vcenter_attention,
@@ -294,6 +295,7 @@ def _target_instructions() -> str:
 
 
 mcp = FastMCP("vmware-monitor", instructions=_target_instructions())
+apps.register(mcp)
 
 
 def _with_target(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -540,7 +542,8 @@ def list_all_clusters(
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": True,
-    }
+    },
+    meta=apps.ui_meta(apps.CLUSTER_HEALTH_URI),
 )
 @vmware_tool(risk_level="low")
 @_catch_tool_errors

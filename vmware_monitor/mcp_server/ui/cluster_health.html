@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cluster health</title>
+<style>
+/*__BASE_CSS__*/
+  body { margin:0; }
+  .wrap { padding:16px; }
+  .drill { display:block; margin:6px 0 0 auto; font:inherit; font-size:12px; padding:3px 10px; border-radius:6px;
+           border:1px solid var(--border); background:var(--surface-2); color:var(--ink); cursor:pointer; }
+  .drill:disabled { opacity:.6; cursor:default; }
+  .panel { grid-column:1/-1; margin-top:8px; padding:10px 12px; border-radius:8px;
+           background:var(--surface-2); border:1px solid var(--border); font-size:12px; }
+  .panel dl { display:grid; grid-template-columns:max-content 1fr; gap:2px 12px; margin:0; }
+  .panel dt { color:var(--muted); }
+  .panel dd { margin:0; overflow-wrap:anywhere; }
+  .panel .nested { grid-column:1/-1; padding-left:12px; border-left:2px solid var(--border); }
+  .notice { padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); }
+  /* Host side panels are narrow: keep the problem text in the wide column. */
+  @media (max-width:720px){ .issue .what{grid-column:2} }
+  .notice.err { border-color:var(--crit, #b42318); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="notice">Waiting for the cluster health result…</div></div>
+<script type="application/json" id="drilldown">__DRILLDOWN_JSON__</script>
+<script type="application/json" id="labels">__LABELS_JSON__</script>
+<script>
+(function () {
+  "use strict";
+
+  var PROTOCOL_VERSION = "2026-01-26";
+  var DRILLDOWN = JSON.parse(document.getElementById("drilldown").textContent);
+  var LABELS = JSON.parse(document.getElementById("labels").textContent);
+  var SEV_LABEL = LABELS.sev_label, SEV_CLASS = LABELS.sev_class;
+  var STATUS_CLASS = LABELS.status_class, STATUS_LABEL = LABELS.status_label;
+  var root = document.getElementById("root");
+  var lastTarget = null;
+
+  // ---- DOM helpers: every vSphere string goes in through textContent ----
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+  function add(parent) {
+    for (var i = 1; i < arguments.length; i++) if (arguments[i]) parent.appendChild(arguments[i]);
+    return parent;
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+  function clamp(p) { return Math.max(0, Math.min(100, Number(p) || 0)); }
+  function meterClass(p) { return p >= 95 ? "mcrit" : p >= 85 ? "mwarn" : "mok"; }
+  function num(v) { return Number(v || 0); }
+  // Results name their target as {name, type}; tool arguments name it as a string.
+  function targetName(t) { return typeof t === "string" ? t : (t && t.name) || null; }
+
+  // ---- host bridge: JSON-RPC 2.0 over postMessage (MCP Apps) ----
+  var nextId = 1;
+  var pending = {};
+  function send(msg) { window.parent.postMessage(msg, "*"); }
+  function request(method, params) {
+    var id = nextId++;
+    send({ jsonrpc: "2.0", id: id, method: method, params: params || {} });
+    return new Promise(function (resolve, reject) {
+      pending[id] = { resolve: resolve, reject: reject };
+      setTimeout(function () {
+        if (pending[id]) { delete pending[id]; reject(new Error(method + " timed out")); }
+      }, 60000);
+    });
+  }
+  function notify(method, params) { send({ jsonrpc: "2.0", method: method, params: params || {} }); }
+  function reply(id, result) { send({ jsonrpc: "2.0", id: id, result: result }); }
+
+  window.addEventListener("message", function (event) {
+    if (event.source !== window.parent) return;
+    var msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    if (msg.id !== undefined && !msg.method) {
+      var p = pending[msg.id];
+      if (!p) return;
+      delete pending[msg.id];
+      if (msg.error) p.reject(new Error(msg.error.message || "host error"));
+      else p.resolve(msg.result);
+      return;
+    }
+    if (msg.method === "ui/notifications/tool-input") {
+      var args = (msg.params && msg.params.arguments) || {};
+      if (args.target) lastTarget = targetName(args.target);
+    } else if (msg.method === "ui/notifications/host-context-changed") {
+      applyHostContext(msg.params || {});
+    } else if (msg.method === "ui/notifications/tool-result") {
+      onToolResult(msg.params || {});
+    } else if (msg.id !== undefined) {
+      if (msg.method === "ui/resource-teardown" || msg.method === "ping") reply(msg.id, {});
+      else send({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "Method not found" } });
+    }
+  });
+
+  // Follow the host's light/dark choice; without one the page follows the OS.
+  function applyHostContext(ctx) {
+    if (ctx.theme === "light" || ctx.theme === "dark") document.documentElement.setAttribute("data-theme", ctx.theme);
+  }
+
+  // A tool result carries the payload as structured content when the tool has
+  // an output schema; this one does not, so the JSON text is the payload.
+  function payloadOf(result) {
+    if (result.structuredContent) return result.structuredContent;
+    var blocks = result.content || [];
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i].type === "text") {
+        try { return JSON.parse(blocks[i].text); } catch (e) { return { error: blocks[i].text }; }
+      }
+    }
+    return { error: "The tool returned no readable result." };
+  }
+
+  function onToolResult(result) {
+    var data = payloadOf(result);
+    if (result.isError || data.error) { showError(data.error || "The tool reported an error.", data.hint); return; }
+    if (data.target) lastTarget = targetName(data.target);
+    render(data);
+  }
+
+  function showError(message, hint) {
+    clear(root);
+    var box = add(el("div", "notice err"), el("b", null, "Could not read cluster health. "), el("span", null, message));
+    if (hint) add(box, el("div", "obj", hint));
+    add(root, box);
+  }
+
+  // ---- rendering (mirrors ops/health_html.py) ----
+  function metric(label, width, klass, value) {
+    var meter = el("div", "meter " + klass);
+    var bar = el("span");
+    bar.style.width = clamp(width).toFixed(0) + "%";
+    meter.appendChild(bar);
+    return add(el("div", "metric"), el("span", "ml", label), meter, el("span", "mv", value));
+  }
+
+  function cell(label, value, small) {
+    var v = el("div", "v", value);
+    if (small) v.appendChild(el("small", null, small));
+    return add(el("div", "cell"), el("div", "k", label), v);
+  }
+
+  function issueRow(rank, issue) {
+    var sev = issue.severity || "warning";
+    var cls = SEV_CLASS[sev] || "warn";
+    var row = el("div", "issue " + cls);
+    var what = el("div", "what");
+    add(what, el("div", "prob", issue.detail || ""));
+    var loc = el("div", "obj");
+    var scope = issue.scope;
+    if (scope === "host" || scope === "datastore") {
+      add(loc, document.createTextNode(scope + " "), el("b", null, issue.object || ""));
+      if (issue.cluster) loc.appendChild(document.createTextNode(" · cluster " + issue.cluster));
+    } else {
+      add(loc, document.createTextNode((scope || "cluster") + " "), el("b", null, issue.object || ""));
+    }
+    what.appendChild(loc);
+    var next = el("div", "next");
+    add(next, el("span", "arrow", "→ "), document.createTextNode(issue.drilldown || ""));
+    add(row, el("div", "rank", rank), el("div", "chip " + cls, SEV_LABEL[sev] || sev), what, next);
+
+    var spec = DRILLDOWN[scope];
+    if (spec && issue.object) {
+      var btn = el("button", "drill", "Investigate");
+      btn.type = "button";
+      btn.addEventListener("click", function () { drill(row, btn, spec, scope, issue.object); });
+      next.appendChild(btn);
+    }
+    return row;
+  }
+
+  function clusterCard(c, hasVms) {
+    var status = c.status || "ok";
+    var cls = STATUS_CLASS[status] || "ok";
+    var card = el("div", "card " + cls);
+    add(card, add(el("div", "top"), el("span", "cname", c.name || ""), el("span", "pill " + cls, STATUS_LABEL[status] || status)));
+    var body = el("div", "body");
+    var ht = num(c.hosts_total), hc = num(c.hosts_connected), hu = num(c.hosts_unreadable);
+    // A host this account cannot read is not a disconnected host: amber, not red.
+    var hostsCls = hc === ht ? "mok" : (hc + hu === ht ? "mwarn" : "mcrit");
+    body.appendChild(metric("Hosts", ht ? hc / ht * 100 : 0, hostsCls, hc + "/" + ht + (hu ? " (" + hu + " unreadable)" : "")));
+    if (hasVms) {
+      var vt = num(c.vms_total), von = num(c.vms_on);
+      body.appendChild(metric("VMs on", vt ? von / vt * 100 : 0, "macc", von + "/" + vt));
+    }
+    var cpu = num(c.cpu_used_pct), mem = num(c.mem_used_pct);
+    body.appendChild(metric("CPU", cpu, meterClass(cpu), cpu + "%"));
+    body.appendChild(metric("Memory", mem, meterClass(mem), mem + "%"));
+    // null = the row has no cluster (standalone hosts), so the setting does not apply.
+    var ha = c.ha_enabled == null ? "n/a" : (c.ha_enabled ? "on" : "off");
+    var drs = c.drs_enabled == null ? "n/a" : (c.drs_enabled ? "on" : "off");
+    var al = c.alarms || {};
+    var kv = el("div", "kv");
+    add(kv,
+      add(el("span", "tag " + (ha === "n/a" ? "dim" : ha), "HA "), el("b", null, ha)),
+      add(el("span", "tag " + (drs === "on" ? "on" : "dim"), "DRS "), el("b", null, drs)),
+      el("span", "tag", "alarms " + num(al.critical) + "c / " + num(al.warning) + "w"));
+    body.appendChild(kv);
+    var attn = el("div", "attn");
+    var attention = c.attention || [];
+    if (attention.length) attention.forEach(function (a) { attn.appendChild(el("div", "a", a)); });
+    else attn.appendChild(el("div", "clean", "No issues — cluster healthy"));
+    body.appendChild(attn);
+    card.appendChild(body);
+    return card;
+  }
+
+  function render(data) {
+    var totals = data.totals || {};
+    var clusters = data.clusters || [];
+    var hasVms = "vms_total" in totals;
+    var worst = totals.worst_status || "ok";
+    clear(root);
+
+    var header = el("header");
+    var title = el("div");
+    title.style.width = "100%";
+    add(title, el("div", "eyebrow", "VMware cluster health · live view"));
+    var h1 = add(el("h1", null, "What needs attention on "), el("span", "vc", lastTarget || "the default target"));
+    title.appendChild(h1);
+    var overall = add(el("div", "overall " + (STATUS_CLASS[worst] || "ok")), el("span", "dot"));
+    overall.appendChild(document.createTextNode(STATUS_LABEL[worst] || worst));
+    add(header, title, overall);
+    root.appendChild(header);
+
+    var cells = [
+      cell("Clusters", num(totals.clusters)),
+      cell("Hosts connected", num(totals.hosts_connected),
+        "/" + num(totals.hosts_total) + (totals.hosts_unreadable ? " (" + totals.hosts_unreadable + " unreadable)" : ""))
+    ];
+    if (hasVms) cells.push(cell("VMs powered on", num(totals.vms_on), "/" + num(totals.vms_total)));
+    var al = totals.alarms || {};
+    cells.push(cell("Active alarms", num(al.critical) + " crit · " + num(al.warning) + " warn"));
+    var strip = el("div", "totals");
+    strip.style.setProperty("--tc", String(cells.length));
+    cells.forEach(function (c) { strip.appendChild(c); });
+    root.appendChild(strip);
+
+    var issues = data.top_issues || [];
+    if (issues.length) {
+      var label = add(el("div", "section-label", "Top issues "),
+        el("span", "count", issues.length + " shown · " + (data.issues_total != null ? data.issues_total : issues.length) + " total"));
+      var list = el("div", "issues");
+      issues.forEach(function (iss, i) { list.appendChild(issueRow(i + 1, iss)); });
+      add(root, label, list);
+    } else {
+      root.appendChild(el("div", "clean-all", "No issues detected — every cluster is OK."));
+    }
+
+    add(root, add(el("div", "section-label", "Clusters "), el("span", "count", "worst status first")));
+    var cards = el("div", "cards");
+    clusters.forEach(function (c) { cards.appendChild(clusterCard(c, hasVms)); });
+    root.appendChild(cards);
+
+    var footer = el("footer");
+    if (data.customization_hint) footer.appendChild(el("div", "hint", data.customization_hint));
+    footer.appendChild(add(el("div", "meta"), el("span", null, data.snapshot || "point-in-time snapshot")));
+    root.appendChild(footer);
+  }
+
+  // ---- drill-down: a read-only tool, called through the host ----
+  function drill(row, btn, spec, scope, name) {
+    var old = row.querySelector(".panel");
+    if (old) { row.removeChild(old); btn.textContent = "Investigate"; return; }
+    var panel = el("div", "panel", "Investigating " + scope + " " + name + "…");
+    row.appendChild(panel);
+    btn.disabled = true;
+    var args = {};
+    args[spec.arg] = name;
+    if (lastTarget) args.target = lastTarget;
+    request("tools/call", { name: spec.tool, arguments: args }).then(function (result) {
+      clear(panel);
+      var data = payloadOf(result || {});
+      if ((result && result.isError) || data.error) {
+        add(panel, el("b", null, "Could not investigate: "), el("span", null, data.error || "tool error"));
+      } else {
+        panel.appendChild(tree(data, 0));
+      }
+      btn.textContent = "Hide";
+    }).catch(function () {
+      // Host cannot call tools from the view: hand the step back to the agent.
+      clear(panel);
+      panel.textContent = "This host cannot run tools from the view; asked the assistant to investigate instead.";
+      request("ui/message", {
+        role: "user",
+        content: [{ type: "text", text: "Investigate " + scope + " " + name + " with " + spec.tool + "." }]
+      }).catch(function () {
+        panel.textContent = "Run " + spec.tool + " for " + scope + " " + name + " to see the details.";
+      });
+      btn.textContent = "Hide";
+    }).then(function () { btn.disabled = false; });
+  }
+
+  // Key/value view of any JSON value, depth- and length-capped.
+  function tree(value, depth) {
+    if (value === null || typeof value !== "object") return el("span", null, value === null ? "—" : value);
+    if (depth >= 3) return el("span", null, Array.isArray(value) ? "[" + value.length + " items]" : "{…}");
+    var dl = el("dl");
+    var keys = Array.isArray(value) ? value.slice(0, 20).map(function (_v, i) { return i; }) : Object.keys(value);
+    keys.forEach(function (k) {
+      var v = value[k];
+      if (v !== null && typeof v === "object") {
+        dl.appendChild(el("dt", null, Array.isArray(value) ? "#" + (k + 1) : k));
+        dl.appendChild(add(el("dd"), el("span", null, Array.isArray(v) ? v.length + " items" : "")));
+        dl.appendChild(add(el("div", "nested"), tree(v, depth + 1)));
+      } else {
+        add(dl, el("dt", null, Array.isArray(value) ? "#" + (k + 1) : k), add(el("dd"), tree(v, depth + 1)));
+      }
+    });
+    if (Array.isArray(value) && value.length > 20) dl.appendChild(el("dd", null, "… " + (value.length - 20) + " more"));
+    return dl;
+  }
+
+  // ---- size reporting and handshake ----
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      notify("ui/notifications/size-changed", {
+        width: document.documentElement.scrollWidth,
+        height: document.documentElement.scrollHeight
+      });
+    }).observe(document.body);
+  }
+
+  request("ui/initialize", {
+    protocolVersion: PROTOCOL_VERSION,
+    appInfo: { name: "vmware-monitor cluster health", version: "1" },
+    appCapabilities: {}
+  }).then(function (result) {
+    applyHostContext((result && result.hostContext) || {});
+    notify("ui/notifications/initialized", {});
+  }).catch(function (err) {
+    showError("The host did not complete the MCP Apps handshake: " + err.message);
+  });
+})();
+</script>
+</body>
+</html>
