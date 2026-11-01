@@ -1,6 +1,8 @@
 <!-- mcp-name: io.github.vmware-skills/vmware-monitor -->
 # VMware Monitor
 
+要用自己的模型和 Agent 平台进行只读自测，请看 marketplace 根目录的[共享模型适配自测任务](https://github.com/vmware-skills/marketplace/blob/main/MODEL_FIT_SELF_TEST.md)。
+
 > **作者**: Wei Zhou, VMware by Broadcom — wei-wz.zhou@broadcom.com
 > 本项目由 VMware 工程师维护的社区项目，非 VMware 官方产品。
 > VMware 官方开发者工具请访问 [developer.broadcom.com](https://developer.broadcom.com)。
@@ -140,7 +142,7 @@ ESXi 独立主机 ──→ VM
 |------|:-------:|:----:|------|
 | 活跃告警 | ✅ | ✅ | 严重级别、告警名、实体、时间 |
 | 事件日志查询 | ✅ | ✅ | 按时间、严重级别过滤，识别 50+ 事件类型 |
-| 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red） — CLI `health sensors`，MCP `get_host_sensors` |
+| 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red）；MCP `interpretation_note` 说明聚合传感器结论的边界 — CLI `health sensors`，MCP `get_host_sensors` |
 | 主机服务状态 | ✅ | ✅ | 服务运行/停止状态 — CLI `health services`，MCP `get_host_services` |
 | 账号权限 | ✅ | ✅ | server 使用哪个账号，以及它在根文件夹上是否具备每个工具所需的权限 — CLI `access-info`，MCP `get_access_info` |
 

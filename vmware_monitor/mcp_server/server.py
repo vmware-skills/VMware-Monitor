@@ -905,6 +905,10 @@ def get_host_sensors(
     (the CIM Server, sfcbd-watchdog, supplies the sensors; null = not read), and
     ``sensors_note`` says what that means — quote it.
 
+    ``interpretation_note`` bounds what a red aggregate memory sensor proves:
+    it does not identify a DIMM/slot, establish ECC errors, or predict failure.
+    Keep observed status separate from a component diagnosis.
+
     Use this for physical hardware only — for CPU/memory load use
     get_host_performance, and follow up on a red sensor with
     investigate_host to see the alarms and events around that host.
