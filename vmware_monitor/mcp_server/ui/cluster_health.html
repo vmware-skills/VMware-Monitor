@@ -249,6 +249,12 @@
       var list = el("div", "issues");
       issues.forEach(function (iss, i) { list.appendChild(issueRow(i + 1, iss)); });
       add(root, label, list);
+    } else if (num(data.issues_total) > 0) {
+      root.appendChild(el("div", "notice", data.issues_total + " issue(s) detected; the focus list is empty. Review cluster details or request a larger top_n."));
+    } else if (worst !== "ok") {
+      root.appendChild(el("div", "notice", "Cluster status needs attention. Review the cluster details below."));
+    } else if (!clusters.length) {
+      root.appendChild(el("div", "notice", "No cluster rows were returned for this scope."));
     } else {
       root.appendChild(el("div", "clean-all", "No issues detected — every cluster is OK."));
     }
