@@ -1,4 +1,4 @@
-## Unreleased — sensor evidence scope (discussion #43)
+## v2.4.3 — sensor evidence scope (2026-11-01)
 
 * `get_host_sensors` adds `interpretation_note` when sensor rows exist. A red
   aggregate memory sensor is a reported health condition, not evidence of a

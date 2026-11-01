@@ -50,7 +50,7 @@ Read-only VMware vCenter/ESXi monitoring — 33 MCP tools, zero destructive code
 ## Quick Install
 
 ```bash
-uv tool install vmware-monitor==2.4.2
+uv tool install vmware-monitor==2.4.3
 vmware-monitor doctor
 ```
 
@@ -96,7 +96,7 @@ an agent can follow directly. Example: `references/capabilities.md`.
 
 ### Cluster Health Check ("is anything on fire?" / "what's wrong right now?")
 
-**Judgment**: this is the 5-second triage glance, not an Aria replacement. One call rolls every cluster's hosts, VM power, live CPU/memory and alarms up, flattens the individual anomalies into a ranked **top-N focus list** (`top_issues`), and gives each cluster an opinionated `status`. On a big fleet, lead with the focus list — scanning per-cluster rows is too slow.
+**Judgment**: a fast triage glance, not an Aria replacement. One call rolls up hosts, VM power, CPU/memory and alarms into a ranked **top-N focus list** (`top_issues`) and per-cluster `status`. Lead with the focus list for large fleets.
 
 1. One glance --> `vmware-monitor summary` (MCP: `get_cluster_health_summary`). Read `top_issues` first (worst first, each with a drill-down `next step`); the per-cluster table is context. `issues_total` shows how many anomalies existed before the top-N cap
 2. Tighten or widen the focus --> `--top 5` for the 5 most urgent, `--top 20` for more, `--top 0` to hide the list and just see the table
@@ -270,7 +270,7 @@ Config example: `references/setup-guide.md`.
 ## Setup
 
 ```bash
-uv tool install vmware-monitor==2.4.2
+uv tool install vmware-monitor==2.4.3
 vmware-monitor init      # guided: prompts for host/user/password, writes config + .env (chmod 600), then verifies
 ```
 
