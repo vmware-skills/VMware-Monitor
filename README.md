@@ -174,7 +174,7 @@ ESXi Standalone ──→ VMs
 |---------|:-------:|:----:|---------|
 | Active Alarms | ✅ | ✅ | Severity, alarm name, entity, timestamp |
 | Event/Log Query | ✅ | ✅ | Filter by time range, severity; 50+ event types |
-| Hardware Sensors | ✅ | ✅ | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red) — CLI `health sensors`, MCP `get_host_sensors` |
+| Hardware Sensors | ✅ | ✅ | Per-sensor `type` (temperature/voltage/fan...), reading, unit, and health `status` (green/yellow/red); MCP `interpretation_note` bounds aggregate sensor conclusions — CLI `health sensors`, MCP `get_host_sensors` |
 | Host Services | ✅ | ✅ | hostd, vpxa running/stopped status — CLI `health services`, MCP `get_host_services` |
 | Account Access | ✅ | ✅ | Which account the server uses and whether it holds each tool's privileges on the root folder — CLI `access-info`, MCP `get_access_info` |
 

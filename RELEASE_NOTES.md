@@ -1,3 +1,11 @@
+## Unreleased — sensor evidence scope (discussion #43)
+
+* `get_host_sensors` adds `interpretation_note` when sensor rows exist. A red
+  aggregate memory sensor is a reported health condition, not evidence of a
+  specific DIMM/slot, ECC errors, or imminent host failure. Sensor rows and
+  read behavior are unchanged. Reported by @juanpf-ha in the
+  [organization discussion](https://github.com/orgs/vmware-skills/discussions/43).
+
 ## v2.4.2 — an unreadable host is not down; a login refused for lack of a role says so (2026-10-19)
 
 Found on a vCenter 8.0.3 lab with two restricted SSO accounts (follow-up to AIops#47).
