@@ -1195,7 +1195,7 @@ wheels = [
 
 [[package]]
 name = "vmware-monitor"
-version = "2.4.3"
+version = "2.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
