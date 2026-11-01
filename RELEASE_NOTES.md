@@ -1,4 +1,4 @@
-## Unreleased — MCP Apps cluster health view
+## v2.5.0 — MCP Apps cluster health view (2026-11-01)
 
 * `get_cluster_health_summary` now advertises a self-contained MCP Apps `ui://` resource. Supporting hosts can display a cluster dashboard and call read-only `investigate_host` / `investigate_datastore` through the ordinary MCP tool path; other hosts receive unchanged tool output. The page loads no remote assets and writes vSphere strings as text.
 * Verified the resource, tool metadata, real summary data and a host drill-down through the production loopback HTTP transport against a lab vCenter. All calls reached the temporary central audit database. Visual rendering in a current third-party host has not been verified in this round.
