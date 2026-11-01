@@ -138,7 +138,7 @@ ESXi 独立主机 ──→ VM
 |------|:-------:|:----:|------|
 | 活跃告警 | ✅ | ✅ | 严重级别、告警名、实体、时间 |
 | 事件日志查询 | ✅ | ✅ | 按时间、严重级别过滤，识别 50+ 事件类型 |
-| 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red） — CLI `health sensors`，MCP `get_host_sensors` |
+| 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red）；MCP `interpretation_note` 说明聚合传感器结论的边界 — CLI `health sensors`，MCP `get_host_sensors` |
 | 主机服务状态 | ✅ | ✅ | 服务运行/停止状态 — CLI `health services`，MCP `get_host_services` |
 | 账号权限 | ✅ | ✅ | server 使用哪个账号，以及它在根文件夹上是否具备每个工具所需的权限 — CLI `access-info`，MCP `get_access_info` |
 

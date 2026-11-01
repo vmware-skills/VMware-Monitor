@@ -173,7 +173,7 @@ Offer the levels progressively — do **not** ask for details the environment al
 | `list_all_networks` | Networks with attached VM count and accessibility |
 | `get_alarms` | Active alarms: `suggested_actions`, acknowledger, `condition_now` (`cleared` = stale) |
 | `get_events` | Events by severity and time window (`start`/`end`) |
-| `get_host_sensors` | Hardware sensor status (temperature/voltage/fan) per host with green/yellow/red health |
+| `get_host_sensors` | Hardware sensor status per host with green/yellow/red health; `interpretation_note` says what an aggregate red memory sensor cannot establish |
 | `get_host_services` | Host service status (running state and startup policy), optionally filtered by host |
 | `get_vm_info` | Detailed VM info (CPU, memory, disks, NICs, snapshots) |
 | `list_vm_snapshots` | Snapshot list for one VM with nesting hierarchy (read-only) |

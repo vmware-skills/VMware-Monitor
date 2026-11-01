@@ -44,6 +44,13 @@ empty `items` with `truncated: false` means "checked, found none" only when
 `logs_unavailable` is empty as well. With unread logs, the honest answer is
 "nothing matched in the logs that could be read" — name the ones that could not.
 
+`get_host_sensors` adds `interpretation_note` when sensor rows exist. A red
+aggregate memory sensor reports the named sensor's health; by itself it does
+not identify a DIMM or slot, establish ECC errors, or predict host failure.
+Use component-level diagnostics before making those claims. The sensor rows
+remain unchanged, so a sensor that explicitly names a component is not
+silently reclassified as aggregate.
+
 By default `scan_host_logs` groups repeated lines by pattern, per log: each item has `count`,
 `hosts`, `first_seen` / `last_seen` (the log's own timestamps), `severity`, `log_level`, `pattern`
 and one `sample`; `lines_matched` is the ungrouped count and `group=false` returns one row per

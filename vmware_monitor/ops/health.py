@@ -862,6 +862,14 @@ def _no_sensors_note(rows: list[dict]) -> str:
     return f"{len(rows)} connected host(s) report no hardware sensors. " + "; ".join(parts) + "."
 
 
+_SENSOR_INTERPRETATION_NOTE = (
+    "A sensor status is vSphere's reported health for the named sensor. "
+    "A red aggregate memory sensor alone does not identify a DIMM or slot, "
+    "establish ECC errors, or predict host failure; use component-level "
+    "diagnostics for those claims."
+)
+
+
 def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> dict:
     """Get hardware sensor status for all hosts.
 
@@ -920,6 +928,8 @@ def get_host_hardware_status(si: ServiceInstance, limit: int | None = None) -> d
         "hosts_without_sensors": without[:_MAX_HOSTS_LISTED],
         "hosts_without_sensors_total": len(without),
     }
+    if total:
+        extra["interpretation_note"] = _SENSOR_INTERPRETATION_NOTE
     if without:
         extra["sensors_note"] = _no_sensors_note(without)
     return paginated(results, limit=limit, total=total, **extra)
