@@ -48,7 +48,7 @@ It does write to the local machine — by default under your home directory:
 |---|---|---|
 | `~/.vmware-monitor/config.yaml`, `~/.vmware-monitor/.env` | `vmware-monitor init` | Once, when you run it (`.env` is set to 0600) |
 | `~/.vmware-monitor/.env` (rewritten in place) | Every run | Only if it holds a plaintext `*_PASSWORD`: the value is rewritten as `b64:` (see below) |
-| `~/.vmware/audit.db` (SQLite; `OPS_HOME` moves it) | vmware-policy | Every MCP tool call, and every CLI command that reaches vCenter |
+| `~/.vmware/audit.db` (SQLite; `OPS_HOME` moves it) | vmware-policy | Every MCP tool call, remote CLI call, daemon target scan and webhook send |
 | `~/.vmware-monitor/audit.log` (JSON Lines) | CLI | Every CLI query command |
 | `~/vmware-health/*.html` | `summary` / `investigate` / `attention` | Only with `--html` (or `--html-path <file>`) |
 | `~/.vmware-monitor/daemon.pid`, `~/.vmware-monitor/scan.log` (`notify.log_file` moves the log) | Scanner daemon | Only after `daemon start` |
@@ -276,7 +276,7 @@ decide:
   - (Optional) Webhook URLs for Slack/Discord notifications
 
   The config file `~/.vmware-monitor/config.yaml` stores only target hostnames, ports, and usernames — it does **not** contain passwords or tokens. The env var `VMWARE_MONITOR_CONFIG` points to this YAML file.
-- **Webhook Data Scope**: Webhook notifications are **disabled by default**. When enabled, the daemon posts to **user-configured URLs only** (Slack, Discord, or any HTTP endpoint you control); no data is sent to any other service. Each payload carries critical/warning counts plus every critical issue and every alarm/event warning from that scan — host-log warnings go to `scan.log` only, and `info` rows (unreadable or partly-read host logs) are never sent. Each issue carries the entity name and one of: the alarm name, vCenter event message (sanitized, ≤500 chars), ESXi log line matching critical/panic/corrupt (sanitized, ≤200 chars), or the error text for a target the daemon could not connect to. Event, log, and error text can contain host names, IP addresses, and user names — treat the webhook destination as receiving operational data. No credentials from the skill's config or `.env` are included.
+- **Webhook Data Scope**: Webhook notifications are **disabled by default**. When enabled, the daemon posts to **user-configured URLs only** (Slack, Discord, or any HTTP endpoint you control); no data is sent to any other service. Each payload carries critical/warning counts plus every critical issue and every alarm/event warning from that scan — host-log warnings go to `scan.log` only, and `info` rows (unreadable or partly-read host logs) are never sent. Each issue carries the entity name and one of: the alarm name, vCenter event message (sanitized, ≤500 chars), ESXi log line matching critical/panic/corrupt (sanitized, ≤200 chars), or a generic connection/policy failure class, without raw exception text. Event and log text can contain host names, IP addresses, and user names — treat the webhook destination as receiving operational data. No credentials from the skill's config or `.env` are included.
 - **Prompt Injection Protection**: All vSphere-sourced content (event messages, host logs) is truncated, stripped of control characters, and wrapped in boundary markers (`[VSPHERE_EVENT]`/`[VSPHERE_HOST_LOG]`) before output to prevent prompt injection when consumed by LLM agents.
 
 **The account is the boundary.** This skill has no write tools, but an agent that can run shell commands can reach
@@ -323,3 +323,5 @@ When the user starts a conversation, **always ask first**:
 1. **Which environment** do they want to monitor? (vCenter Server or standalone ESXi host)
 2. **Which target** from their config? (e.g., `prod-vcenter`, `lab-esxi`)
 3. If no config exists yet, guide them through creating `~/.vmware-monitor/config.yaml`
+
+Daemon target reads (`daemon_scan`) and notification sends (`webhook_send`) pass Policy before network access. Their unified audit rows use `surface=daemon` and contain counts/outcomes, not endpoint URLs or incident text. Repeated unchanged failures are recorded once until recovery or an outcome change; successful operations are always recorded. A background scan with failed passes or unread/skipped log coverage is audited as incomplete.
