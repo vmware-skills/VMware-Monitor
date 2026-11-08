@@ -77,6 +77,13 @@ use the original log timestamp for `time` and a separate `observed_at` for the s
 timestamp remains null. Patch reads retain nested `base_image` and `components` evidence, with explicit
 markers when large or deeply nested metadata is omitted.
 
+The health summary includes the connected endpoint's `api_type`, `version` and
+`build`, distinct from ESXi hosts in its inventory. Interactive log scans accept
+selected diagnostic keys: `scan_host_logs(log_keys=["hostd", "vobd"])` or
+`vmware-monitor scan logs --log-key hostd --log-key vobd`. Defaults remain
+hostd/vmkernel/vpxa. Unavailable logs are reported as coverage gaps; keys are
+API identifiers, never file paths.
+
 ### MCP Apps cluster health view (2.5.0)
 
 `get_cluster_health_summary` also advertises `ui://vmware-monitor/cluster-health.html` to MCP Apps hosts. A supporting host can render a live cluster dashboard and use its **Investigate** buttons to call the read-only host or datastore tool through the same MCP server, role, Policy and audit path. The HTML is self-contained and renders vSphere names as text. Hosts without MCP Apps support receive the same tool result as before. The view and real vCenter data have been verified through the production loopback HTTP transport; visual rendering in a current third-party host remains to be verified. This is separate from the CLI's offline `--html` snapshot.

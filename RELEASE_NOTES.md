@@ -1,3 +1,11 @@
+## Unreleased — endpoint and selected-log evidence
+
+- Health summaries include sanitized endpoint API type, version and build,
+  distinct from ESXi inventory; unavailable metadata preserves health evidence.
+- MCP `scan_host_logs(log_keys=[...])` and repeatable CLI `scan logs --log-key`
+  select bounded diagnostic identifiers. Defaults remain unchanged; unsupported
+  keys remain visible coverage gaps and the envelope records the selected keys.
+
 ## Unreleased — background scan policy and audit
 
 * Scheduled target scans and webhook sends now check Policy and write minimal unified audit records with the daemon surface. Partial scans, policy denials and interruptions are recorded truthfully; unchanged failures are deduplicated until recovery or a changed outcome.
