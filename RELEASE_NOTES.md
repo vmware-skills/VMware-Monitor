@@ -1,18 +1,19 @@
-## Unreleased — endpoint and selected-log evidence
+## v2.6.0 — endpoint evidence, selected logs and governed background scans (2026-11-08)
 
+* Update public author/project contact metadata to `zhouwei008@gmail.com`.
+
+### endpoint and selected-log evidence
 - Health summaries include sanitized endpoint API type, version and build,
   distinct from ESXi inventory; unavailable metadata preserves health evidence.
 - MCP `scan_host_logs(log_keys=[...])` and repeatable CLI `scan logs --log-key`
   select bounded diagnostic identifiers. Defaults remain unchanged; unsupported
   keys remain visible coverage gaps and the envelope records the selected keys.
 
-## Unreleased — background scan policy and audit
-
+### background scan policy and audit
 * Scheduled target scans and webhook sends now check Policy and write minimal unified audit records with the daemon surface. Partial scans, policy denials and interruptions are recorded truthfully; unchanged failures are deduplicated until recovery or a changed outcome.
 * Audit summaries exclude notification endpoints and log text. Connection errors sent as notifications and webhook transport/status logs no longer quote raw errors or response bodies that may contain credentials.
 
-## Unreleased — preserve host, log-time and patch evidence
-
+### preserve host, log-time and patch evidence
 * The vCenter REST client now honors system proxy bypass rules for the configured origin while preserving TLS verification and CA environment settings.
 
 * Host investigation collects and returns the exact ESXi build, with null for an unreadable build.
@@ -2051,7 +2052,7 @@ This release tracks vmware-pilot v1.5.17 (new `investigate_alert` template + `re
 - **[READ]/[WRITE] tool prefixes**: All MCP tool descriptions now start with [READ] or [WRITE] to clearly indicate operation type
 - **Read/write split counts**: SKILL.md MCP Tools section header shows exact read vs write tool counts
 - **Negative routing**: Description frontmatter includes "Do NOT use when..." clause to prevent misrouting
-- **Broadcom author attestation**: README.md, README-CN.md, and pyproject.toml include VMware by Broadcom author identity (wei-wz.zhou@broadcom.com) to resolve Snyk E005 brand warnings
+- **Broadcom author attestation**: README.md, README-CN.md, and pyproject.toml include VMware by Broadcom author identity (zhouwei008@gmail.com) to resolve Snyk E005 brand warnings
 
 ### Monitor-specific
 
