@@ -189,6 +189,7 @@ def _fake_app_config():
             log_file="unused.log", webhook_url="", webhook_timeout=5
         ),
         targets=(),
+        environment_for=lambda name: "",
     )
 
 

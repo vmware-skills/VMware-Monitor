@@ -15,7 +15,7 @@ English | [中文](README-CN.md)
 >
 > **How that is enforced, precisely.** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) parses every source file with `ast` and requires each vSphere method the package calls to appear on a reviewed allowlist, cross-checked against pyVmomi's own type metadata: anything returning a `vim.Task`, or gated by vCenter on a non-read privilege, fails unless a human wrote down why. Today that allowlist is fourteen methods. The check is a gate on the code as written — it cannot see a method name assembled at runtime, and nothing runs it automatically, so it holds only as far as someone runs the test suite. For a guarantee that does not depend on this repository at all, point the skill at a dedicated account holding vCenter's built-in **Read-Only** role ([which reads need more than that role](skills/vmware-monitor/references/setup-guide.md#security)).
 >
-> **What "read-only" does not cover.** It is a claim about vCenter/ESXi: no code path changes their state. On vCenter the skill opens only its own login session and short-lived query handles it releases. It does write locally: `~/.vmware-monitor/config.yaml` and `.env` (via `init`; plaintext passwords in `.env` are rewritten as `b64:` on load), audit logs (`~/.vmware/audit.db` for MCP calls, `~/.vmware-monitor/audit.log` for CLI commands), `--html` snapshots in `~/vmware-health/`, and — only after `daemon start` — `daemon.pid`, `scan.log`, and posts to a webhook you configured. Full table: [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally).
+> **What "read-only" does not cover.** It is a claim about vCenter/ESXi: no code path changes their state. On vCenter the skill opens only its own login session and short-lived query handles it releases. It does write locally: `~/.vmware-monitor/config.yaml` and `.env` (via `init`; plaintext passwords in `.env` are rewritten as `b64:` on load), audit logs (`~/.vmware/audit.db` for MCP, remote CLI calls and daemon operations; the legacy per-skill log remains), `--html` snapshots in `~/vmware-health/`, and — only after `daemon start` — `daemon.pid`, `scan.log`, and posts to a webhook you configured. Full table: [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally).
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -70,7 +70,21 @@ vmware-monitor investigate vm web-01 --html      # → offline snapshot in ~/vmw
 
 Unknown object names return a **teaching error** naming exactly how to list objects. Via MCP these are the tools `get_cluster_health_summary`, `get_cross_vcenter_attention`, `investigate_vm`, `investigate_host`, `investigate_datastore` — the model calls them and explains the aggregated result in operational language. Full flags: [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md).
 
-### MCP Apps cluster health view (unreleased)
+### Evidence fields
+
+Host investigation includes the exact ESXi `build`, or null when unreadable. Ungrouped host-log findings
+use the original log timestamp for `time` and a separate `observed_at` for the scan time; a missing log
+timestamp remains null. Patch reads retain nested `base_image` and `components` evidence, with explicit
+markers when large or deeply nested metadata is omitted.
+
+The health summary includes the connected endpoint's `api_type`, `version` and
+`build`, distinct from ESXi hosts in its inventory. Interactive log scans accept
+selected diagnostic keys: `scan_host_logs(log_keys=["hostd", "vobd"])` or
+`vmware-monitor scan logs --log-key hostd --log-key vobd`. Defaults remain
+hostd/vmkernel/vpxa. Unavailable logs are reported as coverage gaps; keys are
+API identifiers, never file paths.
+
+### MCP Apps cluster health view (2.5.0)
 
 `get_cluster_health_summary` also advertises `ui://vmware-monitor/cluster-health.html` to MCP Apps hosts. A supporting host can render a live cluster dashboard and use its **Investigate** buttons to call the read-only host or datastore tool through the same MCP server, role, Policy and audit path. The HTML is self-contained and renders vSphere names as text. Hosts without MCP Apps support receive the same tool result as before. The view and real vCenter data have been verified through the production loopback HTTP transport; visual rendering in a current third-party host remains to be verified. This is separate from the CLI's offline `--html` snapshot.
 
@@ -214,6 +228,7 @@ ESXi Standalone ──→ VMs
 | Structured Log | JSONL output to `~/.vmware-monitor/scan.log` — every issue, `info` rows included |
 | Webhook | Slack, Discord, or any HTTP endpoint. Receives every critical issue and every alarm/event warning; host-log warnings go to the scan log only, and `info` rows are never sent |
 | Cycle Summary | One line per cycle in the daemon's log output: findings (and how many went to the webhook), unreadable host logs, logs with unscanned lines, failed passes. If any pass failed or a target could not be reached it reads `Scan INCOMPLETE`, never "all clear" |
+| Daemon Policy & Audit | Each target scan and webhook send checks Policy and writes to the unified audit database with `surface=daemon`. Failed/incomplete reads, denials and interruptions are distinct. Unchanged failures are deduplicated for the process lifetime; every success is recorded. Audit summaries exclude webhook URLs and incident text |
 | Daemon Management | `daemon start/stop/status`, PID file, graceful shutdown |
 
 ### 5. Safety Features
@@ -225,7 +240,7 @@ ESXi Standalone ──→ VMs
 | **Password Protection** | `.env` file loading with permission check (warn if not 600) |
 | **SSL Self-signed Support** | `verify_ssl: false` — only for ESXi with self-signed certs in isolated labs; production should use CA-signed certificates |
 | **Prompt Injection Protection** | vSphere event messages and host logs are truncated, sanitized, and wrapped in boundary markers |
-| **Webhook Data Scope** | Disabled by default. When configured, the daemon posts to your URL only: every critical issue (alarms, events, ESXi log lines matching critical/panic/corrupt, targets it could not connect to) and every alarm/event warning — host-log warnings stay in the scan log, and `info` rows are never sent. Each issue carries its entity name and message: sanitized alarm, event, or ESXi log text, or the connection error, which can include host names, IPs, and user names. No credentials from the skill's config or `.env` are sent |
+| **Webhook Data Scope** | Disabled by default. When configured, the daemon posts to your URL only: every critical issue (alarms, events, ESXi log lines matching critical/panic/corrupt, targets it could not connect to) and every alarm/event warning — host-log warnings stay in the scan log, and `info` rows are never sent. Each issue carries its entity name and message: sanitized alarm, event, or ESXi log text, or a generic connection/policy failure class; operational text can include host names, IPs, and user names. No credentials from the skill's config or `.env` are sent |
 | **Production Recommended** | AI agents can misinterpret context and execute unintended destructive operations — real-world incidents have shown AI-driven tools deleting production databases and entire environments. VMware-Monitor removes that class of risk from its own code: no destructive code paths exist, and the allowlist gate fails the build if one is added. Pair it with a read-only vCenter account for defence that does not rely on this codebase. Use [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) only in dev/lab environments |
 
 ### What's NOT Included (By Design)
@@ -841,6 +856,12 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
 exists for the write-capable skills. Least privilege comes from the account the server uses.
 
 Details: `skills/vmware-monitor/references/setup-guide.md` ("Serving MCP over HTTPS", "Limiting which tools are offered").
+
+## System proxy bypass
+
+The vCenter REST client honors the operating system proxy bypass list for the configured origin.
+TLS verification still follows `verify_ssl`, and CA environment settings such as `SSL_CERT_FILE` remain active.
+Other origins retain their normal proxy routing.
 
 ## License
 

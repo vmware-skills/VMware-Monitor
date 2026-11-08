@@ -18,10 +18,10 @@ that can mutate vCenter state.
 
 from __future__ import annotations
 
+import urllib.request
 from typing import TYPE_CHECKING, Any
 
 import httpx
-
 from vmware_policy import sanitize
 from vmware_policy.compat import Requires, parse_version, version_remedy
 
@@ -209,7 +209,12 @@ class VsphereRest:
         self._product_version: str | None | object = _UNPROBED
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(base_url=self._base, verify=self._verify, timeout=_TIMEOUT_S)
+        mounts = None
+        if urllib.request.proxy_bypass(self._target.host):
+            mounts = {self._base: httpx.HTTPTransport(verify=self._verify, trust_env=True)}
+        return httpx.Client(
+            base_url=self._base, verify=self._verify, timeout=_TIMEOUT_S, mounts=mounts
+        )
 
     def _login(self) -> str:
         """POST /api/session with Basic auth → session id (cached).

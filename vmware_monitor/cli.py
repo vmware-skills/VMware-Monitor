@@ -551,16 +551,23 @@ def scan_logs_cmd(
     raw: Annotated[
         bool, typer.Option("--raw", help="One row per matching line, not grouped")
     ] = False,
+    log_keys: Annotated[
+        list[str] | None, typer.Option("--log-key", help="Diagnostic key; repeat to select logs")
+    ] = None,
     target: TargetOption = None,
     config: ConfigOption = None,
 ) -> None:
     """Scan ESXi host logs (hostd/vmkernel/vpxa) for trouble, grouped by pattern."""
     from rich.markup import escape
 
-    from vmware_monitor.scanner.log_scanner import scan_host_logs
+    from vmware_monitor.scanner.log_scanner import scan_host_logs, validate_log_keys
 
+    try:
+        keys = validate_log_keys(log_keys)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--log-key") from None
     si, _, tgt = _get_connection(target, config)
-    result = scan_host_logs(si, host_name=host, lines=lines, group=not raw)
+    result = scan_host_logs(si, host_name=host, lines=lines, group=not raw, log_keys=keys)
     _audit.log_query(target=tgt, resource="host_logs", query_type="scan_host_logs")
     sev_style = {"critical": "red", "warning": "yellow", "info": "dim"}
     items = result["items"]

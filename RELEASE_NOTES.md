@@ -1,3 +1,24 @@
+## Unreleased — endpoint and selected-log evidence
+
+- Health summaries include sanitized endpoint API type, version and build,
+  distinct from ESXi inventory; unavailable metadata preserves health evidence.
+- MCP `scan_host_logs(log_keys=[...])` and repeatable CLI `scan logs --log-key`
+  select bounded diagnostic identifiers. Defaults remain unchanged; unsupported
+  keys remain visible coverage gaps and the envelope records the selected keys.
+
+## Unreleased — background scan policy and audit
+
+* Scheduled target scans and webhook sends now check Policy and write minimal unified audit records with the daemon surface. Partial scans, policy denials and interruptions are recorded truthfully; unchanged failures are deduplicated until recovery or a changed outcome.
+* Audit summaries exclude notification endpoints and log text. Connection errors sent as notifications and webhook transport/status logs no longer quote raw errors or response bodies that may contain credentials.
+
+## Unreleased — preserve host, log-time and patch evidence
+
+* The vCenter REST client now honors system proxy bypass rules for the configured origin while preserving TLS verification and CA environment settings.
+
+* Host investigation collects and returns the exact ESXi build, with null for an unreadable build.
+* Ungrouped host-log findings use the original log timestamp for `time`, retain null when it is absent, and report scan time separately as `observed_at`.
+* Patch compliance and last-apply results retain sanitized nested base-image and component metadata, with explicit markers for omitted size/depth limits.
+
 ## v2.5.0 — MCP Apps cluster health view (2026-11-01)
 
 * `get_cluster_health_summary` now advertises a self-contained MCP Apps `ui://` resource. Supporting hosts can display a cluster dashboard and call read-only `investigate_host` / `investigate_datastore` through the ordinary MCP tool path; other hosts receive unchanged tool output. The page loads no remote assets and writes vSphere strings as text.

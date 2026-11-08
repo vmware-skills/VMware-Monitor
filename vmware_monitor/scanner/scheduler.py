@@ -12,12 +12,15 @@ from pathlib import Path
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from vmware_policy import set_environment_resolver
+from vmware_policy.policy import PolicyDenied
 
 from vmware_monitor.config import AppConfig, load_config
 from vmware_monitor.connection import ConnectionManager
 from vmware_monitor.notify.logger import ScanLogger
 from vmware_monitor.notify.webhook import WebhookNotifier
 from vmware_monitor.scanner.alarm_scanner import scan_alarms
+from vmware_monitor.scanner.audit import DaemonAudit
 from vmware_monitor.scanner.log_scanner import scan_host_logs_since, scan_logs
 
 logger = logging.getLogger("vmware-monitor.scheduler")
@@ -37,6 +40,7 @@ class HostLogCursors:
     """
 
     def __init__(self) -> None:
+        self.audit = DaemonAudit()
         self._by_target: dict[str, Mapping[tuple[str, str], int]] = {}
 
     def since(self, target: str) -> Mapping[tuple[str, str], int]:
@@ -116,7 +120,7 @@ def _scan_target(
             # With the traceback: a failed pass may be a bug in this code, and
             # "Scan complete" below will say the cycle was incomplete.
             logger.error("%s failed for %s: %s", label, target_name, e, exc_info=True)
-            failed.append(f"{target_name}: {label.lower()}")
+            failed.append(f"{target_name}: {label.lower()} ({type(e).__name__})")
     return issues, failed
 
 
@@ -160,21 +164,27 @@ def _run_scan(
 
     for target_name in conn_mgr.list_targets():
         try:
-            si = conn_mgr.connect(target_name)
-        except Exception as e:
-            issue = {
-                "severity": "critical",
-                "source": "connection",
-                "message": f"Failed to connect to {target_name}: {e}",
-                "time": "",
-                "entity": target_name,
-            }
-            all_issues.append(issue)
-            failed.append(f"{target_name}: connect")
-            continue
-        issues, target_failed = _scan_target(si, target_name, config, cursors)
-        all_issues.extend(issues)
-        failed.extend(target_failed)
+            with cursors.audit.operation("daemon_scan", target_name) as outcome:
+                si = conn_mgr.connect(target_name)
+                issues, target_failed = _scan_target(si, target_name, config, cursors)
+                all_issues.extend(issues)
+                failed.extend(target_failed)
+                gaps = sum(i.get("source") in (_UNREADABLE_SOURCE, _SKIPPED_SOURCE)
+                           for i in issues)
+                outcome.result = {"findings": len(issues), "failed": target_failed,
+                                  "coverage_gaps": gaps}
+                if target_failed or gaps:
+                    outcome.status = "error"
+        except Exception as exc:
+            # Do not forward raw connection exceptions to the configured webhook.
+            kind = "policy" if isinstance(exc, PolicyDenied) else "connection"
+            all_issues.append({
+                "severity": "critical", "source": kind,
+                "message": f"Scan of {target_name} failed ({type(exc).__name__}); "
+                           "check policy or run vmware-monitor doctor",
+                "time": "", "entity": target_name,
+            })
+            failed.append(f"{target_name}: {kind}")
 
     # Log all issues — one bad write must not discard the rest of the cycle
     for issue in all_issues:
@@ -184,10 +194,23 @@ def _run_scan(
             logger.error("Failed to log issue %r: %s", issue.get("message", "?"), e)
 
     paged = [i for i in all_issues if _pages(i)]
+    delivered: list[dict] = []
     if paged and config.notify.webhook_url:
-        webhook.send(paged)
+        try:
+            with cursors.audit.operation("webhook_send", "webhook") as outcome:
+                sent = webhook.send(paged)
+                outcome.result = {"issues": len(paged)}
+                if not sent:
+                    outcome.status = "error"
+                    outcome.result["error"] = "webhook send failed"
+                    failed.append("webhook send")
+                else:
+                    delivered = paged
+        except Exception as exc:
+            failed.append(f"webhook send ({type(exc).__name__})")
+            logger.warning("Webhook not sent (%s)", type(exc).__name__)
 
-    _log_summary(all_issues, paged, failed)
+    _log_summary(all_issues, delivered, failed)
 
 
 def start_scheduler(config_path: Path | None = None) -> None:
@@ -199,6 +222,7 @@ def start_scheduler(config_path: Path | None = None) -> None:
 
     config = load_config(config_path)
     conn_mgr = ConnectionManager(config)
+    set_environment_resolver(config.environment_for, skill="monitor")
 
     if not config.scanner.enabled:
         logger.warning("Scanner is disabled in config. Exiting.")

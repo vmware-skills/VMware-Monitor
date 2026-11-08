@@ -89,6 +89,36 @@ def _scalar_fields(data: Any) -> dict:
     return out
 
 
+def _image_detail(value: Any, depth: int = 0) -> Any:
+    """Sanitize bounded JSON image metadata without inventing schema fields."""
+    if isinstance(value, (dict, list)):
+        if depth >= 6:
+            return {"_unmeasured": "nested image metadata exceeds the depth limit"}
+        if isinstance(value, dict):
+            out = {
+                sanitize(str(key), 200): _image_detail(item, depth + 1)
+                for key, item in list(value.items())[:100]
+            }
+            if len(value) > 100:
+                out["_omitted_entries"] = len(value) - 100
+            return out
+        out = [_image_detail(item, depth + 1) for item in value[:100]]
+        if len(value) > 100:
+            out.append({"_omitted_entries": len(value) - 100})
+        return out
+    if isinstance(value, str):
+        return sanitize(value)
+    return value if value is None or isinstance(value, (bool, int, float)) else None
+
+
+def _software_fields(data: dict) -> dict:
+    fields = _scalar_fields(data)
+    for key in ("base_image", "components"):
+        if isinstance(data.get(key), (dict, list)):
+            fields[key] = _image_detail(data[key])
+    return fields
+
+
 def get_deployment_size(target: TargetConfig) -> dict:
     """[READ] vCenter appliance deployment size (NEW in vSphere 9.1).
 
@@ -257,7 +287,7 @@ def get_patch_compliance(target: TargetConfig, cluster: str) -> dict:
         # schema change shows up as "unknown", not as compliant or as work.
         "unknown_status_hosts": buckets["unknown"],
         "scan_time": sanitize(str(data.get("scan_time", ""))) or None,
-        "fields": _scalar_fields(data),
+        "fields": _software_fields(data),
     }
 
 
@@ -284,5 +314,5 @@ def get_last_apply_result(target: TargetConfig, cluster: str) -> dict:
         "status": sanitize(str(data.get("status", "unknown"))),
         "end_time": sanitize(str(data.get("end_time", ""))) or None,
         "note": _VERIFIED,
-        "fields": _scalar_fields(data),
+        "fields": _software_fields(data),
     }

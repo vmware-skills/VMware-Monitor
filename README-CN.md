@@ -15,7 +15,7 @@
 >
 > **这一点具体由什么守住。** [`tests/eval/regression/test_read_only_enforcement.py`](tests/eval/regression/test_read_only_enforcement.py) 用 `ast` 解析每个源文件，要求本包调用的每一个 vSphere 方法都出现在一份经人工审阅的白名单里，并对照 pyVmomi 自带的类型元数据交叉核验：凡是返回 `vim.Task`、或 vCenter 要求非只读权限的方法，都必须有人写明理由才放行。当前白名单有十四个方法。它守的是**写出来的代码**——看不见运行时拼出来的方法名；而且本仓没有任何 CI，所以它只在有人跑测试时才生效。若要一份不依赖本仓的保证，请用一个专用账号、授予 vCenter 内置的 **Read-Only（只读）** 角色来连接（[哪些读取需要超出该角色的权限](skills/vmware-monitor/references/setup-guide.md#security)）。
 >
-> **"只读"不覆盖什么。** 这是针对 vCenter/ESXi 的承诺：没有任何代码路径会改变它们的状态。在 vCenter 上，本 skill 只会建立自己的登录会话，以及用完即释放的短期查询句柄。它会写本机文件：`~/.vmware-monitor/config.yaml` 和 `.env`（由 `init` 写入；`.env` 里的明文密码会在加载时被改写为 `b64:`）、审计日志（MCP 调用写 `~/.vmware/audit.db`，CLI 命令写 `~/.vmware-monitor/audit.log`）、`--html` 生成的快照（`~/vmware-health/`），以及——仅在 `daemon start` 之后——`daemon.pid`、`scan.log` 和发往你所配置 webhook 的推送。完整列表见 [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally)。
+> **"只读"不覆盖什么。** 这是针对 vCenter/ESXi 的承诺：没有任何代码路径会改变它们的状态。在 vCenter 上，本 skill 只会建立自己的登录会话，以及用完即释放的短期查询句柄。它会写本机文件：`~/.vmware-monitor/config.yaml` 和 `.env`（由 `init` 写入；`.env` 里的明文密码会在加载时被改写为 `b64:`）、审计日志（MCP、远端 CLI 与后台操作写 `~/.vmware/audit.db`，旧的 skill 日志仍保留）、`--html` 生成的快照（`~/vmware-health/`），以及——仅在 `daemon start` 之后——`daemon.pid`、`scan.log` 和发往你所配置 webhook 的推送。完整列表见 [setup guide](skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally)。
 
 [![ClawHub](https://img.shields.io/badge/ClawHub-vmware--monitor-orange)](https://clawhub.ai/skills/vmware-monitor)
 [![Skills.sh](https://img.shields.io/badge/Skills.sh-Install-blue)](https://skills.sh/vmware-skills/VMware-Monitor)
@@ -68,7 +68,18 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 
 对象名不存在时返回**教学性错误**，明确告诉你如何列出对象。MCP 下对应工具为 `get_cluster_health_summary`、`get_cross_vcenter_attention`、`investigate_vm`、`investigate_host`、`investigate_datastore`——模型调用后用运维语言解释聚合结果。完整参数见 [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md)。
 
-### MCP Apps 集群健康看板（未发布）
+### 证据字段
+
+主机调查包含精确的 ESXi `build`，无法读取时为 null。未分组的主机日志结果将原日志时间放在 `time`，
+另用 `observed_at` 表示扫描时间；原日志无时间戳时 `time` 保留 null。补丁查询保留嵌套的 `base_image`
+和 `components` 证据，过大或嵌套过深而省略的内容会明确标记。
+
+健康摘要包含当前连接端点的 `api_type`、`version`、`build`，与清单中的 ESXi 主机信息分开。
+交互式日志扫描可选择诊断键：`scan_host_logs(log_keys=["hostd", "vobd"])`，或
+`vmware-monitor scan logs --log-key hostd --log-key vobd`。默认仍为 hostd/vmkernel/vpxa；
+不可读取的日志会列为覆盖缺口。键是 API 标识符，不能使用文件路径。
+
+### MCP Apps 集群健康看板（2.5.0）
 
 `get_cluster_health_summary` 还向支持 MCP Apps 的宿主声明 `ui://vmware-monitor/cluster-health.html`。宿主可显示实时集群看板；点 **Investigate** 时，经同一 MCP server、角色、Policy 和审计路径调用只读的主机或数据存储下钻工具。HTML 自包含，vSphere 对象名只按文本渲染。不支持 MCP Apps 的宿主仍收到原样工具结果。已通过生产回环 HTTP 传输和真实 vCenter 数据验证资源与工具；当前第三方宿主的界面目视渲染仍待验证。这与 CLI `--html` 的离线快照是两个功能。
 
@@ -165,6 +176,7 @@ ESXi 独立主机 ──→ VM
 | 日志分析 | 匹配 error、fail、critical、panic、lost access、cannot、timeout、refused、corrupt 的主机日志行——含 critical/panic/corrupt 的为 `critical`，其余为 `warning` |
 | 结构化日志 | JSONL 输出到 `~/.vmware-monitor/scan.log`——记录所有问题，包括 `info` 记录 |
 | Webhook 通知 | 支持 Slack、Discord 或任意 HTTP 端点。发送所有 critical 问题和所有告警/事件类 warning；主机日志的 warning 只写入扫描日志，`info` 记录从不发送 |
+| 后台 Policy 与审计 | 每个目标扫描和 webhook 外发均先检查 Policy，以 `surface=daemon` 写统一审计库；失败/不完整读取、拒绝和中断分别记录。同一进程内未变化的失败去重，每次成功均记录。审计摘要不含 webhook URL 或事件正文 |
 | 每轮摘要 | daemon 日志输出里每轮一行：发现数（以及其中发往 webhook 的数量）、读不到的主机日志数、有未扫描行的日志数、失败的扫描环节数。只要有环节失败或某个目标连不上，就显示 `Scan INCOMPLETE`，绝不会说“一切正常” |
 
 ### 5. 安全特性
@@ -177,7 +189,7 @@ ESXi 独立主机 ──→ VM
 | **配置文件内容** | `config.yaml` 仅存储主机名、端口和 `.env` 引用路径，**不含密码或 Token** |
 | **SSL 自签名** | 仅用于 ESXi 自签名证书的隔离实验环境；生产环境应使用 CA 签名证书 |
 | **Prompt 注入防护** | vSphere 事件消息和主机日志在输出前进行截断、控制字符清理和边界标记（`[VSPHERE_EVENT]`/`[VSPHERE_HOST_LOG]`）包裹 |
-| **Webhook 数据范围** | **默认禁用**。配置后，daemon 只向你配置的 URL 发送：所有 critical 问题（告警、事件、匹配 critical/panic/corrupt 的 ESXi 日志行、连不上的目标）和所有告警/事件类 warning——主机日志的 warning 只写入扫描日志，`info` 记录从不发送。每条问题带实体名和消息：经过清洗的告警、事件或 ESXi 日志文本，或连接错误信息，其中可能含主机名、IP 和用户名。不会发送 skill 配置或 `.env` 里的任何凭据 |
+| **Webhook 数据范围** | **默认禁用**。配置后，daemon 只向你配置的 URL 发送：所有 critical 问题（告警、事件、匹配 critical/panic/corrupt 的 ESXi 日志行、连不上的目标）和所有告警/事件类 warning——主机日志的 warning 只写入扫描日志，`info` 记录从不发送。每条问题带实体名和消息：经过清洗的告警、事件或 ESXi 日志文本，或不含原始异常的连接/策略失败类型；运维文本可能含主机名、IP 和用户名。不会发送 skill 配置或 `.env` 里的任何凭据 |
 | **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 从自身代码中消除了这一类风险：不存在任何破坏性代码路径，一旦加入，白名单闸门就会让构建失败。再配合一个只读 vCenter 账号，就有了不依赖本代码库的防线。仅在开发/实验环境使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) |
 
 ### 不包含的操作（设计如此）
@@ -508,6 +520,11 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
 准备的。最小权限来自 server 使用的账号。
 
 详见 `skills/vmware-monitor/references/setup-guide.md`（"Serving MCP over HTTPS"、"Limiting which tools are offered"）。
+
+## 系统代理绕过
+
+vCenter REST 客户端按操作系统的代理绕过列表直连配置的目标地址。
+TLS 校验仍由 `verify_ssl` 控制，`SSL_CERT_FILE` 等 CA 环境设置继续生效；其他地址保留原有代理路由。
 
 ## 许可证
 

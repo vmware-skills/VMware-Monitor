@@ -39,6 +39,7 @@ _HOST_PROPS = [
     "summary.hardware.memorySize",
     "summary.overallStatus",
     "config.product.version",
+    "config.product.build",
     "triggeredAlarmState",
 ]
 
@@ -91,6 +92,10 @@ def _format_host_object(props: dict, fallback_name: str) -> dict:
         "mem_pct": _correlate.pct(mem_used, props.get("summary.hardware.memorySize") or 0),
         "uptime_hours": round(uptime_s / 3600, 1),
         "version": str(props.get("config.product.version") or "N/A"),
+        "build": (
+            sanitize(str(props["config.product.build"]))
+            if props.get("config.product.build") else None
+        ),
         "status": str(props.get("summary.overallStatus") or "gray"),
     }
 

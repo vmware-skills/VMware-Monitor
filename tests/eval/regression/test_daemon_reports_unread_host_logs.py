@@ -205,7 +205,8 @@ def test_the_scheduler_shares_one_cursor_store_across_every_cycle(monkeypatch, t
         def start(self):
             pass
 
-    config = SimpleNamespace(scanner=SimpleNamespace(enabled=True, interval_minutes=15),
+    config = SimpleNamespace(environment_for=lambda name: "",
+                             scanner=SimpleNamespace(enabled=True, interval_minutes=15),
                              notify=SimpleNamespace())
     monkeypatch.setattr(sched, "PID_FILE", tmp_path / "daemon.pid")
     monkeypatch.setattr(sched, "load_config", lambda p=None: config)
@@ -215,6 +216,7 @@ def test_the_scheduler_shares_one_cursor_store_across_every_cycle(monkeypatch, t
     monkeypatch.setattr(sched, "_run_scan", lambda cfg, conn, cursors=None: seen.append(cursors))
     monkeypatch.setattr(sched.signal, "signal", lambda *a: None)
 
+    monkeypatch.setattr(sched, "set_environment_resolver", lambda *a, **k: None)
     sched.start_scheduler()
 
     (job_args,) = jobs
