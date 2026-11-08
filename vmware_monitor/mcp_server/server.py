@@ -980,7 +980,9 @@ def scan_host_logs(
     each item has count, hosts, first_seen/last_seen (log time), severity,
     source (``host_log:<key>``), pattern and one sample; ``lines_matched`` is the
     ungrouped count. ``group=false`` returns one row per line (severity, source,
-    message, time, entity, log_level, log_time). Returns the list envelope {items,
+    message, time, observed_at, entity, log_level, log_time). ``time`` is the log
+    timestamp (null when absent); ``observed_at`` is when this scan read the line.
+    Returns the list envelope {items,
     returned, limit, total, truncated, hint}. ``total`` is
     null on purpose — this is "errors within the scanned window", not all errors
     ever. ``logs_unavailable`` lists every host/log that could NOT be read, with

@@ -287,6 +287,24 @@ def test_weird_shape_does_not_crash(monkeypatch) -> None:
     assert out["fields"] == {}
 
 
+def test_patch_compliance_keeps_nested_image_and_component_evidence(monkeypatch):
+    payload = {"status": "NON_COMPLIANT", "base_image": {"version": "8.0.3", "status": "NON_COMPLIANT"},
+               "components": {"driver-a": {"current": "1.0", "target": "2.0"}}, "hosts": {"host-1": {}}}
+    _patch_rest(monkeypatch, payload=payload)
+    fields = patching.get_patch_compliance(_TARGET, "domain-c1")["fields"]
+    assert fields["base_image"] == payload["base_image"]
+    assert fields["components"] == payload["components"]
+    assert "hosts" not in fields  # host counts have a separate projection
+
+
+def test_last_apply_image_details_are_sanitized_and_bounded(monkeypatch):
+    payload = {"components": {f"driver-{i}": {"version": "1.0\x00"} for i in range(120)}}
+    _patch_rest(monkeypatch, payload=payload)
+    details = patching.get_last_apply_result(_TARGET, "domain-c1")["fields"]["components"]
+    assert details["driver-0"]["version"] == "1.0"
+    assert details["_omitted_entries"] == 20
+
+
 # ---------------------------------------------------------------------------
 # 5. REST error translation carries teaching text (leak-free)
 # ---------------------------------------------------------------------------

@@ -225,6 +225,11 @@ null otherwise. `entity_name` is unchanged, because vmware-aiops resolves it.
 
 ## 2a. Performance, capacity and vSphere 9.1 reads — result fields
 
+`investigate_host.object.build` is the exact collected ESXi build, or null when unreadable.
+For ungrouped `scan_host_logs` rows, `time`/`log_time` describe the log event and `observed_at` describes
+the scan; missing event time is null. Patch compliance and last-apply `fields` preserve nested
+`base_image`/`components`; `_omitted_entries` and `_unmeasured` mark size/depth limits explicitly.
+
 | Tool (CLI) | Field | Meaning |
 |------------|-------|---------|
 | `get_vm_performance` (`perf vms`) | `mem_ballooned_mb` | `mem.vmmemctl.average` — memory reclaimed by the balloon driver; above 0 means host memory pressure or a limit |

@@ -156,6 +156,25 @@ def test_host_standalone_no_cluster(monkeypatch):
     assert b["cluster"] is None
 
 
+def test_host_bundle_collects_and_returns_exact_build(monkeypatch):
+    _install_host(monkeypatch)
+    collect = investigate_host._collect_objects
+
+    def with_build(si, objs, obj_type, paths):
+        rows = collect(si, objs, obj_type, paths)
+        if obj_type is vim.HostSystem and "config.product.build" in paths:
+            rows = [(ref, {**props, "config.product.build": "25600417"}) for ref, props in rows]
+        return rows
+
+    monkeypatch.setattr(investigate_host, "_collect_objects", with_build)
+    result = investigate_host.get_host_investigation_bundle(object(), "esxi-09")
+    assert result["object"]["build"] == "25600417"
+
+
+def test_unreadable_host_build_is_explicitly_unknown():
+    assert investigate_host._format_host_object({}, "host")["build"] is None
+
+
 def test_host_batched_reads_bounded(monkeypatch):
     counter = _install_host(monkeypatch)
     investigate_host.get_host_investigation_bundle(object(), "esxi-09")

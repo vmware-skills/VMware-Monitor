@@ -68,7 +68,13 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 
 对象名不存在时返回**教学性错误**，明确告诉你如何列出对象。MCP 下对应工具为 `get_cluster_health_summary`、`get_cross_vcenter_attention`、`investigate_vm`、`investigate_host`、`investigate_datastore`——模型调用后用运维语言解释聚合结果。完整参数见 [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md)。
 
-### MCP Apps 集群健康看板（未发布）
+### 证据字段
+
+主机调查包含精确的 ESXi `build`，无法读取时为 null。未分组的主机日志结果将原日志时间放在 `time`，
+另用 `observed_at` 表示扫描时间；原日志无时间戳时 `time` 保留 null。补丁查询保留嵌套的 `base_image`
+和 `components` 证据，过大或嵌套过深而省略的内容会明确标记。
+
+### MCP Apps 集群健康看板（2.5.0）
 
 `get_cluster_health_summary` 还向支持 MCP Apps 的宿主声明 `ui://vmware-monitor/cluster-health.html`。宿主可显示实时集群看板；点 **Investigate** 时，经同一 MCP server、角色、Policy 和审计路径调用只读的主机或数据存储下钻工具。HTML 自包含，vSphere 对象名只按文本渲染。不支持 MCP Apps 的宿主仍收到原样工具结果。已通过生产回环 HTTP 传输和真实 vCenter 数据验证资源与工具；当前第三方宿主的界面目视渲染仍待验证。这与 CLI `--html` 的离线快照是两个功能。
 
@@ -508,6 +514,11 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
 准备的。最小权限来自 server 使用的账号。
 
 详见 `skills/vmware-monitor/references/setup-guide.md`（"Serving MCP over HTTPS"、"Limiting which tools are offered"）。
+
+## 系统代理绕过
+
+vCenter REST 客户端按操作系统的代理绕过列表直连配置的目标地址。
+TLS 校验仍由 `verify_ssl` 控制，`SSL_CERT_FILE` 等 CA 环境设置继续生效；其他地址保留原有代理路由。
 
 ## 许可证
 

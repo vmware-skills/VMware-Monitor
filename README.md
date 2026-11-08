@@ -70,7 +70,14 @@ vmware-monitor investigate vm web-01 --html      # → offline snapshot in ~/vmw
 
 Unknown object names return a **teaching error** naming exactly how to list objects. Via MCP these are the tools `get_cluster_health_summary`, `get_cross_vcenter_attention`, `investigate_vm`, `investigate_host`, `investigate_datastore` — the model calls them and explains the aggregated result in operational language. Full flags: [`references/cli-reference.md`](skills/vmware-monitor/references/cli-reference.md).
 
-### MCP Apps cluster health view (unreleased)
+### Evidence fields
+
+Host investigation includes the exact ESXi `build`, or null when unreadable. Ungrouped host-log findings
+use the original log timestamp for `time` and a separate `observed_at` for the scan time; a missing log
+timestamp remains null. Patch reads retain nested `base_image` and `components` evidence, with explicit
+markers when large or deeply nested metadata is omitted.
+
+### MCP Apps cluster health view (2.5.0)
 
 `get_cluster_health_summary` also advertises `ui://vmware-monitor/cluster-health.html` to MCP Apps hosts. A supporting host can render a live cluster dashboard and use its **Investigate** buttons to call the read-only host or datastore tool through the same MCP server, role, Policy and audit path. The HTML is self-contained and renders vSphere names as text. Hosts without MCP Apps support receive the same tool result as before. The view and real vCenter data have been verified through the production loopback HTTP transport; visual rendering in a current third-party host remains to be verified. This is separate from the CLI's offline `--html` snapshot.
 
@@ -841,6 +848,12 @@ claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp 
 exists for the write-capable skills. Least privilege comes from the account the server uses.
 
 Details: `skills/vmware-monitor/references/setup-guide.md` ("Serving MCP over HTTPS", "Limiting which tools are offered").
+
+## System proxy bypass
+
+The vCenter REST client honors the operating system proxy bypass list for the configured origin.
+TLS verification still follows `verify_ssl`, and CA environment settings such as `SSL_CERT_FILE` remain active.
+Other origins retain their normal proxy routing.
 
 ## License
 
