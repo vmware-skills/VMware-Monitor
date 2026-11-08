@@ -29,6 +29,7 @@ from vmware_policy import sanitize
 from vmware_monitor.ops._collect import _collect, _collect_objects
 from vmware_monitor.ops.alarm_triage import build_alarm_issues, staleness_rank
 from vmware_monitor.ops.capacity import DATASTORE_OVERCOMMIT_WARN_PCT, overcommit_pct
+from vmware_monitor.ops.endpoint import get_endpoint_identity
 
 if TYPE_CHECKING:
     from pyVmomi.vim import ServiceInstance
@@ -479,7 +480,9 @@ def get_cluster_health_summary(
     # `capacity datastores`, and this summary listed six issues without it.
     host_issues.extend(_datastore_issues(si, host_to_cluster, clusters))
 
-    return _finalize(si, list(clusters.values()), include_vms, raw_alarms, host_issues, top_n)
+    result = _finalize(si, list(clusters.values()), include_vms, raw_alarms, host_issues, top_n)
+    result["endpoint"] = get_endpoint_identity(si)
+    return result
 
 
 #: Capacity fields only. ``host`` carries a mount record per host — hundreds on a

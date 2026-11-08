@@ -102,6 +102,7 @@ from vmware_monitor.ops.vm_info import VMNotFoundError, list_snapshots
 from vmware_monitor.ops.vm_info import get_vm_info as _ops_get_vm_info
 from vmware_monitor.rest import RestAuthError
 from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs
+from vmware_monitor.scanner.log_scanner import validate_log_keys
 
 logger = logging.getLogger(__name__)
 
@@ -561,8 +562,10 @@ def get_cluster_health_summary(
     stitching list_all_clusters + list_esxi_hosts + get_alarms yourself.
 
     Returns {totals, top_issues, issues_total, clusters, snapshot,
-    customization_hint} — not the list envelope. Lead with ``top_issues`` (worst
-    first), show ``clusters`` as context, always echo ``customization_hint`` last.
+    customization_hint, endpoint} — not the list envelope. ``endpoint`` gives
+    api_type/version/build of this connection, distinct from inventory hosts.
+    Lead with ``top_issues`` (worst first), show ``clusters`` as context,
+    always echo ``customization_hint`` last.
     Point-in-time — no trending. ``top_issues`` includes datastores thin-provisioned
     past 100% of capacity (kind capacity, scope datastore), attributed to the
     cluster of a host that mounts them; get_datastore_capacity has the full table.
@@ -969,10 +972,11 @@ def scan_host_logs(
     lines: int = 500,
     target: Optional[str] = None,
     group: bool = True,
+    log_keys: Optional[list[str]] = None,
 ) -> dict:
     """[READ] Scan recent ESXi host syslog lines for error/warning patterns.
 
-    Reads the last ``lines`` entries of the hostd/vmkernel/vpxa logs via the
+    Reads the last ``lines`` entries of selected logs (default hostd/vmkernel/vpxa) via the
     diagnostic system and returns only the lines matching known trouble patterns
     (error, fail, critical, panic, lost access, timeout, …). Severity follows the
     level ESXi wrote on the line (Cr/Er/Wa/In…, raw token in ``log_level``); a
@@ -999,11 +1003,15 @@ def scan_host_logs(
         host_name: Filter to a single host by exact name (None = all hosts).
         lines: How many recent lines per log to scan (default 500, at least 1).
         target: vCenter/ESXi target from config (default if omitted).
+        log_keys: 1–16 distinct diagnostic keys, e.g. ["hostd", "vobd"].
+            Omit for defaults. Availability depends on the target; unsupported
+            keys appear in logs_unavailable. File paths are not accepted.
         group: Group repeated lines by pattern (default true). One call on a lab
             returned 353 lines, 195 of them one statistics-provider message.
     """
+    keys = validate_log_keys(log_keys)
     si = _get_connection(target)
-    return _ops_scan_host_logs(si, host_name=host_name, lines=lines, group=group)
+    return _ops_scan_host_logs(si, host_name=host_name, lines=lines, group=group, log_keys=keys)
 
 
 # ---------------------------------------------------------------------------

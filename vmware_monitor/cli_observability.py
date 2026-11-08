@@ -731,6 +731,14 @@ def render_summary_console(data: dict, top: int) -> None:
         + f"  ·  overall: [{_STATUS_STYLE[worst]}]{worst.upper()}[/]"
     )
 
+    endpoint = data.get("endpoint", {})
+    if endpoint.get("unavailable"):
+        console.print(endpoint["unavailable"], markup=False)
+    elif any(endpoint.values()):
+        identity = " · ".join(str(endpoint.get(k) or "unknown")
+                              for k in ("api_type", "version", "build"))
+        console.print(f"Endpoint (API / version / build): {identity}", markup=False)
+
     _render_top_issues(data, top)
 
     table = Table(title="Cluster Health Summary")

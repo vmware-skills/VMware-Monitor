@@ -154,14 +154,14 @@ vmware-monitor deployment-size [--target <name>]
 
 ```bash
 vmware-monitor scan now [--target <name>]
-vmware-monitor scan logs [--host <name>] [--lines 500] [--raw] [--target <name>]
+vmware-monitor scan logs [--host <name>] [--lines 500] [--log-key <key>]... [--raw] [--target <name>]
 vmware-monitor daemon start
 vmware-monitor daemon stop
 vmware-monitor daemon status
 ```
 
 - `scan now`: Run a one-time scan of alarms and events. It does not read ESXi host logs — use `scan logs` (MCP `scan_host_logs`); the daemon's host-log pass reads them too
-- `scan logs`: Read the last `--lines` lines of hostd/vmkernel/vpxa on each host (or `--host`) and list the lines matching a trouble pattern, grouped by pattern with a count, the hosts and the log time span; severity follows the level ESXi wrote on the line. `--raw` prints one row per line
+- `scan logs`: Repeat `--log-key` to select diagnostic keys (for example `--log-key hostd --log-key vobd`); omit for the defaults below. Keys are identifiers, not file paths; unsupported keys remain visible as unreadable logs. Read the last `--lines` lines of the selected logs (default hostd/vmkernel/vpxa) on each host (or `--host`) and list the lines matching a trouble pattern, grouped by pattern with a count, the hosts and the log time span; severity follows the level ESXi wrote on the line. `--raw` prints one row per line
 - `daemon start`: Start APScheduler-based background scanner (default: every 15 min)
 - `daemon stop`: Stop the background scanner
 - `daemon status`: Check if the daemon is running

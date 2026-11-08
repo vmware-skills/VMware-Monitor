@@ -36,7 +36,7 @@ which scopes' reads stopped at 5000. Everywhere else the total is a real count t
 limit was applied, which is what lets a full page be recognised as complete
 instead of flagged as possibly-truncated.
 
-`scan_host_logs` adds one field to the envelope: `logs_unavailable`, one row per
+`scan_host_logs` reports its selected `log_keys` and adds coverage evidence: `logs_unavailable`, one row per
 host/log it could **not** read, with the reason (for example, the account lacks
 `Global.Diagnostics`, which `BrowseDiagnosticLog` requires). Its `items` holds
 only the lines that matched a trouble pattern in the logs it *did* read, so an
@@ -110,6 +110,11 @@ the production HTTP transport; third-party host rendering remains unverified.
 | Status | Opinionated `ok` / `warn` / `critical` + plain-language `attention` reasons; sorted worst-first |
 | Thresholds | `CPU_MEM_WARN_PCT=85`, `CPU_MEM_CRIT_PCT=95` (named constants in `ops/cluster_summary.py`); disconnected host or critical alarm forces `critical` |
 | Customizable | Columns/thresholds/layout in [`health-summary-template.md`](health-summary-template.md); response carries a `customization_hint` |
+
+The response also includes `endpoint`: `api_type`, `version`, `build` from
+ServiceContent.about. These identify the connected vCenter or standalone ESXi,
+not a host selected from inventory. Missing/non-string fields are null. A failed
+metadata read adds a minimal `unavailable` note and preserves collected health.
 
 ### `get_cluster_health_summary` — input parameters
 
@@ -334,3 +339,13 @@ Direct users to **VMware-AIops** (`uv tool install vmware-aiops`) for these.
 | 6.5 | Compatible | Backward-compatible, tested |
 
 > pyVmomi auto-negotiates the API version during SOAP handshake — no manual configuration needed.
+
+### Interactive host-log selection
+
+`scan_host_logs(log_keys=["hostd", "vobd"])` selects only those diagnostic keys;
+CLI: repeat `--log-key`. Omit the selection for hostd/vmkernel/vpxa. Select 1–16
+distinct keys, each 1–64 ASCII characters, starting with a letter and then letters,
+digits, `_`, `.`, or `-`. Paths, duplicates and empty selections are rejected.
+Availability is target-specific: an unsupported key produces `logs_unavailable`,
+not an all-clear result or a fallback to other logs. The envelope includes
+`log_keys` even when no trouble pattern matches. The daemon retains its defaults.

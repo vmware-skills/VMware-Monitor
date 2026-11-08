@@ -74,6 +74,11 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 另用 `observed_at` 表示扫描时间；原日志无时间戳时 `time` 保留 null。补丁查询保留嵌套的 `base_image`
 和 `components` 证据，过大或嵌套过深而省略的内容会明确标记。
 
+健康摘要包含当前连接端点的 `api_type`、`version`、`build`，与清单中的 ESXi 主机信息分开。
+交互式日志扫描可选择诊断键：`scan_host_logs(log_keys=["hostd", "vobd"])`，或
+`vmware-monitor scan logs --log-key hostd --log-key vobd`。默认仍为 hostd/vmkernel/vpxa；
+不可读取的日志会列为覆盖缺口。键是 API 标识符，不能使用文件路径。
+
 ### MCP Apps 集群健康看板（2.5.0）
 
 `get_cluster_health_summary` 还向支持 MCP Apps 的宿主声明 `ui://vmware-monitor/cluster-health.html`。宿主可显示实时集群看板；点 **Investigate** 时，经同一 MCP server、角色、Policy 和审计路径调用只读的主机或数据存储下钻工具。HTML 自包含，vSphere 对象名只按文本渲染。不支持 MCP Apps 的宿主仍收到原样工具结果。已通过生产回环 HTTP 传输和真实 vCenter 数据验证资源与工具；当前第三方宿主的界面目视渲染仍待验证。这与 CLI `--html` 的离线快照是两个功能。

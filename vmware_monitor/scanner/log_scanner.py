@@ -36,6 +36,25 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger("vmware-monitor.log-scanner")
 
+DEFAULT_LOG_KEYS = ("hostd", "vmkernel", "vpxa")
+_LOG_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,63}\Z", re.ASCII)
+
+
+def validate_log_keys(log_keys: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    """Bound diagnostic identifiers; never accept a file path or echo bad input."""
+    if log_keys is None:
+        return DEFAULT_LOG_KEYS
+    if (not isinstance(log_keys, (list, tuple)) or not 1 <= len(log_keys) <= 16
+            or any(not isinstance(key, str) or not _LOG_KEY.fullmatch(key) for key in log_keys)
+            or len(set(log_keys)) != len(log_keys)):
+        raise ValueError(
+            "log_keys must contain 1–16 distinct diagnostic identifiers "
+            "(ASCII letter first, then letters, digits, _, . or -; at most 64 characters). "
+            "Use keys available on your target, such as hostd; file paths are not accepted."
+        )
+    return tuple(log_keys)
+
+
 _ERROR_PATTERNS = (
     "error", "fail", "critical", "panic", "lost access",
     "cannot", "timeout", "refused", "corrupt",
@@ -202,7 +221,7 @@ def scan_logs(
 def scan_host_logs(
     si: ServiceInstance,
     host_name: str | None = None,
-    log_keys: tuple[str, ...] = ("hostd", "vmkernel", "vpxa"),
+    log_keys: tuple[str, ...] = DEFAULT_LOG_KEYS,
     lines: int = 500,
     group: bool = False,
 ) -> dict:
@@ -223,6 +242,7 @@ def scan_host_logs(
         HostNotFoundError: ``host_name`` matched no host — otherwise a typo
             would come back in exactly the shape of a clean host.
     """
+    log_keys = validate_log_keys(log_keys)
     if lines < 1:
         raise ValueError(f"lines must be at least 1 (got {lines}); the default is 500.")
     result = _scan_pass(si, host_name, log_keys, lines, since=None)
@@ -238,13 +258,14 @@ def scan_host_logs(
         logs_unavailable=list(result.logs_unavailable),
         lines_matched=len(rows),
         grouped=group,
+        log_keys=list(log_keys),
     )
 
 
 def scan_host_logs_since(
     si: ServiceInstance,
     since: Mapping[tuple[str, str], int],
-    log_keys: tuple[str, ...] = ("hostd", "vmkernel", "vpxa"),
+    log_keys: tuple[str, ...] = DEFAULT_LOG_KEYS,
     lines: int = 500,
 ) -> HostLogPass:
     """Read only the host-log lines written since the previous pass (the daemon).
