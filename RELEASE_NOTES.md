@@ -1,3 +1,8 @@
+## Unreleased — background scan policy and audit
+
+* Scheduled target scans and webhook sends now check Policy and write minimal unified audit records with the daemon surface. Partial scans, policy denials and interruptions are recorded truthfully; unchanged failures are deduplicated until recovery or a changed outcome.
+* Audit summaries exclude notification endpoints and log text. Connection errors sent as notifications and webhook transport/status logs no longer quote raw errors or response bodies that may contain credentials.
+
 ## Unreleased — preserve host, log-time and patch evidence
 
 * The vCenter REST client now honors system proxy bypass rules for the configured origin while preserving TLS verification and CA environment settings.
