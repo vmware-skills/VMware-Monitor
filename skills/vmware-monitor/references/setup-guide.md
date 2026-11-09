@@ -6,13 +6,13 @@ All install methods fetch from the same source: [github.com/vmware-skills/VMware
 
 ```bash
 # Via PyPI (recommended for version pinning)
-uv tool install vmware-monitor==2.6.0
+uv tool install vmware-monitor==2.6.1
 
 # Via Skills.sh (fetches from GitHub)
-npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1
 
 # Via ClawHub (fetches from ClawHub registry snapshot of GitHub)
-clawhub install @zw008/vmware-monitor --version 2.6.0
+clawhub install @zw008/vmware-monitor --version 2.6.1
 ```
 
 The installer is pinned to `skills@1.7.6` (Node.js >=22.20.0); the repository tag separately selects the skill revision. Review the installer and its dependencies before running it. Pinning the top-level package does not lock its dependency graph. Alternative: use the release-tagged manual copy below.
@@ -65,7 +65,7 @@ are never sent).
 
 ```bash
 # 1. Install
-uv tool install vmware-monitor==2.6.0
+uv tool install vmware-monitor==2.6.1
 
 # 2. Verify
 vmware-monitor --version
@@ -117,7 +117,7 @@ question about vCenter.
 ## Development Install
 
 ```bash
-git clone --branch v2.6.0 https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.6.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 uv venv && source .venv/bin/activate
 uv pip install -e .
@@ -159,7 +159,7 @@ For Claude Code / Cursor users who prefer structured tool calls, add to `~/.clau
 ```
 
 > v1.5.15+ recommends the single-command form `vmware-monitor mcp`. Pre-1.5.15 used
-> `uvx --from vmware-monitor==2.6.0 vmware-monitor-mcp`, which still works but re-resolves from
+> `uvx --from vmware-monitor==2.6.1 vmware-monitor-mcp`, which still works but re-resolves from
 > PyPI on each launch and breaks behind corporate TLS proxies. The legacy
 > `vmware-monitor-mcp` entry point is also kept for backward compatibility.
 
