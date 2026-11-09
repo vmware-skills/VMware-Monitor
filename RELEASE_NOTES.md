@@ -20,6 +20,13 @@
 * Ungrouped host-log findings use the original log timestamp for `time`, retain null when it is absent, and report scan time separately as `observed_at`.
 * Patch compliance and last-apply results retain sanitized nested base-image and component metadata, with explicit markers for omitted size/depth limits.
 
+## Unreleased — security documentation corrections
+
+Clarify actual capability, credential, local-write and transport boundaries where applicable.
+Pin documented setup/fallback tools and make credential examples owner-only before writing,
+without overwriting existing files. Runtime permissions, TLS defaults and approval behavior are unchanged.
+These edits do not establish a new ClawHub scan verdict.
+
 ## v2.5.0 — MCP Apps cluster health view (2026-11-01)
 
 * `get_cluster_health_summary` now advertises a self-contained MCP Apps `ui://` resource. Supporting hosts can display a cluster dashboard and call read-only `investigate_host` / `investigate_datastore` through the ordinary MCP tool path; other hosts receive unchanged tool output. The page loads no remote assets and writes vSphere strings as text.
