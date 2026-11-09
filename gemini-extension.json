@@ -1,0 +1,16 @@
+{
+  "name": "vmware-monitor",
+  "version": "2.6.0",
+  "description": "VMware vCenter/ESXi read-only monitoring tool. No destructive operations — code-level enforced.",
+  "mcpServers": {
+    "vmware-monitor": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "vmware-monitor==2.6.0",
+        "vmware-monitor-mcp"
+      ]
+    }
+  }
+}
