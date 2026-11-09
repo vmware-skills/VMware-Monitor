@@ -1,0 +1,51 @@
+name: Container MCP metadata smoke
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - Dockerfile
+      - pyproject.toml
+      - vmware_monitor/**
+      - .github/workflows/container-mcp-smoke.yml
+permissions:
+  contents: read
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the source container
+        run: docker build -t vmware-monitor-metadata-smoke .
+      - name: Install MCP protocol test client
+        run: python -m pip install 'mcp>=1.30,<2'
+      - name: Verify stdio startup and read-only tool discovery
+        run: |
+          python - <<'PY'
+          import asyncio
+          from mcp import ClientSession, StdioServerParameters
+          from mcp.client.stdio import stdio_client
+
+          async def check():
+              # No host mounts, credentials, network access, or infrastructure tool calls.
+              params = StdioServerParameters(
+                  command='docker',
+                  args=['run', '--rm', '-i', '--network=none', 'vmware-monitor-metadata-smoke'],
+              )
+              async with asyncio.timeout(90):
+                  async with stdio_client(params) as (reader, writer):
+                      async with ClientSession(reader, writer) as session:
+                          await session.initialize()
+                          await session.send_ping()
+                          result = await session.list_tools()
+                          assert result.tools, 'No tools discovered'
+                          for tool in result.tools:
+                              annotations = tool.model_dump(by_alias=True).get('annotations') or {}
+                              assert annotations.get('readOnlyHint') is True, tool.name
+                              assert annotations.get('destructiveHint') is False, tool.name
+                          print(f'PASS: {len(result.tools)} read-only tools; initialize, ping, tools/list only')
+          asyncio.run(check())
+          PY
