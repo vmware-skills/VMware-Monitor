@@ -91,23 +91,23 @@ vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmw
 
 ```bash
 # 通过 Skills.sh 安装
-npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1
 
 # 通过 ClawHub 安装
-clawhub install @zw008/vmware-monitor
+clawhub install @zw008/vmware-monitor --version 2.6.1
 ```
 
 ### PyPI 安装（无需访问 GitHub）
 
 ```bash
 # 通过 uv 安装（推荐）
-uv tool install vmware-monitor==2.6.0
+uv tool install vmware-monitor==2.6.1
 
 # 或通过 pip 安装
-pip install vmware-monitor==2.6.0
+pip install vmware-monitor==2.6.1
 
 # 国内镜像加速
-pip install vmware-monitor==2.6.0 -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install vmware-monitor==2.6.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ---
@@ -308,7 +308,7 @@ aider --conventions skills/vmware-monitor/SKILL.md --model ollama/qwen2.5-coder:
 ### 第 1 步：安装
 
 ```bash
-git clone https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.6.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 python3 -m venv .venv
 source .venv/bin/activate
@@ -341,12 +341,12 @@ chmod 600 ~/.vmware-monitor/.env
 
 ```bash
 # 方式一：由安装器放置 skill（推荐）
-npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1
 # 或
-clawhub install @zw008/vmware-monitor
+clawhub install @zw008/vmware-monitor --version 2.6.1
 
 # 方式二：手工安装 skill
-git clone https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.6.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 mkdir -p ~/.claude/skills/vmware-monitor
 cp -r skills/vmware-monitor/. ~/.claude/skills/vmware-monitor/
@@ -369,7 +369,7 @@ aider --conventions skills/vmware-monitor/SKILL.md --model ollama/qwen2.5-coder:
 
 #### MCP 服务器（v1.5.15+ 推荐方式）
 
-完成 `uv tool install vmware-monitor==2.6.0` 后，**一条命令启动 MCP**：
+完成 `uv tool install vmware-monitor==2.6.1` 后，**一条命令启动 MCP**：
 
 ```bash
 vmware-monitor mcp
@@ -378,7 +378,7 @@ vmware-monitor mcp
 VMWARE_MONITOR_CONFIG=/path/to/config.yaml vmware-monitor mcp
 ```
 
-> 备选：`uvx --from vmware-monitor==2.6.0 vmware-monitor mcp`（不安装临时运行）或 legacy 入口
+> 备选：`uvx --from vmware-monitor==2.6.1 vmware-monitor mcp`（不安装临时运行）或 legacy 入口
 > `vmware-monitor-mcp`（仍可用）。公司 TLS 代理网络下 uvx 可能报
 > `invalid peer certificate: UnknownIssuer` — 推荐用上面的 `vmware-monitor mcp`，
 > 或设置 `export UV_NATIVE_TLS=true`。
@@ -458,7 +458,7 @@ VMware-Monitor/
 
 | Skill | 范围 | 工具数 | 安装 |
 |-------|------|:-----:|------|
-| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | 只读监控、告警、事件 | 27 | `uv tool install vmware-monitor==2.6.0` |
+| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | 只读监控、告警、事件 | 27 | `uv tool install vmware-monitor==2.6.1` |
 | **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
 | **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
 | **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
