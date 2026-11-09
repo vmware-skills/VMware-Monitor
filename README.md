@@ -54,7 +54,7 @@ Full agent instructions: [`skills/vmware-monitor/SKILL.md`](skills/vmware-monito
 Requires Python `>=3.10` and `uv`.
 
 ```bash
-uv tool install vmware-monitor==2.6.0
+uv tool install vmware-monitor==2.6.1
 vmware-monitor --help
 ```
 
@@ -78,7 +78,7 @@ node --version
 #### Step 1: Clone & Install Python Backend
 
 ```bash
-git clone https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.6.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 python3 -m venv .venv
 source .venv/bin/activate
@@ -123,15 +123,15 @@ Choose one (or more) of the following:
 Either installer places the skill in Claude Code's skills directory for you:
 
 ```bash
-npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1
 # or
-clawhub install @zw008/vmware-monitor
+clawhub install @zw008/vmware-monitor --version 2.6.1
 ```
 
 **Method 2: Manual skill install**
 
 ```bash
-git clone https://github.com/vmware-skills/VMware-Monitor.git
+git clone --branch v2.6.1 https://github.com/vmware-skills/VMware-Monitor.git
 cd VMware-Monitor
 
 # Copy the skill into Claude Code's personal skills directory
@@ -285,7 +285,7 @@ cp skills/vmware-monitor/SKILL.md ~/.kimi/skills/vmware-monitor/SKILL.md
 
 The MCP server exposes VMware read-only monitoring as tools via the [Model Context Protocol](https://modelcontextprotocol.io). Works with any MCP-compatible client (Claude Desktop, Cursor, etc.).
 
-**After `uv tool install vmware-monitor==2.6.0`, start the MCP server with one command** (v1.5.15+):
+**After `uv tool install vmware-monitor==2.6.1`, start the MCP server with one command** (v1.5.15+):
 
 ```bash
 # Recommended — single command, no network re-resolve
@@ -315,7 +315,7 @@ VMWARE_MONITOR_CONFIG=/path/to/config.yaml vmware-monitor mcp
 
 ```bash
 # Run without installing (requires PyPI access each launch)
-uvx --from vmware-monitor==2.6.0 vmware-monitor mcp
+uvx --from vmware-monitor==2.6.1 vmware-monitor mcp
 
 # Legacy entry point (still works, kept for backward compatibility)
 vmware-monitor-mcp
@@ -376,7 +376,7 @@ Copy this configuration into your MCP client's local stdio settings. The client 
   "mcpServers": {
     "vmware-monitor": {
       "command": "uvx",
-      "args": ["--from", "vmware-monitor==2.6.0", "vmware-monitor-mcp"],
+      "args": ["--from", "vmware-monitor==2.6.1", "vmware-monitor-mcp"],
       "env": {
         "VMWARE_MONITOR_CONFIG": "~/.vmware-monitor/config.yaml"
       }
@@ -435,23 +435,23 @@ Works with Claude Code, Cursor, Codex, Gemini CLI, Trae, and 30+ AI agents:
 
 ```bash
 # Via Skills.sh
-npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1
 
 # Via ClawHub
-clawhub install @zw008/vmware-monitor
+clawhub install @zw008/vmware-monitor --version 2.6.1
 ```
 
 #### PyPI Install (No GitHub Access Required)
 
 ```bash
 # Install via uv (recommended)
-uv tool install vmware-monitor==2.6.0
+uv tool install vmware-monitor==2.6.1
 
 # Or via pip
-pip install vmware-monitor==2.6.0
+pip install vmware-monitor==2.6.1
 
 # China mainland mirror (faster)
-pip install vmware-monitor==2.6.0 -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install vmware-monitor==2.6.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 #### Offline / Air-Gapped Install (from source)
@@ -784,7 +784,7 @@ The VMware Skills family contains 14 MCP servers and the shared Policy library. 
 
 | Skill | Scope | Tools | Install |
 |-------|-------|:-----:|---------|
-| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | Read-only monitoring, alarms, events | 27 | `uv tool install vmware-monitor==2.6.0` |
+| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | Read-only monitoring, alarms, events | 27 | `uv tool install vmware-monitor==2.6.1` |
 | **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** | VM lifecycle, deployment, guest ops, clusters | 49 | `uv tool install vmware-aiops` |
 | **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | Datastores, iSCSI, vSAN | 11 | `uv tool install vmware-storage` |
 | **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu Namespaces, TKC cluster lifecycle | 20 | `uv tool install vmware-vks` |
@@ -868,10 +868,10 @@ Already installed? Re-run the install command for your channel to get the latest
 
 | Install Channel | Update Command |
 |----------------|----------------|
-| ClawHub | `clawhub install @zw008/vmware-monitor` |
-| Skills.sh | `npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.0` |
+| ClawHub | `clawhub install @zw008/vmware-monitor --version 2.6.1` |
+| Skills.sh | `npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.1` |
 | Git clone | `cd VMware-Monitor && git pull origin main && uv pip install -e .` |
-| uv | `uv tool install vmware-monitor==2.6.0 --force` |
+| uv | `uv tool install vmware-monitor==2.6.1 --force` |
 
 Check your current version: `vmware-monitor --version`
 

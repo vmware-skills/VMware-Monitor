@@ -1,6 +1,6 @@
 {
   "name": "vmware-monitor",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "VMware vCenter/ESXi read-only monitoring tool. No destructive operations — code-level enforced.",
   "mcpServers": {
     "vmware-monitor": {
@@ -8,7 +8,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "vmware-monitor==2.6.0",
+        "vmware-monitor==2.6.1",
         "vmware-monitor-mcp"
       ]
     }
