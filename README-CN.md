@@ -167,11 +167,7 @@ vmware-monitor health alarms --target home-esxi
   "mcpServers": {
     "vmware-monitor": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "vmware-monitor==2.6.0",
-        "vmware-monitor-mcp"
-      ],
+      "args": ["--from", "vmware-monitor==2.6.0", "vmware-monitor-mcp"],
       "env": {
         "VMWARE_MONITOR_CONFIG": "~/.vmware-monitor/config.yaml"
       }

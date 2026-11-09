@@ -376,11 +376,7 @@ Copy this configuration into your MCP client's local stdio settings. The client 
   "mcpServers": {
     "vmware-monitor": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "vmware-monitor==2.6.0",
-        "vmware-monitor-mcp"
-      ],
+      "args": ["--from", "vmware-monitor==2.6.0", "vmware-monitor-mcp"],
       "env": {
         "VMWARE_MONITOR_CONFIG": "~/.vmware-monitor/config.yaml"
       }
