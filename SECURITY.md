@@ -64,7 +64,7 @@ The background scanner (`daemon start`) is **user-initiated only** and is never 
 This project is scanned with [Bandit](https://bandit.readthedocs.io/) before every release, targeting 0 Medium+ issues:
 
 ```bash
-uvx bandit -r vmware_monitor/
+uvx bandit==1.9.4 -r vmware_monitor/
 ```
 
 ## Supported Versions

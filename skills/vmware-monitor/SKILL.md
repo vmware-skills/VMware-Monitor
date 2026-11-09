@@ -1,11 +1,12 @@
 ---
 name: vmware-monitor
 description: >
-  Use this skill for safe, read-only queries of VMware infrastructure — no destructive operations exist in the codebase; a test enforces it.
-  Directly handles: a one-glance cross-cluster health summary, object-centered VM/host/datastore investigation drill-downs (correlating surrounding infrastructure + recent events), a cross-vCenter "what needs attention now?" rollup, list VMs/hosts/datastores/clusters, active alarms, recent events, VM details.
-  Always use vmware-monitor when the user asks to "list VMs", "check vSphere alarms", "show host status", "is anything on fire", "what needs attention now", "what is happening around this VM/host/datastore", "investigate this VM" — or needs read-only VMware info before making changes.
-  Do NOT use for any write operations — this skill is read-only and has no code path that creates, modifies, or deletes a vSphere resource.
-  For VM modifications use vmware-aiops, for networking use vmware-nsx, for metrics/capacity use vmware-aria. For load balancing/AVI/AKO use vmware-avi.
+  Use for read-only VMware/vSphere/ESXi inventory, health, alarms, events and VM/host/datastore
+  investigations; cross-cluster or cross-vCenter triage such as "is anything on fire", "what needs
+  attention now" and "what is happening around this VM". No tool changes a VMware resource. Local
+  config, audit, HTML snapshots and an explicitly started daemon write local state; optional webhooks
+  send disclosed operational data to configured URLs. For VM writes use vmware-aiops, NSX networking
+  vmware-nsx, metrics/capacity vmware-aria, and AVI/AKO vmware-avi.
 installer:
   kind: uv
   package: vmware-monitor
@@ -245,7 +246,7 @@ The `get_alarms` tool queries triggered alarms at the root folder level. Some al
 ### "Connection refused" error
 1. Run `vmware-monitor doctor` to diagnose
 2. Verify target hostname/IP and port (443) in config.yaml
-3. Lab self-signed cert only: `verify_ssl: false`
+3. Verify TLS (`verify_ssl: true`); use `SSL_CERT_FILE` for private CAs. Lab-only `verify_ssl: false` disables certificate/hostname checks, risking impersonation/credential interception.
 
 ### Events returns too many results
 Use severity filter: `--severity warning` (default) filters out info-level events. Use `--hours 4` to narrow time range.
