@@ -141,6 +141,7 @@ def test_runtime_names_have_imports() -> None:
                 imported.add(node.module.split(".")[0])
         for name in _RUNTIME_NAMES_TO_CHECK:
             # Match `name.identifier(` — covers attribute access patterns.
-            if re.search(rf"\b{name}\.[A-Za-z_]\w*\(", src) and name not in imported:
+            if any(isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                   and n.value.id == name for n in ast.walk(tree)) and name not in imported:
                 failures.append(f"{py.relative_to(REPO_ROOT)}: uses `{name}.…` but never imports {name}")
     assert not failures, "Missing imports detected:\n" + "\n".join(failures)
