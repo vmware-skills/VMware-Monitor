@@ -21,18 +21,19 @@ Source: https://github.com/vmware-skills/VMware-Monitor
 License: MIT
 """
 
+import sys as _sys
 import functools
 import json
 import logging
 import ssl
 import threading
 from collections.abc import Callable
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional  # noqa: F401 — compatibility/runtime export
 
 # MCP SDK — Model Context Protocol server framework
 from mcp.server.fastmcp import FastMCP
 from pyVmomi import vim
-from vmware_policy import (
+from vmware_policy import (  # noqa: F401 — compatibility/runtime export
     describe_tool_parameters,
     mtime_cached_loader,
     sanitize,
@@ -51,58 +52,58 @@ from vmware_monitor.connection import (
     NoVSphereRoleError,
 )
 from vmware_monitor.mcp_server import apps
-from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks
-from vmware_monitor.ops.attention import (
+from vmware_monitor.ops.activity import get_active_sessions, get_active_tasks  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.ops.attention import (  # noqa: F401 — compatibility/runtime export
     get_cross_vcenter_attention as _ops_get_cross_vcenter_attention,
 )
-from vmware_monitor.ops.capacity import (
+from vmware_monitor.ops.capacity import (  # noqa: F401 — compatibility/runtime export
     get_datastore_capacity as _ops_get_datastore_capacity,
     get_resource_pool_usage as _ops_get_resource_pool_usage,
 )
-from vmware_monitor.ops.cluster_summary import (
+from vmware_monitor.ops.cluster_summary import (  # noqa: F401 — compatibility/runtime export
     get_cluster_health_summary as _ops_get_cluster_health_summary,
 )
-from vmware_monitor.ops.health import (
+from vmware_monitor.ops.health import (  # noqa: F401 — compatibility/runtime export
     get_active_alarms,
     get_host_hardware_status,
     get_recent_events,
 )
-from vmware_monitor.ops.health import get_host_services as _ops_get_host_services
-from vmware_monitor.ops.infra_health import (
+from vmware_monitor.ops.health import get_host_services as _ops_get_host_services  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.ops.infra_health import (  # noqa: F401 — compatibility/runtime export
     get_certificate_status as _ops_get_certificate_status,
     get_license_status as _ops_get_license_status,
     get_ntp_status as _ops_get_ntp_status,
 )
-from vmware_monitor.ops.inventory import (
+from vmware_monitor.ops.inventory import (  # noqa: F401 — compatibility/runtime export
     list_clusters,
     list_datastores,
     list_hosts,
     list_networks,
     list_vms,
 )
-from vmware_monitor.ops.investigate_datastore import (
+from vmware_monitor.ops.investigate_datastore import (  # noqa: F401 — compatibility/runtime export
     DatastoreNotFoundError,
     get_datastore_investigation_bundle,
 )
-from vmware_monitor.ops.investigate_host import (
+from vmware_monitor.ops.investigate_host import (  # noqa: F401 — compatibility/runtime export
     HostNotFoundError,
     get_host_investigation_bundle,
 )
-from vmware_monitor.ops.investigate_vm import get_vm_investigation_bundle
-from vmware_monitor.ops.performance import (
+from vmware_monitor.ops.investigate_vm import get_vm_investigation_bundle  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.ops.performance import (  # noqa: F401 — compatibility/runtime export
     get_host_performance as _ops_get_host_performance,
     get_vm_performance as _ops_get_vm_performance,
 )
-from vmware_monitor.ops.backup_window import (
+from vmware_monitor.ops.backup_window import (  # noqa: F401 — compatibility/runtime export
     AmbiguousVMError,
     get_backup_snapshot_history,
 )
-from vmware_monitor.ops.snapshots import list_snapshot_aging
-from vmware_monitor.ops.vm_info import VMNotFoundError, list_snapshots
-from vmware_monitor.ops.vm_info import get_vm_info as _ops_get_vm_info
+from vmware_monitor.ops.snapshots import list_snapshot_aging  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.ops.vm_info import VMNotFoundError, list_snapshots  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.ops.vm_info import get_vm_info as _ops_get_vm_info  # noqa: F401 — compatibility/runtime export
 from vmware_monitor.rest import RestAuthError
-from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs
-from vmware_monitor.scanner.log_scanner import validate_log_keys
+from vmware_monitor.scanner.log_scanner import scan_host_logs as _ops_scan_host_logs  # noqa: F401 — compatibility/runtime export
+from vmware_monitor.scanner.log_scanner import validate_log_keys  # noqa: F401 — compatibility/runtime export
 
 logger = logging.getLogger(__name__)
 
@@ -396,390 +397,39 @@ def _get_target_config(target: Optional[str] = None) -> Any:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_virtual_machines(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-    sort_by: str = "name",
-    power_state: Optional[str] = None,
-    fields: Optional[list[str]] = None,
-    folder_filter: Optional[str] = None,
-    name_filter: Optional[str] = None,
-) -> dict:
-    """[READ] List virtual machines, with filtering, sorting, and field selection.
-
-    Returns the family list envelope {items, returned, limit, total, truncated,
-    hint}; ``total`` is the real post-filter count, so read ``truncated`` before
-    summarising. Over 50 VMs with no limit/fields, only the first five fields
-    below come back (``mode`` says which). ``vms`` is a deprecated pre-1.8.0
-    alias of ``items``, removed in 2.0 — read ``items``.
-
-    Use this to resolve an exact VM name, then get_vm_info for detail or
-    investigate_vm to drill into one; for a fleet-wide view start at
-    get_cluster_health_summary instead.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max VMs (None = all).
-        sort_by: name | cpu | memory_mb | power_state | folder_path.
-        power_state: poweredOn | poweredOff | suspended.
-        fields: Any of name, power_state, cpu, memory_mb, folder_path, guest_os,
-            ip_address, host, uuid, tools_status (None = auto).
-        name_filter: Case-insensitive substring of the VM name. Use this to find
-            one VM by name on a large estate — it is what the "VM not found"
-            errors elsewhere tell you to come here for.
-        folder_filter: Case-insensitive folder_path substring; nested folders
-            match.
-    """
-    si = _get_connection(target)
-    return list_vms(
-        si,
-        limit=limit,
-        sort_by=sort_by,
-        power_state=power_state,
-        fields=fields,
-        folder_filter=folder_filter,
-        name_filter=name_filter,
-    )
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_esxi_hosts(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] List ESXi hosts with CPU cores, memory, version, VM count, and uptime.
-
-    Returns the list envelope; ``total`` is the real host count. Static config only
-    (cores, total GB) — use this to resolve a host name, then get_host_performance for
-    live load or investigate_host to drill into one host.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max hosts to return (None = all).
-    """
-    si = _get_connection(target)
-    return list_hosts(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_all_datastores(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] List datastores with capacity, free space, type, and VM count.
-
-    Returns the list envelope with a real ``total``. Raw free/used only — use this
-    to resolve a datastore name, then get_datastore_capacity for thin-provisioning
-    over-commit risk or investigate_datastore to drill into one datastore.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max datastores to return (None = all).
-    """
-    si = _get_connection(target)
-    return list_datastores(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_all_clusters(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] List clusters with host count, DRS/HA status, and resource totals.
-
-    Returns the list envelope with a real ``total``. Each row's ``moid`` (e.g.
-    domain-c123) is the cluster id the vLCM patch tools take. Static topology only
-    — use this to resolve a cluster name, then get_cluster_health_summary, which supersedes
-    stitching this with list_esxi_hosts and get_alarms yourself.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max clusters to return (None = all).
-    """
-    si = _get_connection(target)
-    return list_clusters(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    },
-    meta=apps.ui_meta(apps.CLUSTER_HEALTH_URI),
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_cluster_health_summary(
-    target: Optional[str] = None,
-    cluster_filter: Optional[str] = None,
-    include_vms: bool = True,
-    top_n: int = 10,
-) -> dict:
-    """[READ] One-glance health rollup for every cluster — "is anything on fire?".
-
-    Start here for single-vCenter triage. Batches hosts, VM power state, live
-    CPU/memory pressure and alarms per cluster, scores each "ok"/"warn"/
-    "critical", and ranks the anomalies into ``top_issues``. Use this instead of
-    stitching list_all_clusters + list_esxi_hosts + get_alarms yourself.
-
-    Returns {totals, top_issues, issues_total, clusters, snapshot,
-    customization_hint, endpoint} — not the list envelope. ``endpoint`` gives
-    api_type/version/build of this connection, distinct from inventory hosts.
-    Lead with ``top_issues`` (worst first), show ``clusters`` as context,
-    always echo ``customization_hint`` last.
-    Point-in-time — no trending. ``top_issues`` includes datastores thin-provisioned
-    past 100% of capacity (kind capacity, scope datastore), attributed to the
-    cluster of a host that mounts them; get_datastore_capacity has the full table.
-    Alarm issues carry ``condition_now`` and ``acknowledged_days``. Only a
-    ``cleared`` alarm (its condition is read to be false now) ranks after live
-    issues; an ``unknown`` one is not re-checked and keeps its severity rank,
-    however long ago it was acknowledged — report it as possibly still live.
-
-    Then drill into what ``top_issues`` names with investigate_vm,
-    investigate_host or investigate_datastore; use
-    get_cross_vcenter_attention to cover every target at once. Acting on a finding
-    belongs to vmware-aiops.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        cluster_filter: Case-insensitive substring; only matching clusters show
-            (None = all, plus a standalone-hosts row).
-        include_vms: Roll up VM counts (default True); False skips that pass.
-        top_n: Cap ``top_issues`` (default 10; 0 omits it). ``issues_total`` is
-            the pre-cap count.
-    """
-    si = _get_connection(target)
-    return _ops_get_cluster_health_summary(
-        si, cluster_filter=cluster_filter, include_vms=include_vms, top_n=top_n
-    )
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def investigate_vm(
-    vm_name: str,
-    target: Optional[str] = None,
-    hours: int = 24,
-) -> dict:
-    """[READ] "What is happening around this VM?" — one correlated drill-down.
-
-    Use this instead of stitching get_vm_info + list_vm_snapshots + get_alarms +
-    get_vm_performance + get_events yourself. Returns one correlated bundle (not the
-    list envelope): the VM's state, its host, cluster and backing datastores, its
-    snapshots and triggered alarms, live performance, and a merged event timeline
-    across VM/host/cluster/datastore (newest first). All reads are batched.
-    Explain it in operational language; do not dump it raw.
-
-    Reach for it after get_cluster_health_summary names a problem VM, or when asked
-    "what's going on with <vm>?". Point-in-time snapshot — no trending. Acting on
-    what you find (power, migrate, delete snapshot) belongs to vmware-aiops.
-
-    Args:
-        vm_name: Exact VM name; unknown names return a teaching error. Get it from
-            list_virtual_machines or get_cluster_health_summary first.
-        target: vCenter/ESXi target from config (default if omitted).
-        hours: Event-timeline look-back window in hours (default 24).
-    """
-    si = _get_connection(target)
-    return get_vm_investigation_bundle(si, vm_name, hours=hours)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def investigate_host(
-    host_name: str,
-    target: Optional[str] = None,
-    hours: int = 24,
-) -> dict:
-    """[READ] "What is happening around this ESXi host?" — one correlated drill-down.
-
-    Use this instead of stitching list_esxi_hosts + get_host_performance + get_alarms
-    + get_events yourself. Returns one correlated bundle (not the list envelope):
-    the host's state (connection, CPU/memory pressure, version, uptime), its
-    cluster, a rollup of the VMs it runs, the datastores it mounts, alarms across
-    host/cluster/datastore, live performance, and a merged event timeline. All
-    reads are batched. Explain it in operational language; do not dump it raw.
-
-    Reach for it after get_cluster_health_summary flags a host. Point-in-time
-    snapshot — no trending; for syslog lines use scan_host_logs. Acting on a
-    finding (maintenance mode, evacuate) belongs to vmware-aiops.
-
-    Args:
-        host_name: Exact ESXi host name; unknown names return a teaching error.
-            Get it from list_esxi_hosts or get_cluster_health_summary first.
-        target: vCenter/ESXi target from config (default if omitted).
-        hours: Event-timeline look-back window in hours (default 24).
-    """
-    si = _get_connection(target)
-    return get_host_investigation_bundle(si, host_name, hours=hours)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def investigate_datastore(
-    datastore_name: str,
-    target: Optional[str] = None,
-    hours: int = 24,
-) -> dict:
-    """[READ] "What is happening around this datastore?" — one correlated drill-down.
-
-    Use this instead of stitching list_all_datastores + get_datastore_capacity +
-    get_alarms + get_events yourself. Returns one correlated bundle (not the list
-    envelope): capacity / free space / accessibility, the hosts that mount it, a
-    rollup of the VMs it backs, alarms across datastore/host, and a merged event
-    timeline. All reads are batched. Explain it in operational language; do not
-    dump it raw. Per-datastore latency is not included.
-
-    Reach for it after get_cluster_health_summary flags storage pressure.
-    Point-in-time snapshot — no trending. Freeing space (deleting snapshots,
-    storage vMotion) belongs to vmware-aiops.
-
-    Args:
-        datastore_name: Exact datastore name; unknown names return a teaching
-            error. Get it from list_all_datastores or get_datastore_capacity first.
-        target: vCenter/ESXi target from config (default if omitted).
-        hours: Event-timeline look-back window in hours (default 24).
-    """
-    si = _get_connection(target)
-    return get_datastore_investigation_bundle(si, datastore_name, hours=hours)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_cross_vcenter_attention(
-    cluster_filter: Optional[str] = None,
-    top_n: int = 10,
-) -> dict:
-    """[READ] "What needs attention now?" across EVERY configured vCenter — one list.
-
-    Start here when the estate has more than one vCenter. Rolls every configured
-    target's cluster-health summary into one globally ranked ``top_issues`` list
-    (worst first, each tagged with its ``vcenter``) plus a per-target rollup. Use
-    this instead of calling get_cluster_health_summary once per target and merging
-    yourself. Returns a rollup, not the list envelope; lead with ``top_issues``.
-
-    Degrades gracefully: an unreachable target is listed under ``unreachable``
-    with a reason and the rest still aggregate, but it is never counted as
-    healthy: ``totals.worst_status`` is at least ``warn`` (``critical`` when no
-    target answered) and ``totals.status_reason`` says how many were not read.
-    Point-in-time — no trending.
-    Overlap is removed by identity: a host reached through a vCenter and as its
-    own ESXi target counts once (hardware UUID), a datastore seen through both is
-    one issue with the other view's figure under ``also_seen_via`` (datastore
-    URL), and ``totals`` separates ``vcenters``, ``esxi_targets`` and
-    ``unidentified_targets``.
-    Then drill in with investigate_vm, investigate_host or
-    investigate_datastore against the ``vcenter`` the issue names.
-
-    Args:
-        cluster_filter: Case-insensitive cluster substring applied to every target
-            (None = all clusters).
-        top_n: Cap the merged top_issues list (default 10); ``issues_total`` is
-            the pre-cap count.
-    """
-    sessions, unreachable = _ensure_conn_mgr().connect_all()
-    return _ops_get_cross_vcenter_attention(
-        sessions, unreachable=unreachable, cluster_filter=cluster_filter, top_n=top_n
-    )
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_all_networks(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] List networks with name, attached VM count, and accessibility.
 
-    Returns the list envelope with a real ``total``. Name, vm_count and accessible
-    only — no VLAN, uplink or NSX overlay detail. Use this to resolve a port-group
-    name, then get_vm_info for the NICs of one VM. NSX segments live in vmware-nsx.
+from vmware_monitor.mcp_server._tools_inventory import register_tools as _register_inventory
 
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max networks to return (None = all).
-    """
-    si = _get_connection(target)
-    return list_networks(si, limit=limit)
+(
+    list_virtual_machines,
+    list_esxi_hosts,
+    list_all_datastores,
+    list_all_clusters,
+    get_cluster_health_summary,
+    investigate_vm,
+    investigate_host,
+    investigate_datastore,
+    get_cross_vcenter_attention,
+    list_all_networks,
+) = _register_inventory(mcp, _sys.modules[__name__])
 
 
 # ---------------------------------------------------------------------------
@@ -787,231 +437,24 @@ def list_all_networks(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_alarms(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Get active/triggered alarms across the VMware inventory.
-
-    Returns the list envelope with a real ``total``. Each alarm carries
-    suggested_actions naming the companion skill and tool for remediation, who
-    acknowledged it and when (``acknowledged_by`` / ``acknowledged_at``), and
-    ``condition_now``: ``holds`` (live), ``cleared`` (vCenter still shows it but
-    its state condition is false now — a stale alarm; see ``condition_note``), or
-    ``unknown`` (event/metric-based or unreadable — never guessed). The envelope's
-    ``stale_alarms`` counts the cleared ones. An expired-vCenter-license alarm is
-    re-checked against this vCenter's own license assignment. ``object_label``
-    names alarms about the vCenter appliance itself (e.g. "vCenter appliance
-    192.168.60.16") that sit on the inventory root; ``entity_name`` stays the
-    object vmware-aiops resolves. Do not report a ``cleared`` alarm as
-    a live problem; do not report an ``unknown`` one as resolved. Empty
-    ``items`` with ``truncated`` False means there genuinely are no active alarms —
-    never report "no data" otherwise.
-
-    Use this for the raw alarm list; prefer get_cluster_health_summary when you want
-    alarms folded into a whole-cluster verdict. Then drill into the flagged
-    object with investigate_vm or investigate_host.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max alarms to return (None = all).
-    """
-    si = _get_connection(target)
-    return get_active_alarms(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_events(
-    hours: int = 24,
-    severity: Literal["critical", "warning", "info"] = "warning",
-    target: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    include_routine: bool = False,
-) -> dict:
-    """[READ] Get recent vCenter/ESXi events filtered by severity.
-
-    Returns the list envelope, newest first. Up to 5000 events in the window are
-    read; when more matched, ``read_truncated`` is true and ``read_note`` says how
-    far back the read got — the oldest events were not examined, so narrow
-    ``hours`` before concluding nothing happened earlier in the window.
-
-    Severity is this skill's own ranking where it has one, and otherwise
-    vCenter's published event catalogue. An event neither can rank comes back
-    with severity "unknown" (it is returned, not filtered out) and is counted in
-    the envelope's ``unclassified``, with ``classification_note`` explaining. An
-    empty ``items`` alongside a non-zero ``unclassified`` does NOT mean the
-    window was quiet — read the note before reporting all-clear.
-
-    Use this for an inventory-wide event sweep. When you already know the object,
-    prefer investigate_vm / investigate_host instead: they
-    return the same events correlated with that object's state in one call. ESXi
-    syslog lines are not events — use scan_host_logs for those.
-
-    Args:
-        hours: How many hours back to query (default 24). Ignored when both
-            start and end are given; with end alone, how far back from end.
-        severity: Minimum severity: "critical", "warning", or "info".
-        target: vCenter/ESXi target from config (default if omitted).
-        start: Window start, ISO 8601 (e.g. "2026-09-03T12:00:00Z"; no zone = UTC).
-            Use it to ask about a specific day rather than the last N hours.
-        end: Window end, ISO 8601; defaults to now.
-        include_routine: List routine login/logout session events too. By default
-            they are folded and counted in ``routine_folded`` — one local agent's
-            logins can outnumber everything else in a window.
-    """
-    si = _get_connection(target)
-    return get_recent_events(
-        si, hours=hours, severity=severity, start=start, end=end, include_routine=include_routine
-    )
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_host_sensors(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Get hardware sensor status (temperature, voltage, fan, ...) for all hosts.
-
-    Returns the list envelope with a real ``total``; each row has host, sensor_name,
-    type, reading, unit and status (green/yellow/red). No rows for a host is not
-    "hardware is fine": every connected host that reports no sensors is listed in
-    ``hosts_without_sensors`` with ``cim_server_running`` / ``cim_server_policy``
-    (the CIM Server, sfcbd-watchdog, supplies the sensors; null = not read), and
-    ``sensors_note`` says what that means — quote it.
-
-    ``interpretation_note`` bounds what a red aggregate memory sensor proves:
-    it does not identify a DIMM/slot, establish ECC errors, or predict failure.
-    Keep observed status separate from a component diagnosis.
-
-    Use this for physical hardware only — for CPU/memory load use
-    get_host_performance, and follow up on a red sensor with
-    investigate_host to see the alarms and events around that host.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max sensor rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return get_host_hardware_status(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_host_services(
-    host_name: Optional[str] = None,
-    target: Optional[str] = None,
-) -> dict:
-    """[READ] Get host service status (running state and startup policy).
-
-    Returns the list envelope; each row has host, service key, label, running (bool)
-    and policy (on/off/automatic). Every matching host is enumerated, so
-    ``truncated`` is always False.
-
-    Use this to check whether SSH, NTP or the firewall service is in the expected
-    state. For NTP specifically prefer get_ntp_status, which also reports the
-    configured servers. Starting or stopping a service is a write — this skill
-    cannot do it; use vmware-aiops.
-
-    Args:
-        host_name: Filter to a single host by exact name (None = all hosts).
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    si = _get_connection(target)
-    return _ops_get_host_services(si, host_name=host_name)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def scan_host_logs(
-    host_name: Optional[str] = None,
-    lines: int = 500,
-    target: Optional[str] = None,
-    group: bool = True,
-    log_keys: Optional[list[str]] = None,
-) -> dict:
-    """[READ] Scan recent ESXi host syslog lines for error/warning patterns.
 
-    Reads the last ``lines`` entries of selected logs (default hostd/vmkernel/vpxa) via the
-    diagnostic system and returns only the lines matching known trouble patterns
-    (error, fail, critical, panic, lost access, timeout, …). Severity follows the
-    level ESXi wrote on the line (Cr/Er/Wa/In…, raw token in ``log_level``); a
-    critical keyword still wins. By default findings are grouped by pattern —
-    each item has count, hosts, first_seen/last_seen (log time), severity,
-    source (``host_log:<key>``), pattern and one sample; ``lines_matched`` is the
-    ungrouped count. ``group=false`` returns one row per line (severity, source,
-    message, time, observed_at, entity, log_level, log_time). ``time`` is the log
-    timestamp (null when absent); ``observed_at`` is when this scan read the line.
-    Returns the list envelope {items,
-    returned, limit, total, truncated, hint}. ``total`` is
-    null on purpose — this is "errors within the scanned window", not all errors
-    ever. ``logs_unavailable`` lists every host/log that could NOT be read, with
-    the reason (e.g. the account lacks Global.Diagnostics); empty ``items`` means
-    nothing matched only when ``logs_unavailable`` is empty too.
+from vmware_monitor.mcp_server._tools_health import register_tools as _register_health
 
-    Use this when get_events or investigate_host show a host in trouble
-    but not why: vCenter events and ESXi syslog are different sources. Filter
-    with ``host_name`` to keep the scan fast on large clusters; a name that
-    matches no host returns an error (get the exact name from list_esxi_hosts),
-    not an empty result. Every call reads the last ``lines`` lines afresh.
-
-    Args:
-        host_name: Filter to a single host by exact name (None = all hosts).
-        lines: How many recent lines per log to scan (default 500, at least 1).
-        target: vCenter/ESXi target from config (default if omitted).
-        log_keys: 1–16 distinct diagnostic keys, e.g. ["hostd", "vobd"].
-            Omit for defaults. Availability depends on the target; unsupported
-            keys appear in logs_unavailable. File paths are not accepted.
-        group: Group repeated lines by pattern (default true). One call on a lab
-            returned 353 lines, 195 of them one statistics-provider message.
-    """
-    keys = validate_log_keys(log_keys)
-    si = _get_connection(target)
-    return _ops_scan_host_logs(si, host_name=host_name, lines=lines, group=group, log_keys=keys)
+(
+    get_alarms,
+    get_events,
+    get_host_sensors,
+    get_host_services,
+    scan_host_logs,
+) = _register_health(mcp, _sys.modules[__name__])
 
 
 # ---------------------------------------------------------------------------
@@ -1019,63 +462,8 @@ def scan_host_logs(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_vm_info(vm_name: str, target: Optional[str] = None) -> dict:
-    """[READ] Get detailed information about one VM (CPU, memory, disks, NICs, snapshots).
-
-    Returns a single detail dict, not the list envelope. Static configuration
-    only — for live CPU/memory use get_vm_performance, and for the same VM correlated
-    with its host, alarms and events use investigate_vm.
-
-    Use this when you already know the exact name; get it from
-    list_virtual_machines first, since an unknown name returns a teaching error
-    rather than a match. Reconfiguring the VM belongs to vmware-aiops.
-
-    Args:
-        vm_name: Exact name of the virtual machine.
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    si = _get_connection(target)
-    return _ops_get_vm_info(si, vm_name)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_vm_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
-    """[READ] List all snapshots of one VM, including the nesting hierarchy.
-
-    Returns the list envelope, one row per snapshot with name, description, created
-    timestamp, state and level (0 = root; children are level+1). Empty ``items``
-    with ``truncated`` False means the VM genuinely has no snapshots. Read-only —
-    creating, reverting and deleting snapshots live in vmware-aiops.
-
-    Use this for one known VM; prefer find_aging_snapshots to sweep the whole inventory
-    for old or sprawling snapshots. Get the name from list_virtual_machines
-    first — an unknown name returns a teaching error.
-
-    Args:
-        vm_name: Exact name of the virtual machine.
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    si = _get_connection(target)
-    return list_snapshots(si, vm_name)
 
 
 # ---------------------------------------------------------------------------
@@ -1083,81 +471,8 @@ def list_vm_snapshots(vm_name: str, target: Optional[str] = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_host_performance(
-    host_name: Optional[str] = None,
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Real-time CPU/memory/disk/network utilisation per ESXi host.
-
-    Returns the list envelope with a real ``total`` (hosts that reported metrics).
-    Unlike list_esxi_hosts (static config: cores, total GB) this is LIVE 20-second
-    PerfManager data: cpu_usage_pct, mem_usage_pct, mem_consumed_mb, disk_kbps,
-    net_kbps, busiest first. Disconnected hosts and hosts without a real-time
-    provider are skipped, not reported as zero. Point-in-time only — no historical
-    trend.
-
-    Use this to find which host is hot, then investigate_host to drill
-    into it, or get_vm_performance to see which VMs on it are driving the load.
-
-    Args:
-        host_name: Filter to a single host by exact name (None = all hosts).
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max host rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return _ops_get_host_performance(si, host_name=host_name, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_vm_performance(
-    vm_name: Optional[str] = None,
-    target: Optional[str] = None,
-    limit: Optional[int] = 25,
-) -> dict:
-    """[READ] Real-time CPU/memory/disk/network utilisation per virtual machine.
-
-    Returns the list envelope with a real ``total`` (VMs that reported metrics) —
-    with the default limit of 25, ``truncated`` tells you whether more VMs sit
-    behind it. LIVE data (cpu_usage_pct, mem_usage_pct, mem_consumed_mb,
-    mem_ballooned_mb, mem_swapped_mb, disk_read_kbps, disk_write_kbps, net_kbps),
-    busiest first. mem_usage_pct is mem.usage.average — ACTIVE guest memory over
-    configured, not consumed, so it can read low on a VM under pressure; non-zero
-    mem_ballooned_mb (mem.vmmemctl.average) or mem_swapped_mb (mem.swapped.average)
-    is the pressure signal. ``counters`` names the counter behind every field.
-    Only powered-on VMs have a real-time provider; powered-off VMs are skipped.
-    Point-in-time only.
-
-    Use this to rank load across VMs; for one VM's configuration use get_vm_info, and
-    to see the same VM correlated with its host, alarms and events use
-    investigate_vm.
-
-    Args:
-        vm_name: Filter to a single VM by exact name (None = all powered-on VMs).
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max VM rows to return (default 25; None = all).
-    """
-    si = _get_connection(target)
-    return _ops_get_vm_performance(si, vm_name=vm_name, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1165,235 +480,19 @@ def get_vm_performance(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def find_aging_snapshots(
-    age_threshold_days: int = 30,
-    only_old: bool = False,
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Sweep ALL VMs for snapshots and flag old / sprawling ones.
-
-    Use this for fleet-wide snapshot sprawl; prefer list_vm_snapshots when you
-    only care about one VM. Returns {total_snapshots, old_snapshots,
-    vms_with_snapshots, threshold_days, snapshots[], hint} — a rollup, not the
-    list envelope. Each row has age_days, is_old and an est_size_mb lower bound
-    (snapshotData+snapshotMemory; delta-disk growth is not separable per-snapshot
-    via the API). Read-only — deleting snapshots belongs to vmware-aiops.
-
-    Args:
-        age_threshold_days: Age above which a snapshot is flagged old (default 30).
-        only_old: When True, return only snapshots past the threshold.
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max snapshot rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return list_snapshot_aging(
-        si, age_threshold_days=age_threshold_days, only_old=only_old, limit=limit
-    )
 
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_vm_backup_snapshot_history(
-    vm_name: str,
-    days: int = 30,
-    include_cycles: bool = False,
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] How long backups held a snapshot open on one VM, from task history.
-
-    Image-level backup products (Veeam, Commvault, Rubrik, NetBackup) snapshot
-    the VM, copy the frozen disks, then delete the snapshot. vCenter records
-    both ends, so the backup window is recoverable without credentials for the
-    backup server.
-
-    This is a LOWER BOUND on the job, not its duration: work the product does
-    before the snapshot is taken and after it is removed is invisible to
-    vCenter. The returned ``basis`` says so — quote it alongside any figure.
-
-    Returns a rollup, not the list envelope: counts, four hour statistics
-    (backup_active / snapshot_present / total_window / snapshot_removal),
-    latest_cycle, longest_cycle, and ``unmatched`` rows for creations with no
-    removal (a backup that left its snapshot behind) or removals whose creation
-    predates the window.
-
-    Read two fields before reporting all-clear. ``history_unavailable`` non-null
-    means the history could not be read at all — that is not "no backups".
-    ``coverage_note`` non-null means vCenter has already expired part of the
-    requested window (``task.maxAge`` — 30 days by default; the option is NOT
-    called vpxd.task.maxAge, which raises vim.fault.InvalidName), so the counts
-    describe a shorter period than ``days`` asked for. ``window_fully_covered``
-    is the positive form: True when retention is at least ``days`` and nothing
-    in the window can have expired, so a VM whose oldest task is recent was
-    simply quiet; None when retention or the history could not be read.
-
-    An unmatched creation is not a failed backup. Each one carries ``status:
-    "open"``, ``age_hours``, this VM's ``longest_completed_cycle_hours`` and
-    ``possibly_in_progress`` — True while it is inside that VM's own observed
-    envelope, False past it, None when there is no completed cycle to compare
-    against. Do not report ``incomplete_cycles`` as failures without reading
-    those.
-
-    The creation *task* itself, during the seconds it executes, is absent
-    entirely: no completion time yet, so it forms neither a cycle nor an
-    ``unmatched`` row. A backup whose snapshot already exists is not this case —
-    that is the open cycle described above. So no open cycle does not prove no
-    backup is running.
-
-    Duplicate VM names raise rather than resolve to one, because a duration
-    attributed to the wrong same-named VM looks exactly like a correct answer.
-    For snapshots that exist right now use list_vm_snapshots or find_aging_snapshots.
-
-    Args:
-        vm_name: Exact VM name; duplicates are refused, not guessed.
-        days: How far back to look, 1 to 365 (default 30).
-        include_cycles: Also return the individual cycles, newest kept on cap.
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max cycle rows when include_cycles is set (capped at 200).
-    """
-    si = _get_connection(target)
-    return get_backup_snapshot_history(
-        si, vm_name, days=days, include_cycles=include_cycles, limit=limit
-    )
 
 # ---------------------------------------------------------------------------
 # Infrastructure health (read-only — certificates, licenses, NTP)
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_certificate_status(
-    warn_days: int = 30,
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Per-host ESXi management certificate expiry.
-
-    An expired ESXi cert drops host management — this surfaces it before the
-    outage. Returns the list envelope with a real ``total``; each row has host,
-    not_after, days_until_expiry and an ``expiring`` flag, soonest first. Host
-    certificates only — the vCenter appliance's own certificate is not covered.
-
-    Use this alongside get_license_status and get_ntp_status for a platform-hygiene
-    sweep. Renewing a certificate is a write this skill cannot do; use
-    vmware-aiops or vCenter directly.
-
-    Args:
-        warn_days: Flag certs expiring within this many days (default 30).
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max host rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return _ops_get_certificate_status(si, warn_days=warn_days, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_license_status(target: Optional[str] = None) -> dict:
-    """[READ] vCenter/ESXi license inventory with usage and expiry.
-
-    Returns the list envelope, one row per license: name, edition_key, total/used
-    units, unlimited flag (row total == 0) and expiration. Every license is
-    enumerated, so ``truncated`` is always False — this is the complete inventory.
-
-    Use this to catch over-allocation or an approaching expiry, alongside
-    get_certificate_status and get_ntp_status for a platform-hygiene sweep. ``assignments``
-    says which license each asset (vCenter, hosts, clusters) is assigned, with
-    ``expired`` per asset — use it to tell whether an "expired license" alarm still
-    applies. It is null with ``assignments_note`` when the account cannot read
-    assignments. License keys are never returned. Assigning a license is a write.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    si = _get_connection(target)
-    return _ops_get_license_status(si)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_ntp_status(
-    host_name: Optional[str] = None,
-    target: Optional[str] = None,
-) -> dict:
-    """[READ] Per-host NTP configuration health (servers + ntpd service state).
-
-    Returns the list envelope; every matching host is enumerated, so ``truncated``
-    is always False. Each row has host, reachable, ntp_servers, ntpd_running,
-    ntpd_policy and a ``healthy`` flag (servers configured AND ntpd running). The
-    SOAP API does not expose live clock offset or stratum — this is configuration
-    health only; for actual offset use esxcli on the host.
-
-    healthy/ntp_servers/ntpd_running are null — not false/empty — for a host
-    vCenter could not reach or could not read. Null means nothing was observed;
-    false means NTP is misconfigured. Filtering rows for `healthy == false` will
-    not surface the unread ones, so check the envelope's `hosts_unreachable`
-    and `hosts_unreadable` counts (with `unreachable_note` / `unreadable_note`)
-    before reporting the estate as healthy. Unreachable: vCenter cannot reach the
-    host (reachable false). Unreadable: this account cannot read the host's state
-    (reachable null) — not known to be down.
-
-    The envelope's ``ntp_sources_consistent`` compares hosts with each other:
-    false when hosts that have servers configured use different ones (each row
-    can still be healthy — this is how clocks drift apart), with
-    ``ntp_sources_note`` naming which host uses which servers; null when fewer
-    than two hosts have servers to compare.
-
-    Prefer this over get_host_services for time problems: that tool reports
-    whether ntpd runs but not which servers are configured. Fixing NTP is a
-    write; use vmware-aiops.
-
-    Args:
-        host_name: Filter to a single host by exact name (None = all hosts).
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    si = _get_connection(target)
-    return _ops_get_ntp_status(si, host_name=host_name)
 
 
 # ---------------------------------------------------------------------------
@@ -1401,81 +500,8 @@ def get_ntp_status(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_datastore_capacity(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Per-datastore capacity with thin-provisioning over-commit.
-
-    Returns the list envelope with a real ``total``: capacity_gb, free_gb,
-    committed_gb, provisioned_gb, used_pct, overcommit_pct, riskiest first. Adds the
-    risk signal list_all_datastores lacks — overcommit_pct over 100% means more
-    space is promised to VMs than physically exists, so a thin datastore can fill up
-    while still showing free space. Point-in-time.
-
-    Whose figure: ``view`` (vCenter / ESXi host / unknown) and ``view_note``.
-    Provisioned space is summed by the endpoint over the VMs it has registered on
-    the datastore, so a vCenter and a directly-reached ESXi host can report
-    different provisioned_gb for one datastore — each row's ``vm_count`` says how
-    many VMs the figure covers, and ``vms_not_connected`` names those reported as
-    orphaned/inaccessible/disconnected (None = could not be read). The figures can
-    also differ with the same vm_count: each endpoint aggregates uncommitted
-    space itself.
-
-    Use this for the capacity view, then investigate_datastore to drill
-    into a specific datastore's hosts, VMs and alarms. Reclaiming space (delete
-    snapshots, storage vMotion) belongs to vmware-aiops.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max datastore rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return _ops_get_datastore_capacity(si, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_resource_pool_usage(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] Per-resource-pool CPU/memory reservation, limit, and current usage.
-
-    Returns the list envelope with a real ``total``; each row has name,
-    cpu_reservation_mhz, cpu_limit_mhz, cpu_usage_mhz, mem_reservation_mb,
-    mem_limit_mb, mem_usage_mb, sorted by memory usage descending. A limit of -1
-    means unlimited. Pool names are not cluster-qualified, so identical names in
-    different clusters may look alike.
-
-    Use this when a VM is throttled but its host is not busy — the cap is usually
-    the pool. Then get_vm_performance to see which VMs in it are demanding, or
-    get_cluster_health_summary for the cluster-level picture.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max pool rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return _ops_get_resource_pool_usage(si, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1483,128 +509,29 @@ def get_resource_pool_usage(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_active_tasks(
-    include_recent: bool = True,
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> dict:
-    """[READ] In-flight (and optionally just-completed) vCenter tasks.
-
-    Answers "why is the cluster busy?". Returns the list envelope {items, returned,
-    limit, total, truncated, hint} with a real ``total``; each row has name, entity,
-    state, progress_pct, start_time, user, an active flag and error (for failed
-    recent tasks), running/queued first, then newest first — so ``limit`` drops the
-    oldest. vCenter keeps only a short recent-task
-    window, so an old task may simply be gone rather than absent.
-
-    Use this before blaming load: a migration or clone in flight explains
-    pressure that get_host_performance shows. Pair with list_active_sessions to see who
-    started it. Read-only — cancelling a task belongs to vmware-aiops.
-
-    Args:
-        include_recent: Also include recently completed/failed tasks (default True).
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max task rows to return (None = all).
-    """
-    si = _get_connection(target)
-    return get_active_tasks(si, include_recent=include_recent, limit=limit)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def list_active_sessions(
-    target: Optional[str] = None,
-    limit: Optional[int] = None,
-    include_service: bool = False,
-) -> dict:
-    """[READ] Currently authenticated vCenter/ESXi sessions (who is logged in).
-
-    Returns the list envelope with a real ``total``; each row has user_name,
-    full_name, login_time, last_active, ip_address, user_agent (which client —
-    e.g. Aria's adapter shows ``VMware vim-java``), call_count, kind (user/service)
-    and a ``current`` flag for this skill's own session. vCenter's own solution
-    users (``vpxd-extension-<machine id>`` and similar) are folded by default and
-    counted in ``service_sessions``. Requires the Sessions privilege; low-privilege
-    accounts get a single explanatory row instead of a traceback.
-
-    Use this to attribute a change to a person — pair it with list_active_tasks, which
-    names the user who started each task. Read-only — terminating a session is
-    not supported here.
-
-    Args:
-        target: vCenter/ESXi target from config (default if omitted).
-        limit: Max session rows to return (None = all).
-        include_service: List vCenter's own solution-user sessions too. On a lab
-            vCenter they were 24 of 33 sessions.
-    """
-    si = _get_connection(target)
-    return get_active_sessions(si, limit=limit, include_service=include_service)
 
 
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-@vmware_tool(risk_level="low")
-@_catch_tool_errors
-def get_access_info(
-    tool: Optional[str] = None,
-    target: Optional[str] = None,
-) -> dict:
-    """[READ] The account this server uses on a target, and whether it holds a tool's privileges.
 
-    When to use: a tool failed with NoPermission, returned fewer objects than
-    expected, or you want to know up front what the configured account may read.
-    Ask about one ``tool``, or omit it to sort every tool of this server into
-    granted / not granted / undetermined.
+from vmware_monitor.mcp_server._tools_runtime import register_tools as _register_runtime
 
-    What it returns: {target, account, checked_on, privileges {id: state}, and
-    either ``tool`` {name, requires, verdict, meaning, missing_at_root} or the
-    tools_* lists}, plus the account's direct permissions (role, on, propagate).
-
-    Gotchas: privileges are checked on the vCenter/ESXi **root folder** only.
-    ``not_granted_at_root`` does not mean no access — a permission on a cluster,
-    folder or VM still lets the tool work there. ``undetermined`` means the
-    platform did not answer and is never to be read as granted. Permissions held
-    through a group count in the verdict but are not listed by name.
-
-    Args:
-        tool: A tool name on this server, e.g. list_active_sessions (None = all tools).
-        target: vCenter/ESXi target from config (default if omitted).
-    """
-    from vmware_policy.access import unknown_tool_message, vsphere_access_info
-
-    from vmware_monitor.access_requirements import REQUIREMENTS
-
-    unknown = unknown_tool_message(tool, REQUIREMENTS)  # no login for a misspelled name
-    if unknown:
-        return {"error": unknown}
-    si = _get_connection(target)
-    return vsphere_access_info(
-        si, target=_get_target_config(target).name, requirements=REQUIREMENTS, tool=tool
-    )
+(
+    get_vm_info,
+    list_vm_snapshots,
+    get_host_performance,
+    get_vm_performance,
+    find_aging_snapshots,
+    get_vm_backup_snapshot_history,
+    get_certificate_status,
+    get_license_status,
+    get_ntp_status,
+    get_datastore_capacity,
+    get_resource_pool_usage,
+    list_active_tasks,
+    list_active_sessions,
+    get_access_info,
+) = _register_runtime(mcp, _sys.modules[__name__])
 
 
 # ---------------------------------------------------------------------------
