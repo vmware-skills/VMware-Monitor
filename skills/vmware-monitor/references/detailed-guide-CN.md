@@ -1,0 +1,609 @@
+> 详细用法与架构参考。[返回简明介绍](../../../README-CN.md)。
+
+
+# VMware Monitor
+
+[![PyPI](https://img.shields.io/pypi/v/vmware-monitor)](https://pypi.org/project/vmware-monitor/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#readme-license)
+
+[English](detailed-guide.md) | 中文
+
+维护者: Wei Zhou · [zhouwei008@gmail.com](mailto:zhouwei008@gmail.com)
+
+社区维护的开源项目，非 VMware 或 Broadcom 官方产品。
+
+[概述](#readme-overview) · [快速开始](#readme-quick-start) · [MCP 配置](#readme-mcp-configuration) · [能力与工作流](#readme-capabilities-and-workflows) · [安全与审计](#readme-safety-and-audit) · [故障排查](#readme-troubleshooting) · [配套 Skills](#readme-companion-skills) · [参考资料](#readme-reference) · [许可证](#readme-license)
+
+<a id="readme-overview"></a>
+
+## 概述
+
+默认通过本地 Stdio 运行；请在本机配置所需目标和凭据。
+
+**只读** VMware vCenter/ESXi 监控 — 33 个工具。代码库中不存在任何破坏性操作，并有一道测试守住这一点。
+
+> **为什么独立仓库？** VMware Monitor 完全独立于 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。代码库中不存在关机、删除、创建、调整配置、快照创建/恢复/删除、克隆、迁移等函数——不是提示词约束，是这些代码根本不存在。
+>
+> **这一点具体由什么守住。** [`tests/eval/regression/test_read_only_enforcement.py`](../../../tests/eval/regression/test_read_only_enforcement.py) 用 `ast` 解析每个源文件，要求本包调用的每一个 vSphere 方法都出现在一份经人工审阅的白名单里，并对照 pyVmomi 自带的类型元数据交叉核验：凡是返回 `vim.Task`、或 vCenter 要求非只读权限的方法，都必须有人写明理由才放行。当前白名单有十四个方法。它守的是**写出来的代码**——看不见运行时拼出来的方法名；而且本仓没有任何 CI，所以它只在有人跑测试时才生效。若要一份不依赖本仓的保证，请用一个专用账号、授予 vCenter 内置的 **Read-Only（只读）** 角色来连接（[哪些读取需要超出该角色的权限](../../../skills/vmware-monitor/references/setup-guide.md#security)）。
+>
+> **"只读"不覆盖什么。** 这是针对 vCenter/ESXi 的承诺：没有任何代码路径会改变它们的状态。在 vCenter 上，本 skill 只会建立自己的登录会话，以及用完即释放的短期查询句柄。它会写本机文件：`~/.vmware-monitor/config.yaml` 和 `.env`（由 `init` 写入；`.env` 里的明文密码会在加载时被改写为 `b64:`）、审计日志（MCP、远端 CLI 与后台操作写 `~/.vmware/audit.db`，旧的 skill 日志仍保留）、`--html` 生成的快照（`~/vmware-health/`），以及——仅在 `daemon start` 之后——`daemon.pid`、`scan.log` 和发往你所配置 webhook 的推送。完整列表见 [setup guide](../../../skills/vmware-monitor/references/setup-guide.md#what-read-only-covers-and-what-it-writes-locally)。
+
+
+### 配套技能
+
+| 技能 | 范围 | 工具数 | 安装 |
+|------|------|:-----:|------|
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** ⭐ 统一入口 | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
+| **[vmware-nsx](https://github.com/vmware-skills/VMware-NSX)** | NSX 网络：段、网关、NAT、IPAM | 33 | `uv tool install vmware-nsx-mgmt` |
+| **[vmware-nsx-security](https://github.com/vmware-skills/VMware-NSX-Security)** | DFW 微分段、安全组、Traceflow | 21 | `uv tool install vmware-nsx-security` |
+| **[vmware-aria](https://github.com/vmware-skills/VMware-Aria)** | Aria Ops 指标、告警、容量规划 | 28 | `uv tool install vmware-aria` |
+| **[vmware-avi](https://github.com/vmware-skills/VMware-AVI)** | AVI (NSX ALB) 负载均衡、Kubernetes AKO | 28 | `uv tool install vmware-avi` |
+| **[vmware-harden](https://github.com/vmware-skills/VMware-Harden)** | 合规基线、Drift 检测（只读） | 6 | `uv tool install vmware-harden` |
+| **[vmware-log-insight](https://github.com/vmware-skills/VMware-Log-Insight)** | 集中日志检索、聚合、告警 | 7 | `uv tool install vmware-log-insight` |
+| **[vmware-debug](https://github.com/vmware-skills/VMware-Debug)** | 故障时间线关联、根因定位 | 2 | `uv tool install vmware-debug` |
+| **[vmware-pilot](https://github.com/vmware-skills/VMware-Pilot)** | 多步骤工作流编排、审批门控 | 13 | `uv tool install vmware-pilot` |
+
+Skills.sh 示例分别固定安装器 `skills@1.7.6`（需 Node.js >=22.20.0）和仓库 release tag；这不等于锁定传递依赖。
+
+完整的 Agent 指令见 [`skills/vmware-monitor/SKILL.md`](../../../skills/vmware-monitor/SKILL.md).
+
+<a id="readme-quick-start"></a>
+
+## 快速开始
+
+需要 Python `>=3.10` 和 `uv`。
+
+```bash
+uv tool install vmware-monitor==2.6.2
+vmware-monitor --help
+```
+
+目标、凭据和本地数据目录设置见 [setup guide](../../../skills/vmware-monitor/references/setup-guide.md).
+
+<details>
+<summary>安装与配置详情（含离线安装）</summary>
+
+### 安装
+
+#### 第 1 步：安装
+
+```bash
+git clone --branch v2.6.2 https://github.com/vmware-skills/VMware-Monitor.git
+cd VMware-Monitor
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+#### 第 2 步：配置
+
+```bash
+mkdir -p ~/.vmware-monitor
+cp config.example.yaml ~/.vmware-monitor/config.yaml
+# 编辑 config.yaml，填入你的 vCenter/ESXi 目标信息
+```
+
+通过 `.env` 文件设置密码（推荐）：
+
+```bash
+cp .env.example ~/.vmware-monitor/.env
+chmod 600 ~/.vmware-monitor/.env
+# 编辑并填入真实密码
+```
+
+> **安全提示**：推荐使用 `.env` 文件而非命令行 `export`，避免密码出现在 shell 历史记录中。`config.yaml` 只存主机名、端口和 `.env` 的引用路径——**不含**密码或 Token。所有密钥只存放在 `.env`（`chmod 600`）。Webhook 通知默认禁用；启用后 payload 只发往用户自配置的 URL，不含你配置里的任何凭据——但会带上 vSphere 自己的告警、事件和日志文本，其中可能含主机名、IP 和用户名。推荐使用一个授予 vCenter 内置 Read-Only 角色的专用服务账号。
+
+密码环境变量命名规则：`VMWARE_{目标名大写}_PASSWORD`
+
+#### 第 3 步：连接 AI 工具
+
+##### Claude Code（推荐）
+
+```bash
+# 方式一：由安装器放置 skill（推荐）
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.2
+# 或
+clawhub install @zw008/vmware-monitor --version 2.6.2
+
+# 方式二：手工安装 skill
+git clone --branch v2.6.2 https://github.com/vmware-skills/VMware-Monitor.git
+cd VMware-Monitor
+mkdir -p ~/.claude/skills/vmware-monitor
+cp -r skills/vmware-monitor/. ~/.claude/skills/vmware-monitor/
+```
+
+若需工具调用（而非仅 skill 上下文），再注册 MCP Server：
+
+```bash
+claude mcp add vmware-monitor -- vmware-monitor mcp
+```
+
+##### Codex / Aider / Continue
+
+```bash
+# 云端
+aider --conventions skills/vmware-monitor/SKILL.md
+# 本地 Ollama
+aider --conventions skills/vmware-monitor/SKILL.md --model ollama/qwen2.5-coder:32b
+```
+
+##### MCP 服务器（v1.5.15+ 推荐方式）
+
+完成 `uv tool install vmware-monitor==2.6.2` 后，**一条命令启动 MCP**：
+
+```bash
+vmware-monitor mcp
+
+# 指定配置路径
+VMWARE_MONITOR_CONFIG=/path/to/config.yaml vmware-monitor mcp
+```
+
+> 备选：`uvx --from vmware-monitor==2.6.2 vmware-monitor mcp`（不安装临时运行）或 legacy 入口
+> `vmware-monitor-mcp`（仍可用）。公司 TLS 代理网络下 uvx 可能报
+> `invalid peer certificate: UnknownIssuer` — 推荐用上面的 `vmware-monitor mcp`，
+> 或设置 `export UV_NATIVE_TLS=true`。
+
+##### 独立 CLI（无需 AI）
+
+```bash
+source .venv/bin/activate
+vmware-monitor inventory vms --target home-esxi
+vmware-monitor health alarms --target home-esxi
+```
+
+---
+
+
+</details>
+
+<a id="readme-mcp-configuration"></a>
+
+## MCP 配置
+
+将以下配置复制到 MCP 客户端的本地 Stdio 配置中。客户端需要能找到 `uvx`；首次安装所需包时需要访问包源。
+
+```json
+{
+  "mcpServers": {
+    "vmware-monitor": {
+      "command": "uvx",
+      "args": ["--from", "vmware-monitor==2.6.2", "vmware-monitor-mcp"],
+      "env": {
+        "VMWARE_MONITOR_CONFIG": "~/.vmware-monitor/config.yaml"
+      }
+    }
+  }
+}
+```
+
+<a id="readme-capabilities-and-workflows"></a>
+
+## 能力与工作流
+
+### ⚡ 快速调查报告
+
+五个有主见的只读报告，直接回答运维最关心的问题——每个都在**服务端聚合并关联**数据，返回高信号结果（绝不把 raw inventory 灌给模型）。每个报告都支持 `--html` 生成**自包含离线 HTML 快照**（零外链、内网主机名不外泄；下钻细节用原生 `<details>` 折叠，零 JavaScript）。
+
+| 问题 | 命令 | 关联什么 |
+|------|------|---------|
+| **"有什么着火了？"**（全集群） | `vmware-monitor summary` | 每个集群的主机 + VM 电源 + 实时 CPU/内存 + 告警 → Top-N 异常榜 + 每集群状态 |
+| **"现在该关注什么？"**（全 vCenter） | `vmware-monitor attention` | 所有 vCenter 合并成一个全局排序的异常榜；连不上的目标优雅降级 |
+| **"这个 VM 周围在发生什么？"** | `vmware-monitor investigate vm <名>` | VM 状态 + 所在主机 + 集群 + 背后数据存储 + 快照 + 告警 + 性能 + 合并事件时间线 |
+| **"这个主机周围在发生什么？"** | `vmware-monitor investigate host <名>` | 主机状态 + 集群 + 其上的 VM + 挂载的数据存储 + 告警 + 性能 + 关联时间线 |
+| **"这个数据存储周围在发生什么？"** | `vmware-monitor investigate datastore <名>` | 容量/剩余 + 挂载它的主机 + 落在其上的 VM + 告警 + 关联时间线 |
+
+```bash
+# 先总览，再下钻到它指出的对象：
+vmware-monitor attention                          # 现在该关注什么，全 vCenter
+vmware-monitor summary --top 5                    # 有什么着火了，单 vCenter
+vmware-monitor investigate vm web-01 --hours 72   # 一个 VM 的全貌，72 小时事件窗口
+vmware-monitor investigate vm web-01 --html       # → 离线快照写入 ~/vmware-health/
+```
+
+对象名不存在时返回**教学性错误**，明确告诉你如何列出对象。MCP 下对应工具为 `get_cluster_health_summary`、`get_cross_vcenter_attention`、`investigate_vm`、`investigate_host`、`investigate_datastore`——模型调用后用运维语言解释聚合结果。完整参数见 [`references/cli-reference.md`](../../../skills/vmware-monitor/references/cli-reference.md)。
+
+#### 证据字段
+
+主机调查包含精确的 ESXi `build`，无法读取时为 null。未分组的主机日志结果将原日志时间放在 `time`，
+另用 `observed_at` 表示扫描时间；原日志无时间戳时 `time` 保留 null。补丁查询保留嵌套的 `base_image`
+和 `components` 证据，过大或嵌套过深而省略的内容会明确标记。
+
+健康摘要包含当前连接端点的 `api_type`、`version`、`build`，与清单中的 ESXi 主机信息分开。
+交互式日志扫描可选择诊断键：`scan_host_logs(log_keys=["hostd", "vobd"])`，或
+`vmware-monitor scan logs --log-key hostd --log-key vobd`。默认仍为 hostd/vmkernel/vpxa；
+不可读取的日志会列为覆盖缺口。键是 API 标识符，不能使用文件路径。
+
+#### MCP Apps 集群健康看板（2.5.0）
+
+`get_cluster_health_summary` 还向支持 MCP Apps 的宿主声明 `ui://vmware-monitor/cluster-health.html`。宿主可显示实时集群看板；点 **Investigate** 时，经同一 MCP server、角色、Policy 和审计路径调用只读的主机或数据存储下钻工具。HTML 自包含，vSphere 对象名只按文本渲染。不支持 MCP Apps 的宿主仍收到原样工具结果。已通过生产回环 HTTP 传输和真实 vCenter 数据验证资源与工具；当前第三方宿主的界面目视渲染仍待验证。这与 CLI `--html` 的离线快照是两个功能。
+
+#### 快速安装（推荐）
+
+支持 Claude Code、Cursor、Codex、Gemini CLI、Trae 等 30+ AI 工具：
+
+```bash
+# 通过 Skills.sh 安装
+npx skills@1.7.6 add vmware-skills/VMware-Monitor#v2.6.2
+
+# 通过 ClawHub 安装
+clawhub install @zw008/vmware-monitor --version 2.6.2
+```
+
+#### PyPI 安装（无需访问 GitHub）
+
+```bash
+# 通过 uv 安装（推荐）
+uv tool install vmware-monitor==2.6.2
+
+# 或通过 pip 安装
+pip install vmware-monitor==2.6.2
+
+# 国内镜像加速
+pip install vmware-monitor==2.6.2 -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+---
+
+### 功能总览（只读）
+
+#### 架构
+
+```
+用户 (自然语言)
+  ↓
+AI CLI 工具 (Claude Code / Gemini / Codex / Aider / Continue / Trae / Kimi)
+  ↓ 读取 SKILL.md / AGENTS.md / rules 指令
+  ↓
+vmware-monitor CLI（只读）
+  ↓ pyVmomi (vSphere SOAP API)
+  ↓
+vCenter Server ──→ ESXi 集群 ──→ VM
+    或
+ESXi 独立主机 ──→ VM
+```
+
+#### 版本兼容性
+
+| vSphere 版本 | 支持状态 | 说明 |
+|-------------|---------|------|
+| 8.0 / 8.0U1-U3 | ✅ 完全支持 | pyVmomi 8.0.3+ |
+| 7.0 / 7.0U1-U3 | ✅ 完全支持 | 所有只读 API 正常工作 |
+| 6.7 | ✅ 兼容 | 向后兼容，已测试 |
+| 6.5 | ✅ 兼容 | 向后兼容，已测试 |
+
+#### 1. 资源清单
+
+| 功能 | vCenter | ESXi | 说明 |
+|------|:-------:|:----:|------|
+| 列出虚拟机 | ✅ | ✅ | 名称、电源状态、CPU、内存、操作系统、IP、`folder_path`（vCenter 清单文件夹路径，如 `/Datacenters/Production/Web Tier`）；MCP `list_virtual_machines` 支持 `folder_filter` 参数进行大小写不敏感的文件夹树搜索 |
+| 列出主机 | ✅ | ⚠️ 仅自身 | CPU 核数、内存、版本、VM 数、在线时间 |
+| 列出数据存储 | ✅ | ✅ | 容量、已用/可用、类型、使用率 |
+| 列出集群 | ✅ | ❌ | 主机数、DRS/HA 状态 |
+| 列出网络 | ✅ | ✅ | 网络名、关联 VM 数、可访问性 — CLI `inventory networks`，MCP `list_all_networks` |
+
+#### 2. 健康监控
+
+| 功能 | vCenter | ESXi | 说明 |
+|------|:-------:|:----:|------|
+| 活跃告警 | ✅ | ✅ | 严重级别、告警名、实体、时间 |
+| 事件日志查询 | ✅ | ✅ | 按时间、严重级别过滤，识别 50+ 事件类型 |
+| 硬件传感器 | ✅ | ✅ | 每个传感器的 `type`（温度/电压/风扇等）、读数、单位及健康 `status`（green/yellow/red）；MCP `interpretation_note` 说明聚合传感器结论的边界 — CLI `health sensors`，MCP `get_host_sensors` |
+| 主机服务状态 | ✅ | ✅ | 服务运行/停止状态 — CLI `health services`，MCP `get_host_services` |
+| 账号权限 | ✅ | ✅ | server 使用哪个账号，以及它在根文件夹上是否具备每个工具所需的权限 — CLI `access-info`，MCP `get_access_info` |
+
+#### 3. VM 信息与快照列表（只读）
+
+| 功能 | 说明 |
+|------|------|
+| VM 详情 | 名称、电源状态、操作系统、CPU、内存、IP、VMware Tools、磁盘、网卡、`folder_path` |
+| 快照列表 | 列出已有快照名称和创建时间（无创建/恢复/删除）— CLI `vm snapshot-list`，MCP 工具 `list_vm_snapshots` |
+| 备份窗口 | 从 vCenter 任务历史推算某台 VM 的备份保持快照打开的时长 — CLI `snapshots backup-window`，MCP 工具 `get_vm_backup_snapshot_history`。这是备份作业时长的**下界**，不是官方作业时长 |
+
+#### 4. 定时扫描与通知
+
+| 功能 | 说明 |
+|------|------|
+| 守护进程 | 基于 APScheduler，可配置间隔（默认 15 分钟） |
+| 多目标扫描 | 依次扫描所有配置的 vCenter/ESXi 目标 |
+| 扫描内容 | 每轮：已触发告警、最近 `lookback_hours` 内的 vCenter 事件，以及 ESXi 主机日志 `hostd`、`vmkernel`、`vpxa` 的新增行 |
+| 主机日志 | 增量读取：同一个 daemon 进程内每行只报告一次（daemon 重启后会把每个日志的最后 500 行再读一遍）。日志轮转，或两轮之间新增超过 500 行时，会追加一条 `info` 记录说明哪些行没被扫描。读取主机日志需要 `Global.Diagnostics` 权限，vCenter 内置的 Read-Only 角色不含该权限；读不到的日志会变成一条带原因的 `info` 记录，绝不会被当成“一切正常” |
+| 日志分析 | 匹配 error、fail、critical、panic、lost access、cannot、timeout、refused、corrupt 的主机日志行——含 critical/panic/corrupt 的为 `critical`，其余为 `warning` |
+| 结构化日志 | JSONL 输出到 `~/.vmware-monitor/scan.log`——记录所有问题，包括 `info` 记录 |
+| Webhook 通知 | 支持 Slack、Discord 或任意 HTTP 端点。发送所有 critical 问题和所有告警/事件类 warning；主机日志的 warning 只写入扫描日志，`info` 记录从不发送 |
+| 后台 Policy 与审计 | 每个目标扫描和 webhook 外发均先检查 Policy，以 `surface=daemon` 写统一审计库；失败/不完整读取、拒绝和中断分别记录。同一进程内未变化的失败去重，每次成功均记录。审计摘要不含 webhook URL 或事件正文 |
+| 每轮摘要 | daemon 日志输出里每轮一行：发现数（以及其中发往 webhook 的数量）、读不到的主机日志数、有未扫描行的日志数、失败的扫描环节数。只要有环节失败或某个目标连不上，就显示 `Scan INCOMPLETE`，绝不会说“一切正常” |
+
+#### 5. 安全特性
+
+| 功能 | 说明 |
+|------|------|
+| **代码级隔离** | 独立仓库 — 代码中零破坏性函数，由一道 AST 白名单闸门逐个核验全部 vSphere 调用（[`tests/eval/regression/test_read_only_enforcement.py`](../../../tests/eval/regression/test_read_only_enforcement.py)）|
+| **审计日志** | MCP 工具调用和每条访问 vCenter 的 CLI 命令记录到 `~/.vmware/audit.db`（SQLite，经 vmware-policy）；CLI 查询另写 `~/.vmware-monitor/audit.log`（JSONL） |
+| **密码保护** | 通过 `.env` 加载密码并检查文件权限（warn if not 600） |
+| **配置文件内容** | `config.yaml` 仅存储主机名、端口和 `.env` 引用路径，**不含密码或 Token** |
+| **SSL 自签名** | 仅用于 ESXi 自签名证书的隔离实验环境；生产环境应使用 CA 签名证书 |
+| **Prompt 注入防护** | vSphere 事件消息和主机日志在输出前进行截断、控制字符清理和边界标记（`[VSPHERE_EVENT]`/`[VSPHERE_HOST_LOG]`）包裹 |
+| **Webhook 数据范围** | **默认禁用**。配置后，daemon 只向你配置的 URL 发送：所有 critical 问题（告警、事件、匹配 critical/panic/corrupt 的 ESXi 日志行、连不上的目标）和所有告警/事件类 warning——主机日志的 warning 只写入扫描日志，`info` 记录从不发送。每条问题带实体名和消息：经过清洗的告警、事件或 ESXi 日志文本，或不含原始异常的连接/策略失败类型；运维文本可能含主机名、IP 和用户名。不会发送 skill 配置或 `.env` 里的任何凭据 |
+| **生产环境推荐** | AI Agent 可能误解上下文并执行非预期的破坏性操作 — 已有真实案例表明 AI 驱动工具删除了生产数据库和整个环境。VMware-Monitor 从自身代码中消除了这一类风险：不存在任何破坏性代码路径，一旦加入，白名单闸门就会让构建失败。再配合一个只读 vCenter 账号，就有了不依赖本代码库的防线。仅在开发/实验环境使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops) |
+
+#### 不包含的操作（设计如此）
+
+以下操作在本仓库中**不存在**：
+
+- ❌ 开关机、重置、挂起
+- ❌ 创建、删除、调整配置
+- ❌ 创建/恢复/删除快照
+- ❌ 克隆、迁移
+
+需要这些操作请使用 [VMware-AIops](https://github.com/vmware-skills/VMware-AIops)。
+
+---
+
+使用本地/小模型运行？参见 [`skills/vmware-monitor/references/agent-guardrails.md`](../../../skills/vmware-monitor/references/agent-guardrails.md)。
+
+---
+
+### 常用工作流
+
+#### 日常健康检查
+
+1. 检查告警：`vmware-monitor health alarms --target prod-vcenter`
+2. 查看近期事件：`vmware-monitor health events --hours 24 --severity warning`
+3. 列出主机：`vmware-monitor inventory hosts` — 检查连接状态和内存使用
+
+#### 排查特定对象（钻取）
+
+一次调用就把对象与其周边基础设施和近期历史关联起来——见上文 [⚡ 快速调查报告](#-快速调查报告)。
+
+1. 从速览开始：`vmware-monitor attention`（所有 vCenter）或 `vmware-monitor summary`（单个）
+2. 钻取它标出的对象：`vmware-monitor investigate vm <名>`（或 `host` / `datastore`）
+3. 用 `--hours 72` 扩大事件窗口；用 `--html` 分享（离线快照）
+4. **名字不对时** → 教学性错误会告诉你怎么列出对象（`inventory vms/hosts`、`list_all_datastores`）
+
+#### 设置持续监控
+
+1. 在 `~/.vmware-monitor/config.yaml` 中配置 webhook
+2. 启动守护进程：`vmware-monitor daemon start`
+3. 守护进程每 15 分钟扫描一次，向 Slack/Discord 发送告警
+
+---
+
+### CLI 命令参考
+
+```bash
+# 环境诊断
+vmware-monitor doctor                   # 检查环境、配置、连通性
+vmware-monitor doctor --skip-auth       # 跳过 vSphere 认证检查（更快）
+vmware-monitor access-info [--tool <mcp-tool>] [--target <name>]  # 当前账号 + 每个工具的权限
+
+# MCP 配置生成
+vmware-monitor mcp-config generate --agent goose        # 生成 Goose 配置
+vmware-monitor mcp-config generate --agent claude-code  # 生成 Claude Code 配置
+vmware-monitor mcp-config list                          # 列出所有支持的 Agent
+
+# 资源清单
+vmware-monitor inventory vms|hosts|datastores|clusters [--target <name>]
+vmware-monitor inventory vms --limit 10 --sort-by memory_mb  # 按内存排序 Top 10
+vmware-monitor inventory vms --power-state poweredOn         # 只显示开机 VM
+vmware-monitor inventory vms --sort-by folder_path           # 按清单文件夹分组排序
+# 所有 `inventory vms` 结果均包含 `folder_path` 字段（如 `/Datacenters/Production/Web Tier`）。
+# MCP 工具 `list_virtual_machines` 额外支持 `folder_filter="Production"`，按文件夹路径大小写不敏感子串过滤。
+
+# 健康检查
+vmware-monitor health alarms [--target <name>]
+vmware-monitor health events --hours 24 --severity warning [--target <name>]
+
+# VM 信息（只读）
+vmware-monitor vm info <vm-name>
+vmware-monitor vm snapshot-list <vm-name>
+
+# 扫描与守护进程
+vmware-monitor scan now [--target <name>]
+vmware-monitor daemon start|stop|status
+```
+
+---
+
+<a id="readme-safety-and-audit"></a>
+
+## 安全与审计
+
+### 远程访问（HTTPS）与限制工具
+
+默认情况下 `vmware-monitor mcp` 通过 stdio 服务一个本地客户端，并提供全部工具。以下两个选项可以改变这一点
+（需 vmware-policy ≥ 1.21.0）。
+
+**通过 HTTPS 提供服务**，让其他机器上的客户端连接。每个调用者都需要一个 bearer token：
+
+```bash
+vmware-audit token create alice          # 只显示一次，交给 alice
+vmware-audit token list                  # 只列名字
+vmware-audit token revoke alice          # 下一个请求起即拒绝，无需重启
+vmware-monitor mcp --transport https --host 0.0.0.0 --port 8443 \
+    --cert /etc/vmware-mcp/server.pem --key /etc/vmware-mcp/server-key.pem \
+    --public-name mcp.example.com
+```
+
+连接客户端（以 Claude Code 为例；任何支持 streamable HTTP 和自定义请求头的 MCP 客户端都可以）：
+
+```bash
+claude mcp add --transport http vmware-monitor https://mcp.example.com:8443/mcp \
+    --header "Authorization: Bearer $VMWARE_MCP_TOKEN"
+```
+
+```json
+{
+  "mcpServers": {
+    "vmware-monitor": {
+      "type": "http",
+      "url": "https://mcp.example.com:8443/mcp",
+      "headers": { "Authorization": "Bearer ${VMWARE_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+- 没有 token 时服务不会启动；`--public-name` 之外的 Host/Origin 一律拒绝；绑定端口前会自检，确认未认证请求得到 401。
+  证书要用客户端信任、且覆盖这些名字的证书。
+- 在同一台机器上由反向代理终结 TLS 时，用 `--transport http --host 127.0.0.1 --public-name mcp.example.com`，
+  并让代理透传 `Authorization` 头。
+- 负载均衡或网关在另一台机器上时，保持 `--transport https`（自签证书也可以），在 `--public-name` 里写上负载均衡
+  转发时带的 `Host` 名，并让它透传 `Authorization`。健康检查可以用 `GET /healthz`：不需要 token，只返回
+  `{"status": "ok"}`（需 vmware-policy ≥ 1.23.0）。
+- 每个请求带上 `traceparent` 或 `X-Request-ID`，它会记进审计记录；用 `vmware-audit log --correlation-id ID`
+  就能查到平台上某一次请求对应的调用。
+- 审计日志把每个调用者记为 `token:<名字>`。调用并行执行，每个 target 最多 `VMWARE_MCP_POOL_SIZE`（默认 2）
+  个会话；每个会话都是在该 target 上的一次登录，一个调用最多等待 300 秒拿到会话。
+- **能连到这个端点的人，都以该 server 配置的账号操作。** token 只用来识别调用者，不在平台上授予任何权限。
+  每个权限级别单独起一个端点。
+- **一个端点给多人或多种角色用：** 先运行一次 `vmware-audit roles enable`，再给每个 token 指定角色（`vmware-audit token create 名字 --role reader`，或在 `roles.yaml` 里定义可用的工具和 target；需 vmware-policy ≥ 1.24.0）。角色只能限定这个 token 在本端点上能调用什么，不能超出账号本身的权限。详见 vmware-policy README 的「网络调用者的角色」一节。
+
+**限制工具：**本 server 的工具全部只读，所以 `--expose read` 在这里不改变任何东西，它是为有写工具的 skill
+准备的。最小权限来自 server 使用的账号。
+
+详见 `skills/vmware-monitor/references/setup-guide.md`（"Serving MCP over HTTPS"、"Limiting which tools are offered"）。
+
+<a id="readme-troubleshooting"></a>
+
+## 故障排查
+
+### 故障排查
+
+#### 告警返回为空但 vCenter 显示有告警
+
+`get_alarms` 工具在根文件夹级别查询已触发的告警。部分告警是实体级别的 — 尝试改用事件查询：`vmware-monitor health events --hours 1 --severity info`。
+
+#### "Connection refused" 错误
+
+1. 运行 `vmware-monitor doctor` 进行诊断
+2. 检查 `config.yaml` 中的目标主机名/IP 和端口（443）
+3. 自签名证书场景：信任签发它的 CA；只有隔离的实验主机才设置 `verify_ssl: false`
+
+#### 事件返回过多
+
+使用严重级别过滤：`--severity warning`（默认）会过滤掉 info 级别事件。使用 `--hours 4` 缩小时间范围。
+
+#### VM 信息显示 "guest_os: unknown"
+
+客户机中未安装或未运行 VMware Tools。安装/启动 VMware Tools 以获取操作系统检测、IP 地址和客户机系列信息。
+
+#### Doctor 通过但命令超时
+
+vCenter 可能负载过高。尝试直接连接特定 ESXi 主机而非 vCenter，或在 `config.yaml` 中增加连接超时时间。
+
+#### `doctor` 报 "no vSphere role"，或所有命令都报 "session is not authenticated"
+
+账号能登录，但没有任何 vSphere 角色，所以 vCenter 不给它会话（AIops#47）。在 vCenter 根文件夹上给它分配角色（Read-Only 或更高）：Administration > Access Control > Global Permissions。改密码没有用。`vmware-monitor doctor` 会直接报出这种情况，`attention` 也会把这样的目标算作未读取（总体状态至少为 WARN）。
+
+---
+
+### 问题反馈与贡献
+
+如果遇到任何报错或问题，请将错误信息、日志或截图发送至 **zhouwei008@gmail.com**。欢迎贡献！
+
+<!-- usage: remote-and-exposure -->
+
+### 系统代理绕过
+
+vCenter REST 客户端按操作系统的代理绕过列表直连配置的目标地址。
+TLS 校验仍由 `verify_ssl` 控制，`SSL_CERT_FILE` 等 CA 环境设置继续生效；其他地址保留原有代理路由。
+
+<a id="readme-companion-skills"></a>
+
+## 配套 Skills
+
+VMware Skills 家族包含 14 个 MCP Server 和共享 Policy 库。按职责选择工具： [vmware-skills](https://github.com/vmware-skills).
+
+### 相关项目
+
+| Skill | 范围 | 工具数 | 安装 |
+|-------|------|:-----:|------|
+| **[vmware-monitor](https://github.com/vmware-skills/VMware-Monitor)** | 只读监控、告警、事件 | 27 | `uv tool install vmware-monitor==2.6.2` |
+| **[vmware-aiops](https://github.com/vmware-skills/VMware-AIops)** | VM 生命周期、部署、Guest Ops、集群 | 49 | `uv tool install vmware-aiops` |
+| **[vmware-storage](https://github.com/vmware-skills/VMware-Storage)** | 数据存储、iSCSI、vSAN | 11 | `uv tool install vmware-storage` |
+| **[vmware-vks](https://github.com/vmware-skills/VMware-VKS)** | Tanzu 命名空间、TKC 集群生命周期 | 20 | `uv tool install vmware-vks` |
+
+<a id="readme-reference"></a>
+
+## 参考资料
+
+变更记录： [RELEASE_NOTES.md](../../../RELEASE_NOTES.md).
+
+使用自己的模型和 Agent 宿主进行只读自测： [model-fit self-test](https://github.com/vmware-skills/marketplace/blob/main/MODEL_FIT_SELF_TEST.md).
+
+### 升级到 2.0
+
+2.0 把 MCP 工具名改成动词在前（共改名 23 处）（例如 `active_sessions` → `list_active_sessions`, `active_tasks` → `list_active_tasks`, `certificate_status` → `get_certificate_status`），完整的新旧名对照表见
+[RELEASE_NOTES.md](../../../RELEASE_NOTES.md#v200--mcp-tools-renamed-verb-first)。其他都不变：工具、参数、安全确认门和 CLI 命令都一样。
+如果 agent 提示词、脚本或 `~/.vmware/rules.yaml` 里写了工具名，请改成新名——不过用旧名写的 deny 规则在
+vmware-policy ≥ 1.18 下仍然生效（`vmware-audit policy` 会列出因改名而多匹配的规则），vmware-pilot ≥ 1.13 也会自动转换已保存工作流里的旧名。
+如果还有 2.0 之前的安装共用这个 `rules.yaml`，请把它的 vmware-policy 也升到 ≥ 1.18.2：它会按新旧两个名字匹配每条规则，一份文件两边都管用。
+
+### 支持的 AI 平台
+
+| 平台 | 状态 | 配置文件 | AI 模型 |
+|------|------|---------|---------|
+| **Claude Code** | ✅ 原生技能 | `skills/vmware-monitor/SKILL.md` | Anthropic Claude |
+| **Gemini CLI** | ✅ 上下文文件 + MCP | `skills/vmware-monitor/SKILL.md` | Google Gemini |
+| **Codex CLI** | ✅ Skill + AGENTS.md | `skills/vmware-monitor/SKILL.md` | OpenAI GPT |
+| **Aider** | ✅ 约定文件 | `skills/vmware-monitor/SKILL.md` | 任意（云端 + 本地） |
+| **Continue CLI** | ✅ 规则文件 | `skills/vmware-monitor/SKILL.md` | 任意（云端 + 本地） |
+| **Trae IDE** | ✅ Rules | `skills/vmware-monitor/SKILL.md` | Claude/DeepSeek/GPT-4o |
+| **Kimi Code CLI** | ✅ Skill | `skills/vmware-monitor/SKILL.md` | Moonshot Kimi |
+| **MCP Server** | ✅ MCP 协议 | `vmware_monitor/mcp_server/` | 任意 MCP 客户端 |
+| **Python CLI** | ✅ 独立运行 | N/A | N/A |
+
+#### MCP Server 集成（本地 Agent）
+
+vmware-monitor MCP Server 可接入**任何 MCP 兼容的 Agent 或工具**。配置模板见 [`examples/mcp-configs/`](../../../examples/mcp-configs)。所有 33 个工具均为**只读**，由上述白名单闸门守住。
+
+| Agent / 工具 | 本地模型支持 | 配置模板 | 集成指南 |
+|-------------|:----------:|---------|---------|
+| **[Goose](https://github.com/block/goose)** | ✅ Ollama, LM Studio | [`goose.json`](../../../examples/mcp-configs/goose.json) | [指南](../../../docs/integrations/goose.md) |
+| **[LocalCowork](https://github.com/Liquid4All/localcowork)** | ✅ 完全离线 | [`localcowork.json`](../../../examples/mcp-configs/localcowork.json) | [指南](../../../docs/integrations/localcowork.md) |
+| **[mcp-agent](https://github.com/lastmile-ai/mcp-agent)** | ✅ Ollama, vLLM | [`mcp-agent.yaml`](../../../examples/mcp-configs/mcp-agent.yaml) | [指南](../../../docs/integrations/mcp-agent.md) |
+| **VS Code Copilot** | — | [`vscode-copilot.json`](../../../examples/mcp-configs/vscode-copilot.json) | [指南](../../../docs/integrations/vscode-copilot.md) |
+| **Cursor** | — | [`cursor.json`](../../../examples/mcp-configs/cursor.json) | — |
+| **Continue** | ✅ Ollama | [`continue.yaml`](../../../examples/mcp-configs/continue.yaml) | [指南](../../../docs/integrations/continue.md) |
+| **Claude Code** | — | [`claude-code.json`](../../../examples/mcp-configs/claude-code.json) | — |
+
+**完全本地运行**（无需云端 API）：
+
+```bash
+# Aider + Ollama + vmware-monitor（通过 SKILL.md）
+aider --conventions skills/vmware-monitor/SKILL.md --model ollama/qwen2.5-coder:32b
+```
+
+---
+
+### 项目结构
+
+```
+VMware-Monitor/
+├── vmware_monitor/                # Python 后端（仅只读）
+│   ├── config.py                  # 配置管理
+│   ├── connection.py              # 多目标连接（pyVmomi）
+│   ├── cli.py                     # CLI（仅只读命令）
+│   ├── ops/                       # 查询操作
+│   │   ├── inventory.py           # 资源清单
+│   │   ├── health.py              # 健康检查
+│   │   └── vm_info.py                 # VM 信息、快照列表（只读）
+│   ├── scanner/                   # 日志扫描守护进程
+│   ├── notify/                    # 通知（JSONL + Webhook）
+│   └── mcp_server/                # MCP 服务器（仅只读工具）
+├── skills/vmware-monitor/         # Skills.sh 索引
+│   ├── SKILL.md
+│   └── references/                # 按需加载的详细文档
+├── examples/mcp-configs/          # MCP 客户端配置模板
+├── tests/                         # 测试
+├── smithery.yaml                  # Smithery 市场配置
+├── config.example.yaml
+└── pyproject.toml
+```
+
+<a id="readme-license"></a>
+
+## 许可证
+
+MIT
