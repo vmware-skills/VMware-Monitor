@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 
+from vmware_monitor._feedback import print_feedback_hint, reached_a_target
 from vmware_monitor.cli_base import (
     ConfigOption,
     TargetOption,
@@ -110,6 +111,8 @@ def register_callbacks(runtime):
             runtime.write_attention_html_snapshot(data, html_path)
             return
         runtime.render_attention_console(data)
+        if reached_a_target(data):
+            print_feedback_hint(runtime.console)
 
     return (
         cluster_summary_cmd,
