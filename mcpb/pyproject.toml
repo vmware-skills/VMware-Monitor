@@ -1,0 +1,6 @@
+[project]
+name = "vmware-monitor-mcpb"
+version = "2.6.2"
+description = "Claude Desktop extension shim that runs the published vmware-monitor MCP server"
+requires-python = ">=3.10"
+dependencies = ["vmware-monitor==2.6.2"]

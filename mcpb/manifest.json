@@ -1,0 +1,39 @@
+{
+  "manifest_version": "0.4",
+  "name": "vmware-monitor",
+  "display_name": "VMware Monitor",
+  "version": "2.6.2",
+  "description": "Read-only vSphere monitoring: find what needs attention across vCenter and ESXi, with evidence.",
+  "long_description": "Runs the published vmware-monitor 2.6.2 MCP server locally. It reads inventory, health, alarms, events and performance from your vCenter or ESXi targets; it does not change infrastructure. Run `vmware-monitor init` once to write the config file and local credentials, then point this extension at that config. Use an account with the vCenter Read-Only role.",
+  "author": { "name": "Wei Zhou", "url": "https://github.com/zw008" },
+  "repository": { "type": "git", "url": "https://github.com/vmware-skills/VMware-Monitor" },
+  "homepage": "https://github.com/vmware-skills/VMware-Monitor",
+  "documentation": "https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md",
+  "support": "https://github.com/vmware-skills/VMware-Monitor/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "uv",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "server/main.py"],
+      "env": { "VMWARE_MONITOR_CONFIG": "${user_config.config_path}" }
+    }
+  },
+  "user_config": {
+    "config_path": {
+      "type": "file",
+      "title": "vmware-monitor config file",
+      "description": "config.yaml written by `vmware-monitor init`. Passwords stay in the .env file next to it.",
+      "required": true,
+      "default": "${HOME}/.vmware-monitor/config.yaml"
+    }
+  },
+  "tools_generated": true,
+  "keywords": ["vmware", "vsphere", "vcenter", "esxi", "monitoring", "read-only"],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "python": ">=3.10" }
+  }
+}

@@ -39,6 +39,8 @@ Requires uv and Python >=3.10. `init` prompts for your target and credentials lo
 
 After `doctor` passes, check that `attention` returns readable facts for the intended target. An unreachable target or missing permissions is a setup blocker, not a healthy result. [Setup and troubleshooting](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md#configuration).
 
+One-click installs, after `init`: [Claude Desktop extension (.mcpb)](https://github.com/vmware-skills/VMware-Monitor/releases/download/v2.6.2/vmware-monitor-2.6.2.mcpb) · [Install in VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=vmware-monitor&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22--from%22%2C%22vmware-monitor%3D%3D2.6.2%22%2C%22vmware-monitor-mcp%22%5D%7D). Both run the same pinned 2.6.2 server and read the configuration `init` wrote.
+
 For agent-host installation, use the [setup guide](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md) and [Cursor, Codex, Gemini CLI, Cline and local-model examples](https://github.com/vmware-skills/marketplace/blob/main/docs/agent-hosts.md).
 
 Choose a model with the [shared model-fit workflow](https://github.com/vmware-skills/marketplace/blob/main/model-fit/RUNNER.md): compare the same tasks, review quality and safety, then select the smallest tested passing configuration per task group; this is not a production guarantee.

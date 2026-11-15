@@ -39,6 +39,8 @@ vmware-monitor attention
 
 `doctor` 通过后，确认 `attention` 为预期目标返回可读取的事实。目标不可达或权限不足表示接入受阻，不代表环境健康。[配置与排障](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md#configuration)。
 
+执行 `init` 后可一键安装：[Claude Desktop 扩展（.mcpb）](https://github.com/vmware-skills/VMware-Monitor/releases/download/v2.6.2/vmware-monitor-2.6.2.mcpb) · [在 VS Code 中安装](https://insiders.vscode.dev/redirect/mcp/install?name=vmware-monitor&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22--from%22%2C%22vmware-monitor%3D%3D2.6.2%22%2C%22vmware-monitor-mcp%22%5D%7D)。两者运行同一个固定的 2.6.2 版本，读取 `init` 写入的配置。
+
 Agent 宿主安装见本模块的[配置指南](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md)，以及 [Cursor、Codex、Gemini CLI、Cline 与本地模型示例](https://github.com/vmware-skills/marketplace/blob/main/docs/agent-hosts-CN.md)。
 
 选模型可用[共享模型自测流程](https://github.com/vmware-skills/marketplace/blob/main/model-fit/RUNNER-CN.md)：统一任务、复核质量与安全，再按任务组选择最小已测通过配置；不代表生产质量保证。
