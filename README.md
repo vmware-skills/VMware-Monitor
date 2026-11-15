@@ -26,14 +26,18 @@ Synthetic-data GIF; video includes redacted historical screenshots. [Download th
 
 ## Get started
 
-Install the published CLI and inspect its commands:
+Get one useful read-only result from one vCenter:
 
 ```sh
 uv tool install vmware-monitor==2.6.2
-vmware-monitor --help
+vmware-monitor init
+vmware-monitor doctor
+vmware-monitor attention
 ```
 
-Requires uv and Python >=3.10. Configure targets and credentials locally before remote queries. [Setup guide](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md).
+Requires uv and Python >=3.10. `init` prompts for your target and credentials locally, writes the configuration, and offers a connection test. Use a dedicated account with the vCenter **Read-Only** role; keep TLS verification enabled and trust your organization's CA. Existing configuration is kept unless you choose to overwrite it.
+
+After `doctor` passes, check that `attention` returns readable facts for the intended target. An unreachable target or missing permissions is a setup blocker, not a healthy result. [Setup and troubleshooting](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md#configuration).
 
 For agent-host installation, use the [setup guide](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md) and [Cursor, Codex, Gemini CLI, Cline and local-model examples](https://github.com/vmware-skills/marketplace/blob/main/docs/agent-hosts.md).
 
@@ -62,4 +66,4 @@ Part of [VMware Skills](https://github.com/vmware-skills/marketplace): 15 skills
 
 <a id="readme-license"></a>
 
-[Issues and feedback](https://github.com/vmware-skills/VMware-Monitor/issues) · [MIT](https://github.com/vmware-skills/VMware-Monitor/blob/main/LICENSE)
+[Share setup progress or a first result](https://github.com/vmware-skills/marketplace/issues/new?template=setup-feedback.yml) · [Report a bug](https://github.com/vmware-skills/VMware-Monitor/issues) · [MIT](https://github.com/vmware-skills/VMware-Monitor/blob/main/LICENSE)

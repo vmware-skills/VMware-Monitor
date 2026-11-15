@@ -63,20 +63,35 @@ are never sent).
 
 ## Configuration
 
+Start with one vCenter and a dedicated service account with the built-in **Read-Only** role on the intended inventory scope. Keep TLS verification enabled; trust your organization's CA before connecting.
+
 ```bash
-# 1. Install
+# 1. Install the published package; no repository checkout is needed.
 uv tool install vmware-monitor==2.6.2
 
-# 2. Verify
-vmware-monitor --version
+# 2. Generate local config.yaml and .env through guided prompts.
+vmware-monitor init
 
-# 3. Configure
-mkdir -p ~/.vmware-monitor
-cp config.example.yaml ~/.vmware-monitor/config.yaml
-cp .env.example ~/.vmware-monitor/.env
-chmod 600 ~/.vmware-monitor/.env
-# Edit ~/.vmware-monitor/config.yaml and .env with your target details
+# 3. Check configuration, connectivity and authentication.
+vmware-monitor doctor
+
+# 4. Read the configured targets' health and attention summary.
+vmware-monitor attention
 ```
+
+`init` offers a connection test and asks before overwriting existing configuration. Use `init --skip-test` to write configuration without testing the connection yet. Password entry is hidden and the credential file is set to `0600`; keep it local. Installation does not start the optional daemon.
+
+**First useful result:** verify the intended target and readable inventory/health facts in `attention`. Starting the CLI or passing `doctor` alone is not proof of a useful VMware query. Unreachable targets and unreadable objects are evidence gaps, not a healthy empty environment.
+
+| Where you stopped | Next step |
+|---|---|
+| CLI not found | Check `uv tool dir --bin` and ensure the printed directory is on your shell's PATH. |
+| Configuration missing | Run `vmware-monitor init`; a PyPI installation does not require copying templates from a checkout. |
+| TLS or authentication fails | Trust the correct CA and check target/account details locally. Keep TLS verification enabled. |
+| Authentication works but inventory is unreadable | Check the account's role and scope with the vCenter administrator; see [Least Privilege](#security). |
+| A useful result is returned, or a step still blocks you | [Share setup progress](https://github.com/vmware-skills/marketplace/issues/new?template=setup-feedback.yml) using product/version and stage only. Keep target addresses, credentials and raw logs out of the public issue. |
+
+For manual configuration, download the repository's [config.example.yaml](https://github.com/vmware-skills/VMware-Monitor/blob/main/config.example.yaml) and [.env.example](https://github.com/vmware-skills/VMware-Monitor/blob/main/.env.example), then save edited copies under `~/.vmware-monitor/` and set `.env` to `0600`. These source templates are an alternative to `init`, not files that a PyPI install places in your working directory.
 
 ### Declare `environment:` on each target
 
@@ -269,7 +284,7 @@ decide:
 
 > **Disclaimer**: This is a community-maintained open-source project and is **not affiliated with, endorsed by, or sponsored by VMware, Inc. or Broadcom Inc.** "VMware" and "vSphere" are trademarks of Broadcom.
 
-- **Read-Only toward vSphere**: This is an independent repository with zero destructive code paths. No power off, delete, create, reconfigure, or migrate functions exist in the codebase. Enforced by [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) — in the source repository, not in this skill bundle — which allowlists every vSphere method the package calls against pyVmomi's own type metadata. It is a gate on source code, not a runtime block, and this repo has no CI — for defence that does not depend on it, use a least-privilege account (next item). Local files the skill writes are listed under [What "read-only" covers](#what-read-only-covers-and-what-it-writes-locally).
+- **Read-Only toward vSphere**: This is an independent repository with zero destructive code paths. No power off, delete, create, reconfigure, or migrate functions exist in the codebase. Enforced by [`tests/eval/regression/test_read_only_enforcement.py`](https://github.com/vmware-skills/VMware-Monitor/blob/main/tests/eval/regression/test_read_only_enforcement.py) — in the source repository, not in this skill bundle — which allowlists every vSphere method the package calls against pyVmomi's own type metadata. It is a source-level check, not a runtime block; CI coverage does not enforce your live account's permissions. Use a least-privilege account (next item). Local files the skill writes are listed under [What "read-only" covers](#what-read-only-covers-and-what-it-writes-locally).
 - **Least Privilege**: Give the skill a dedicated vCenter service account holding the built-in **Read-Only** role (propagated from the inventory root), not an administrator. That role has no privilege to change anything, so the read-only claim no longer rests on this code. Two reads need more than it grants: `list_active_sessions` reads the session list, which vCenter gates on `Sessions.TerminateSession` (a privilege that also allows ending sessions — without it the tool returns a one-row explanation instead); and ESXi host-log reads (`scan_host_logs` and the daemon's host-log pass) call `BrowseDiagnosticLog`, gated on `Global.Diagnostics`. Grant those only if you need those reads.
 - **Source Code**: Fully open source at [github.com/vmware-skills/VMware-Monitor](https://github.com/vmware-skills/VMware-Monitor) (MIT). The `uv` installer fetches the `vmware-monitor` package from PyPI, which is built from this GitHub repository. We recommend reviewing the source code and commit history before deploying in production.
 - **TLS Verification**: Enabled by default. Setting `verify_ssl: false` is solely for ESXi hosts using self-signed certificates in isolated lab/home environments. In production, always use CA-signed certificates with full TLS verification.

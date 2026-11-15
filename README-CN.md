@@ -26,14 +26,18 @@ GIF 使用合成数据；视频包含脱敏的历史截图。[下载家族 AI �
 
 ## 快速开始
 
-安装已发布 CLI，并查看可用命令：
+先从一个 vCenter 取得一次有用的只读结果：
 
 ```sh
 uv tool install vmware-monitor==2.6.2
-vmware-monitor --help
+vmware-monitor init
+vmware-monitor doctor
+vmware-monitor attention
 ```
 
-需要 uv 与 Python >=3.10。远程查询前，在本地配置目标与凭据。[配置指南](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md)。
+需要 uv 与 Python >=3.10。`init` 在本地询问目标与凭据、写入配置，并提供连接测试。使用授予 vCenter **Read-Only** 角色的专用账号，保持 TLS 验证开启并信任组织的 CA。已有配置会保留，除非你选择覆盖。
+
+`doctor` 通过后，确认 `attention` 为预期目标返回可读取的事实。目标不可达或权限不足表示接入受阻，不代表环境健康。[配置与排障](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md#configuration)。
 
 Agent 宿主安装见本模块的[配置指南](https://github.com/vmware-skills/VMware-Monitor/blob/main/skills/vmware-monitor/references/setup-guide.md)，以及 [Cursor、Codex、Gemini CLI、Cline 与本地模型示例](https://github.com/vmware-skills/marketplace/blob/main/docs/agent-hosts-CN.md)。
 
@@ -62,4 +66,4 @@ Agent 宿主安装见本模块的[配置指南](https://github.com/vmware-skills
 
 <a id="readme-license"></a>
 
-[问题与反馈](https://github.com/vmware-skills/VMware-Monitor/issues) · [MIT](https://github.com/vmware-skills/VMware-Monitor/blob/main/LICENSE)
+[分享接入进度或首次结果](https://github.com/vmware-skills/marketplace/issues/new?template=setup-feedback.yml) · [报告问题](https://github.com/vmware-skills/VMware-Monitor/issues) · [MIT](https://github.com/vmware-skills/VMware-Monitor/blob/main/LICENSE)
